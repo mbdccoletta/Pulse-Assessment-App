@@ -1,0 +1,29 @@
+{
+  "name": "pulse-assessment",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "npx dt-app dev",
+    "build": "npx dt-app build",
+    "deploy": "npx dt-app deploy",
+    "uninstall": "npx dt-app uninstall"
+  },
+  "dependencies": {
+    "@dynatrace-sdk/client-document": "^1.30.0",
+    "@dynatrace-sdk/client-query": "^1.17.0",
+    "@dynatrace/strato-components": "^1.0.0",
+    "@dynatrace/strato-design-tokens": "^1.0.0",
+    "chart.js": "^4.5.1",
+    "jspdf": "^4.2.1",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "dt-app": "^1.8.1",
+    "typescript": "^5.3.0"
+  }
+}
