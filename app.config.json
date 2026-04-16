@@ -1,0 +1,23 @@
+{
+  "environmentUrl": "https://fov31014.apps.dynatrace.com",
+  "app": {
+    "id": "my.pulse.assessment",
+    "name": "Pulse Assessment",
+    "description": "Assess observability coverage and maturity across 9 Dynatrace capabilities.",
+    "icon": "ui/assets/icon.svg",
+    "version": "2.3.40",
+    "scopes": [
+      { "name": "storage:logs:read", "comment": "Log Analytics coverage" },
+      { "name": "storage:events:read", "comment": "Security, Delivery, Problems" },
+      { "name": "storage:spans:read", "comment": "AI Obs, App Obs tracing" },
+      { "name": "storage:metrics:read", "comment": "Infrastructure metrics" },
+      { "name": "storage:entities:read", "comment": "All entity queries" },
+      { "name": "storage:bizevents:read", "comment": "Business Observability" },
+      { "name": "storage:buckets:read", "comment": "Grail bucket access for DQL metrics queries" },
+      { "name": "storage:system:read", "comment": "System table access" },
+      { "name": "document:documents:read", "comment": "Load assessment history" },
+      { "name": "document:documents:write", "comment": "Save assessment snapshots" },
+      { "name": "document:documents:delete", "comment": "Cleanup old snapshots" }
+    ]
+  }
+}
