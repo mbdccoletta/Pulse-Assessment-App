@@ -137,7 +137,7 @@ const warn = (...args: unknown[]) => { if (DEBUG) console.warn("[CCA]", ...args)
 const MAX_POLL_ATTEMPTS = 10;
 const POLL_INTERVAL_MS = 3000;
 const QUERY_TIMEOUT_MS = 30000;
-const DEFAULT_TIMEFRAME_HOURS = 72;
+const DEFAULT_TIMEFRAME_HOURS = 2;
 
 async function executeDql(query: string): Promise<DqlResult> {
   try {
