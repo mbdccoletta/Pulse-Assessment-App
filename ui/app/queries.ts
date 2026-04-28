@@ -159,7 +159,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "i18", label: "Cloud span enrichment (%)",
         description: "Percentage of services with cloud provider context in span data.",
-        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(cloud.provider) | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(cloud.provider) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
@@ -203,7 +203,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "a1", label: "Service tracing coverage (%)",
         description: "Percentage of detected services with active span data in the last 2h (OneAgent or OTel).",
-        query: "fetch spans | filter timestamp > now() - 2h | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
@@ -217,14 +217,14 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "a3", label: "Root span coverage (%)",
         description: "Percentage of services with root spans (incoming requests) in the last 2h.",
-        query: "fetch spans | filter timestamp > now() - 2h | filter request.is_root_span == true | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | filter request.is_root_span == true | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 70 }, { min: 40 }, { min: 1 }],
       },
       {
         id: "a4", label: "OTel instrumentation coverage (%)",
         description: "Percentage of services with OpenTelemetry spans — vendor-neutral instrumentation adoption.",
-        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(otel.scope.name) | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(otel.scope.name) or isNotNull(telemetry.sdk.name) or isNotNull(telemetry.sdk.language) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
@@ -252,14 +252,14 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "a8", label: "Database span coverage (%)",
         description: "Percentage of services with database operation spans.",
-        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(db.system) | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(db.system) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
         id: "a9", label: "Messaging span coverage (%)",
         description: "Percentage of services with messaging spans (Kafka, RabbitMQ, SQS).",
-        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(messaging.system) | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(messaging.system) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 20 }, { min: 5 }, { min: 1 }],
       },
@@ -287,8 +287,8 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "a13", label: "Database call depth (%)",
         description: "Percentage of DB-using services that interact with 2+ database systems — validates deep database monitoring across the stack.",
-        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(db.system) | summarize systems = countDistinct(db.system), by:{dt.entity.service} | filter systems >= 2 | summarize count()",
-        queryB: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(db.system) | summarize count = countDistinct(dt.entity.service)",
+        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(db.system) | fieldsAdd _svc = coalesce(dt.entity.service, service.name) | summarize systems = countDistinct(db.system), by:{_svc} | filter systems >= 2 | summarize count()",
+        queryB: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(db.system) | summarize count = countDistinct(coalesce(dt.entity.service, service.name))",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
     ],
@@ -528,7 +528,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "s4", label: "Database interaction security (%)",
         description: "Percentage of services with database operation tracing — SQL injection detection surface coverage.",
-        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(db.system) | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(db.system) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
@@ -556,7 +556,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "s8", label: "Failed request coverage (%)",
         description: "Percentage of services with failed request tracking.",
-        query: "fetch spans | filter timestamp > now() - 2h | filter request.is_root_span == true | filter request.is_failed == true | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | filter request.is_root_span == true | filter request.is_failed == true | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 20 }, { min: 5 }, { min: 1 }],
       },
@@ -570,7 +570,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "s10", label: "HTTP request surface coverage (%)",
         description: "Percentage of services with HTTP request tracing — validates attack surface visibility for web application security (OWASP Top 10).",
-        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(http.request.method) | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(http.request.method) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
@@ -677,7 +677,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "ai1", label: "AI span service coverage (%)",
         description: "Percentage of services with AI/LLM spans.",
-        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count = countDistinct(dt.entity.service) | fields count",
+        query: "fetch spans | filter timestamp > now() - 2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 10 }, { min: 5 }, { min: 1 }],
       },
