@@ -267,19 +267,19 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   );
 
   return (
-    <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, minHeight: "100vh", padding: "8px 12px", overflow: "auto" }}>
+    <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, minHeight: "100vh", padding: "4px 10px", overflow: "auto" }}>
       {/* Header + A/B Selectors — compact single row */}
-      <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 8 }} onClick={(e) => e.stopPropagation()}>
+      <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 4 }} onClick={(e) => e.stopPropagation()}>
         <Tooltip text="Return to the main assessment page." position="bottom">
         <Button onClick={() => navigate("/")} size="condensed">← Back</Button>
         </Tooltip>
-        <Text style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap" }}>Evolution Over Time</Text>
-        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 340 }}>
+        <Text style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>Evolution</Text>
+        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
           {snapPickerBtn("A", snapA, showListA, () => { setShowListA(v => !v); setShowListB(false); }, Colors.Charts.Categorical.Color01.Default)}
           {showListA && snapDropdown(idxA, (i) => { setIdxA(i); setShowListA(false); }, idxB, Colors.Charts.Categorical.Color01.Default)}
         </Flex>
-        <Text style={{ color: textTert, fontSize: 12, fontWeight: 700 }}>vs</Text>
-        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 340 }}>
+        <Text style={{ color: textTert, fontSize: 11, fontWeight: 700 }}>vs</Text>
+        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
           {snapPickerBtn("B", snapB, showListB, () => { setShowListB(v => !v); setShowListA(false); }, Colors.Charts.Categorical.Color14.Default)}
           {showListB && snapDropdown(idxB, (i) => { setIdxB(i); setShowListB(false); }, idxA, Colors.Charts.Categorical.Color14.Default)}
         </Flex>
@@ -292,34 +292,34 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
       {comparison && (
         <>
           {/* KPI Summary — compact inline */}
-          <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 10 }}>
-            <Flex alignItems="center" gap={4} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${border}`, background: card }}>
-              <Text style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Coverage</Text>
-              <Text style={{ fontSize: 13, fontWeight: 800 }}>{comparison.baseline.totalScore}%→{comparison.current.totalScore}%</Text>
-              <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.totalDelta) }}>{comparison.totalDelta > 0 ? "+" : ""}{comparison.totalDelta}%</Text>
+          <Flex alignItems="center" gap={6} flexWrap="wrap" style={{ marginBottom: 4 }}>
+            <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
+              <Text style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Cov</Text>
+              <Text style={{ fontSize: 12, fontWeight: 800 }}>{comparison.baseline.totalScore}→{comparison.current.totalScore}%</Text>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: deltaColor(comparison.totalDelta) }}>{comparison.totalDelta > 0 ? "+" : ""}{comparison.totalDelta}%</Text>
             </Flex>
-            <Flex alignItems="center" gap={4} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${border}`, background: card }}>
-              <Text style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Maturity</Text>
-              <Text style={{ fontSize: 13, fontWeight: 800 }}>{comparison.baselineMaturity}%→{comparison.currentMaturity}%</Text>
-              <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.maturityDelta) }}>{comparison.maturityDelta > 0 ? "+" : ""}{comparison.maturityDelta}%</Text>
+            <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
+              <Text style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Mat</Text>
+              <Text style={{ fontSize: 12, fontWeight: 800 }}>{comparison.baselineMaturity}→{comparison.currentMaturity}%</Text>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: deltaColor(comparison.maturityDelta) }}>{comparison.maturityDelta > 0 ? "+" : ""}{comparison.maturityDelta}%</Text>
             </Flex>
-            <Flex alignItems="center" gap={6} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${border}`, background: card }}>
-              <Text style={{ fontSize: 11, fontWeight: 700, color: Colors.Text.Success.Default }}>↑{comparison.improved.length}</Text>
-              <Text style={{ fontSize: 11, fontWeight: 700, color: Colors.Text.Critical.Default }}>↓{comparison.degraded.length}</Text>
-              <Text style={{ fontSize: 11, fontWeight: 700, color: textTert }}>={comparison.unchanged.length}</Text>
+            <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
+              <Text style={{ fontSize: 10, fontWeight: 700, color: Colors.Text.Success.Default }}>↑{comparison.improved.length}</Text>
+              <Text style={{ fontSize: 10, fontWeight: 700, color: Colors.Text.Critical.Default }}>↓{comparison.degraded.length}</Text>
+              <Text style={{ fontSize: 10, fontWeight: 700, color: textTert }}>={comparison.unchanged.length}</Text>
             </Flex>
-            <Text style={{ fontSize: 11, color: textTert }}>{comparison.timeSpan}</Text>
+            <Text style={{ fontSize: 10, color: textTert }}>{comparison.timeSpan}</Text>
           </Flex>
 
           {/* ══════ RADAR CHART + CAPABILITY BARS (side by side) ══════ */}
-          <Flex gap={16} style={{ marginBottom: 24, height: isMobile ? "auto" : "calc(100vh - 160px)" }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
+          <Flex gap={8} style={{ marginBottom: 0, height: isMobile ? "auto" : "calc(100vh - 110px)" }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
             {/* Left: CovMatRadar */}
             <Flex flexDirection="column" style={{
               flex: isMobile ? "1 1 100%" : "1 1 55%", minWidth: 0, minHeight: 0,
               borderRadius: 12, border: `1px solid ${border}`, background: card,
-              padding: "12px 14px 14px", overflow: "visible",
+              padding: "6px 10px 8px", overflow: "visible",
             }}>
-              <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 6 }}>
+              <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
                 <Flex alignItems="center" gap={8} flexWrap="wrap">
                   <Text style={{ fontSize: 12, fontWeight: 700, color: textSec, letterSpacing: 0.5 }}>{dimension === "coverage" ? "Coverage" : "Maturity"} Comparison</Text>
                   <ToggleButtonGroup value={dimension} onChange={(val: string) => setDimension(val as "coverage" | "maturity")}>
@@ -350,7 +350,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
             <Flex flexDirection="column" style={{
               flex: isMobile ? "1 1 100%" : "1 1 45%", minWidth: 0, minHeight: 0,
               background: card, border: `1px solid ${border}`, borderRadius: 12,
-              padding: "14px 16px", overflowY: "auto",
+              padding: "8px 12px", overflowY: "auto",
             }}>
               <Flex alignItems="center" gap={8} style={{ marginBottom: 10 }}>
                 <Text style={{ fontSize: 12, fontWeight: 700, color: textSec, flex: 1 }}>Score per Capability</Text>
