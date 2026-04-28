@@ -148,6 +148,32 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture, data
 | DQL | Grail data queries |
 | dt-app CLI | Build, dev, deploy |
 
+## Grail Query Cost (DPS Consumption)
+
+> **Important:** Each assessment execution queries Grail tables (logs, spans, events, bizevents) which consume **Davis Data Units (DPS)** based on GiB scanned.
+
+### Estimated cost per assessment (based on real BWM tenant data)
+
+| Source | GiB/query | Unique Queries | Total Scanned |
+|---|---|---|---|
+| Logs (2h window) | ~6 GiB | 24 | ~138 GiB |
+| Spans (2h window) | ~0.1 GiB | 23 | ~2.4 GiB |
+| Davis Problems (72h) | ~0.04 GiB | 7 | ~0.3 GiB |
+| Events (2h window) | ~0.05 GiB | 8 | ~0.4 GiB |
+| Bizevents (2h window) | ~0.1 GiB | 11 | ~1.1 GiB |
+| **Total** | | **73 unique** | **~142 GiB** |
+
+- Entity queries (`fetch dt.entity.*`) and `timeseries` queries have **zero or negligible** scan cost.
+- Actual cost depends on your tenant's data volume, Grail pricing tier, and contract.
+- Estimated cost: **~$0.92 – $1.42 per assessment** (at $0.0065–$0.01/GiB).
+- Running once per week: **~$4–$6/month**. Once per day: **~$28–$43/month**.
+
+### Cost optimization applied (v2.3.51)
+
+- AI Observability span queries reduced from 72h → 2h window (**90% cost reduction**).
+- Query deduplication: identical queries execute only once regardless of how many criteria share them.
+- All queries return only aggregated counts (`summarize count()`), minimizing data transfer.
+
 ## Scripts
 
 | Command | Description |
