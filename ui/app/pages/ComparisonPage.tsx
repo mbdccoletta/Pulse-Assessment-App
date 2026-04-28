@@ -367,7 +367,6 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
                   ? comparison.capDiffs.map(c => ({ name: c.name, coverage: c.currScore, maturity: c.currMaturity, color: c.color }))
                   : comparison.capDiffs.map(c => ({ name: c.name, coverage: c.prevScore, maturity: c.prevMaturity, color: c.color }))
                 }
-                  activeIdx={selectedCap ? comparison.capDiffs.findIndex(c => c.name === selectedCap) : null}
                   onSelect={(idx) => setSelectedCap(idx !== null && idx >= 0 ? comparison.capDiffs[idx]?.name ?? null : null)}
                 />
               </Flex>
@@ -399,7 +398,6 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
                 ? comparison.capDiffs.map(c => ({ name: c.name, coverage: c.currScore, maturity: c.currMaturity, color: c.color }))
                 : comparison.capDiffs.map(c => ({ name: c.name, coverage: c.prevScore, maturity: c.prevMaturity, color: c.color }))
               }
-                activeIdx={selectedCap ? comparison.capDiffs.findIndex(c => c.name === selectedCap) : null}
                 onSelect={(idx) => setSelectedCap(idx !== null && idx >= 0 ? comparison.capDiffs[idx]?.name ?? null : null)}
               />
             </Flex>
