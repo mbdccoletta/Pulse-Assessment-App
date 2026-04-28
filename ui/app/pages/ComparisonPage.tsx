@@ -203,8 +203,8 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   if (available.length < 2) {
     return (
       <Flex flexDirection="column" alignItems="center" justifyContent="center" gap={16} style={{ fontFamily: "inherit", background: bg, color: text, minHeight: "100vh" }}>
-        <Flex flexDirection="column" style={{ fontSize: 18, fontWeight: 600 }}>Not enough data</Flex>
-        <Flex flexDirection="column" style={{ fontSize: 13, color: textSec, textAlign: "center", maxWidth: 320 }}>
+        <Flex flexDirection="column" style={{ fontSize: 18, fontWeight: 800 }}>Not enough data</Flex>
+        <Flex flexDirection="column" style={{ fontSize: 14, color: textSec, textAlign: "center", maxWidth: 320 }}>
           Run the assessment at least twice to compare evolution over time. Each run is saved automatically.
         </Flex>
         <Button onClick={() => navigate("/")} size="condensed">← Back to Overview</Button>
@@ -230,7 +230,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
             <Text style={{ fontWeight: 700, color, fontSize: 13, whiteSpace: "nowrap" }}>C{snap.totalScore}%</Text>
             <Text style={{ color: Colors.Charts.Categorical.Color08.Default, fontWeight: 600, fontSize: 12, whiteSpace: "nowrap" }}>M{mat}%</Text>
           </Flex>
-          <Text style={{ color: textTert, fontSize: 11, whiteSpace: "nowrap" }}>{relativeTime(snap.timestamp)}</Text>
+          <Text style={{ color: textTert, fontSize: 12, whiteSpace: "nowrap" }}>{relativeTime(snap.timestamp)}</Text>
         </Flex>
       ) : (
         <Text style={{ color: textTert, fontStyle: "italic", flex: 1, fontSize: 12 }}>Select…</Text>
@@ -257,9 +257,9 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
               borderLeft: isSelected ? `3px solid ${color}` : "3px solid transparent" }}>
             <Text style={{ flex: 1 }}>{fmtShort(snap.timestamp)}</Text>
             <Text style={{ fontWeight: 700, minWidth: 36, textAlign: "right" }}>C{snap.totalScore}%</Text>
-            <Text style={{ color: Colors.Charts.Categorical.Color08.Default, fontWeight: 600, fontSize: 11, minWidth: 36, textAlign: "right" }}>M{mat}%</Text>
-            <Text style={{ color: textTert, fontSize: 11, minWidth: 64, textAlign: "right" }}>{relativeTime(snap.timestamp)}</Text>
-            {isSelected && <Text style={{ color, fontSize: 11, fontWeight: 700 }}>●</Text>}
+            <Text style={{ color: Colors.Charts.Categorical.Color08.Default, fontWeight: 600, fontSize: 12, minWidth: 36, textAlign: "right" }}>M{mat}%</Text>
+            <Text style={{ color: textTert, fontSize: 12, minWidth: 64, textAlign: "right" }}>{relativeTime(snap.timestamp)}</Text>
+            {isSelected && <Text style={{ color, fontSize: 12, fontWeight: 700 }}>●</Text>}
           </Flex>
         );
       })}
@@ -273,12 +273,12 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
         <Tooltip text="Return to the main assessment page." position="bottom">
         <Button onClick={() => navigate("/")} size="condensed">← Back</Button>
         </Tooltip>
-        <Text style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>Evolution</Text>
+        <Text style={{ fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" }}>Evolution</Text>
         <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
           {snapPickerBtn("A", snapA, showListA, () => { setShowListA(v => !v); setShowListB(false); }, Colors.Charts.Categorical.Color01.Default)}
           {showListA && snapDropdown(idxA, (i) => { setIdxA(i); setShowListA(false); }, idxB, Colors.Charts.Categorical.Color01.Default)}
         </Flex>
-        <Text style={{ color: textTert, fontSize: 11, fontWeight: 700 }}>vs</Text>
+        <Text style={{ color: textTert, fontSize: 12, fontWeight: 700 }}>vs</Text>
         <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
           {snapPickerBtn("B", snapB, showListB, () => { setShowListB(v => !v); setShowListA(false); }, Colors.Charts.Categorical.Color14.Default)}
           {showListB && snapDropdown(idxB, (i) => { setIdxB(i); setShowListB(false); }, idxA, Colors.Charts.Categorical.Color14.Default)}
@@ -294,21 +294,21 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           {/* KPI Summary — compact inline */}
           <Flex alignItems="center" gap={6} flexWrap="wrap" style={{ marginBottom: 4 }}>
             <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
-              <Text style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Cov</Text>
-              <Text style={{ fontSize: 12, fontWeight: 800 }}>{comparison.baseline.totalScore}→{comparison.current.totalScore}%</Text>
-              <Text style={{ fontSize: 11, fontWeight: 700, color: deltaColor(comparison.totalDelta) }}>{comparison.totalDelta > 0 ? "+" : ""}{comparison.totalDelta}%</Text>
+              <Text style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Cov</Text>
+              <Text style={{ fontSize: 14, fontWeight: 800 }}>{comparison.baseline.totalScore}→{comparison.current.totalScore}%</Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.totalDelta) }}>{comparison.totalDelta > 0 ? "+" : ""}{comparison.totalDelta}%</Text>
             </Flex>
             <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
-              <Text style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Mat</Text>
-              <Text style={{ fontSize: 12, fontWeight: 800 }}>{comparison.baselineMaturity}→{comparison.currentMaturity}%</Text>
-              <Text style={{ fontSize: 11, fontWeight: 700, color: deltaColor(comparison.maturityDelta) }}>{comparison.maturityDelta > 0 ? "+" : ""}{comparison.maturityDelta}%</Text>
+              <Text style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Mat</Text>
+              <Text style={{ fontSize: 14, fontWeight: 800 }}>{comparison.baselineMaturity}→{comparison.currentMaturity}%</Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.maturityDelta) }}>{comparison.maturityDelta > 0 ? "+" : ""}{comparison.maturityDelta}%</Text>
             </Flex>
             <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
-              <Text style={{ fontSize: 10, fontWeight: 700, color: Colors.Text.Success.Default }}>↑{comparison.improved.length}</Text>
-              <Text style={{ fontSize: 10, fontWeight: 700, color: Colors.Text.Critical.Default }}>↓{comparison.degraded.length}</Text>
-              <Text style={{ fontSize: 10, fontWeight: 700, color: textTert }}>={comparison.unchanged.length}</Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Success.Default }}>↑{comparison.improved.length}</Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Critical.Default }}>↓{comparison.degraded.length}</Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: textTert }}>={comparison.unchanged.length}</Text>
             </Flex>
-            <Text style={{ fontSize: 10, color: textTert }}>{comparison.timeSpan}</Text>
+            <Text style={{ fontSize: 12, color: textSec }}>{comparison.timeSpan}</Text>
           </Flex>
 
           {/* ══════ RADAR CHART + CAPABILITY BARS (side by side) ══════ */}
@@ -321,7 +321,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
             }}>
               <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
                 <Flex alignItems="center" gap={8} flexWrap="wrap">
-                  <Text style={{ fontSize: 12, fontWeight: 700, color: textSec, letterSpacing: 0.5 }}>{dimension === "coverage" ? "Coverage" : "Maturity"} Comparison</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 800, color: text, letterSpacing: 0.2 }}>{dimension === "coverage" ? "Coverage" : "Maturity"} Comparison</Text>
                   <ToggleButtonGroup value={dimension} onChange={(val: string) => setDimension(val as "coverage" | "maturity")}>
                     <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
                     <ToggleButtonGroupItem value="maturity">Maturity</ToggleButtonGroupItem>
@@ -353,7 +353,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
               padding: "8px 12px", overflowY: "auto",
             }}>
               <Flex alignItems="center" gap={8} style={{ marginBottom: 10 }}>
-                <Text style={{ fontSize: 12, fontWeight: 700, color: textSec, flex: 1 }}>Score per Capability</Text>
+                <Text style={{ fontSize: 14, fontWeight: 800, color: text, flex: 1 }}>Score per Capability</Text>
                 <ToggleButtonGroup value={dimension} onChange={(val: string) => setDimension(val as "coverage" | "maturity")}>
                   <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
                   <ToggleButtonGroupItem value="maturity">Maturity</ToggleButtonGroupItem>
@@ -385,7 +385,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           {/* ══════ DETAILED CHANGES ══════ */}
           <Flex flexDirection="column" style={{ marginBottom: 16 }}>
             <Flex flexDirection="column" style={{ background: card, border: `1px solid ${border}`, borderRadius: 10, padding: "16px 18px" }}>
-              <Flex flexDirection="column" style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Detailed Criteria Changes</Flex>
+              <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>Detailed Criteria Changes</Flex>
               {comparison.improved.length > 0 && (
                 <DetailSection title="Improvements" icon="↑" color={Colors.Text.Success.Default} caps={comparison.improved} dk={dk} card={card} border={border} textSec={textSec} textTert={textTert} embedded />
               )}
@@ -399,7 +399,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
                   <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textTert, marginBottom: 8 }}>Unchanged ({comparison.unchanged.length})</Flex>
                   <Flex gap={6} flexWrap="wrap">
                     {comparison.unchanged.map((cap) => (
-                      <Flex key={cap.name} alignItems="center" gap={4} style={{ padding: "3px 8px", borderRadius: 6, border: `1px solid ${border}`, fontSize: 11 }}>
+                      <Flex key={cap.name} alignItems="center" gap={4} style={{ padding: "3px 8px", borderRadius: 6, border: `1px solid ${border}`, fontSize: 12 }}>
                         <Text style={{ width: 6, height: 6, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
                         <Text style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{cap.name}</Text>
                         <Text style={{ color: textTert, whiteSpace: "nowrap" }}>{cap.currScore}%</Text>
@@ -451,11 +451,11 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (onHeaderClick) onHeaderClick(); else setLocalOpen(!localOpen); } }} alignItems="center" gap={6} style={{ padding: "4px 0", cursor: "pointer", borderBottom: `1px solid ${border}` }}>
         <Text style={{ width: 8, height: 8, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
         <Text style={{ flex: 1, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cap.name}</Text>
-        <Text style={{ fontSize: 11, color: textSec, fontVariantNumeric: "tabular-nums" }}>{prev}%</Text>
-        <Text style={{ fontSize: 11, color: textTert }}>→</Text>
-        <Text style={{ fontSize: 11, fontWeight: 700, color: scoreColor(curr), fontVariantNumeric: "tabular-nums" }}>{curr}%</Text>
-        <Text style={{ fontSize: 11, fontWeight: 700, color: deltaColor(d), minWidth: 36, textAlign: "right" }}>{d > 0 ? "+" : ""}{d}%</Text>
-        <Text style={{ fontSize: 10, color: textTert, transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</Text>
+        <Text style={{ fontSize: 12, color: textSec, fontVariantNumeric: "tabular-nums" }}>{prev}%</Text>
+        <Text style={{ fontSize: 12, color: textTert }}>→</Text>
+        <Text style={{ fontSize: 12, fontWeight: 700, color: scoreColor(curr), fontVariantNumeric: "tabular-nums" }}>{curr}%</Text>
+        <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(d), minWidth: 36, textAlign: "right" }}>{d > 0 ? "+" : ""}{d}%</Text>
+        <Text style={{ fontSize: 11, color: textTert, transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</Text>
       </Flex>
       {/* Score bar */}
       <Flex
@@ -489,7 +489,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
           <Flex flexDirection="column" style={{ marginLeft: 18, marginTop: 8, marginBottom: 4 }}>
             {changed.length > 0 && (
               <Flex flexDirection="column" style={{
-                fontSize: 11, fontWeight: 800, color: Colors.Text.Neutral.Disabled, marginBottom: 6,
+                fontSize: 12, fontWeight: 800, color: Colors.Text.Neutral.Disabled, marginBottom: 6,
                 textTransform: "uppercase", letterSpacing: 0.8,
               }}>Changes ({changed.length})</Flex>
             )}
@@ -500,15 +500,15 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                   <Flex alignItems="center" gap={8} style={{ fontSize: 12 }}>
                     <Text style={{ width: 6, height: 6, borderRadius: "50%", background: cr.pointsDelta > 0 ? Colors.Text.Success.Default : Colors.Text.Critical.Default, flexShrink: 0 }} />
                     <Text style={{ flex: 1, color: textSec }}>{cr.label}</Text>
-                    <Text style={{ color: textTert, fontSize: 11 }}>{cr.isRatio ? `${cr.prevValue}%` : cr.prevValue} → {cr.isRatio ? `${cr.currValue}%` : cr.currValue}</Text>
-                    <Text style={{ fontWeight: 700, color: deltaColor(cr.pointsDelta), fontSize: 11, minWidth: 56, textAlign: "right" }}>
+                    <Text style={{ color: textTert, fontSize: 12 }}>{cr.isRatio ? `${cr.prevValue}%` : cr.prevValue} → {cr.isRatio ? `${cr.currValue}%` : cr.currValue}</Text>
+                    <Text style={{ fontWeight: 700, color: deltaColor(cr.pointsDelta), fontSize: 12, minWidth: 56, textAlign: "right" }}>
                       {cr.pointsDelta > 0 ? "✓ Gained" : "✗ Lost"}
                     </Text>
                   </Flex>
                   {rem && (
-                    <Flex alignItems="center" gap={4} flexWrap="wrap" style={{ marginTop: 3, paddingLeft: 14, fontSize: 11, lineHeight: "16px" }}>
+                    <Flex alignItems="center" gap={4} flexWrap="wrap" style={{ marginTop: 3, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
                       <Text style={{
-                        fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
+                        fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
                         background: cr.currPoints > 0
                           ? (dk ? "rgba(0,200,83,0.12)" : "rgba(0,200,83,0.10)")
                           : (dk ? "rgba(229,57,53,0.12)" : "rgba(229,57,53,0.10)"),
@@ -537,7 +537,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                 return (
                   <React.Fragment key={tier}>
                     <Flex flexDirection="column" style={{
-                      fontSize: 11, fontWeight: 800, color: tc, marginTop: 10, marginBottom: 6,
+                      fontSize: 12, fontWeight: 800, color: tc, marginTop: 10, marginBottom: 6,
                       textTransform: "uppercase", letterSpacing: 0.8,
                       padding: "5px 10px", borderRadius: 5,
                       background: dk ? `${tc}18` : `${tc}0C`,
@@ -555,7 +555,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                             <Text style={{ width: 6, height: 6, borderRadius: "50%", background: applied ? Colors.Text.Success.Default : tc, flexShrink: 0 }} />
                             <Text style={{ flex: 1, color: textSec }}>{cr.label}</Text>
                             <Text style={{
-                              fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
+                              fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
                               background: applied
                                 ? (dk ? "rgba(0,200,83,0.12)" : "rgba(0,200,83,0.10)")
                                 : (dk ? "rgba(229,57,53,0.12)" : "rgba(229,57,53,0.10)"),
@@ -564,7 +564,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                             }}>{applied ? "✓ Applied" : "✗ Not applied"}</Text>
                           </Flex>
                           {rem && (
-                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 14, fontSize: 11, lineHeight: "16px" }}>
+                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
                               <Text style={{ color: textSec }}>{rem.action}</Text>
                               <ExternalLink href={rem.docUrl} style={{ marginLeft: 6 }}>
                                 {rem.docLabel} ↗
@@ -583,14 +583,14 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                 {improvable.length > 0 && (
                   <>
                     <Flex flexDirection="column" style={{
-                      fontSize: 11, fontWeight: 800, color: Colors.Text.Warning.Default, marginTop: 10, marginBottom: 6,
+                      fontSize: 12, fontWeight: 800, color: Colors.Text.Warning.Default, marginTop: 10, marginBottom: 6,
                       textTransform: "uppercase", letterSpacing: 0.8,
                       padding: "5px 10px", borderRadius: 5,
                       background: dk ? "rgba(245,166,35,0.10)" : "rgba(245,166,35,0.08)",
                       border: `1px solid ${dk ? "rgba(245,166,35,0.25)" : "rgba(245,166,35,0.2)"}`,
                       display: "inline-flex", alignItems: "center", gap: 6,
                     }}>
-                      <Text style={{ fontSize: 13 }}>💡</Text> Improvement opportunities ({improvable.length})
+                      <Text style={{ fontSize: 14 }}>💡</Text> Improvement opportunities ({improvable.length})
                     </Flex>
                     {improvable.map((cr) => {
                       const rem = CRITERION_ACTIONS[cr.id];
@@ -600,14 +600,14 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                             <Text style={{ width: 6, height: 6, borderRadius: "50%", background: Colors.Text.Warning.Default, flexShrink: 0 }} />
                             <Text style={{ flex: 1, color: textSec }}>{cr.label}</Text>
                             <Text style={{
-                              fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
+                              fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
                               background: dk ? "rgba(229,57,53,0.12)" : "rgba(229,57,53,0.10)",
                               color: Colors.Text.Critical.Default,
                               border: "1px solid rgba(229,57,53,0.3)",
                             }}>✗ Not applied</Text>
                           </Flex>
                           {rem && (
-                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 14, fontSize: 11, lineHeight: "16px" }}>
+                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
                               <Text style={{ color: textSec }}>{rem.action}</Text>
                               <ExternalLink href={rem.docUrl} style={{ marginLeft: 6 }}>
                                 {rem.docLabel} ↗
@@ -622,14 +622,14 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                 {healthy.length > 0 && (
                   <>
                     <Flex flexDirection="column" style={{
-                      fontSize: 11, fontWeight: 800, color: Colors.Text.Success.Default, marginTop: 10, marginBottom: 6,
+                      fontSize: 12, fontWeight: 800, color: Colors.Text.Success.Default, marginTop: 10, marginBottom: 6,
                       textTransform: "uppercase", letterSpacing: 0.8,
                       padding: "5px 10px", borderRadius: 5,
                       background: dk ? "rgba(0,200,83,0.08)" : "rgba(0,200,83,0.06)",
                       border: `1px solid ${dk ? "rgba(0,200,83,0.20)" : "rgba(0,200,83,0.15)"}`,
                       display: "inline-flex", alignItems: "center", gap: 6,
                     }}>
-                      <Text style={{ fontSize: 13 }}>✅</Text> Additional recommendations ({healthy.length})
+                      <Text style={{ fontSize: 14 }}>✅</Text> Additional recommendations ({healthy.length})
                     </Flex>
                     {healthy.map((cr) => {
                       const rem = CRITERION_ACTIONS[cr.id];
@@ -639,14 +639,14 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                             <Text style={{ width: 6, height: 6, borderRadius: "50%", background: Colors.Text.Success.Default, flexShrink: 0 }} />
                             <Text style={{ flex: 1, color: textSec }}>{cr.label}</Text>
                             <Text style={{
-                              fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
+                              fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
                               background: dk ? "rgba(0,200,83,0.12)" : "rgba(0,200,83,0.10)",
                               color: Colors.Text.Success.Default,
                               border: "1px solid rgba(0,200,83,0.3)",
                             }}>✓ Applied</Text>
                           </Flex>
                           {rem && (
-                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 14, fontSize: 11, lineHeight: "16px" }}>
+                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
                               <Text style={{ color: textSec }}>{rem.action}</Text>
                               <ExternalLink href={rem.docUrl} style={{ marginLeft: 6 }}>
                                 {rem.docLabel} ↗
@@ -683,9 +683,9 @@ function DetailSection({ title, icon, color, caps, dk, card, border, textSec, te
       <Flex flexDirection="column"
         onClick={() => setOpen(!open)}
         role="button" tabIndex={0} aria-expanded={open}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(!open); } }} alignItems="center" gap={6} style={{ fontSize: 13, fontWeight: 700, color, cursor: "pointer", userSelect: "none" }}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(!open); } }} alignItems="center" gap={6} style={{ fontSize: 14, fontWeight: 800, color, cursor: "pointer", userSelect: "none" }}
       >
-        <Text style={{ fontSize: 11, transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "rotate(0)" }}>▶</Text>
+        <Text style={{ fontSize: 12, transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "rotate(0)" }}>▶</Text>
         <Text>{icon}</Text> {title} — {caps.length} {caps.length === 1 ? "capability" : "capabilities"}
       </Flex>
       {open && (
@@ -699,11 +699,11 @@ function DetailSection({ title, icon, color, caps, dk, card, border, textSec, te
                   onClick={() => toggleCap(cap.name)}
                   style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}
                 >
-                  <Text style={{ fontSize: 10, color: textSec, transition: "transform 0.2s", transform: isExpanded ? "rotate(90deg)" : "rotate(0)" }}>▶</Text>
+                  <Text style={{ fontSize: 12, color: textSec, transition: "transform 0.2s", transform: isExpanded ? "rotate(90deg)" : "rotate(0)" }}>▶</Text>
                   <Text style={{ width: 8, height: 8, borderRadius: "50%", background: cap.color }} />
-                  <Text style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{cap.name}</Text>
+                  <Text style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{cap.name}</Text>
                   <Text style={{ fontSize: 12, color: textSec }}>{cap.prevScore}% → {cap.currScore}%</Text>
-                  <Text style={{ fontSize: 13, fontWeight: 800, color }}>{cap.delta > 0 ? "+" : ""}{cap.delta}%</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 800, color }}>{cap.delta > 0 ? "+" : ""}{cap.delta}%</Text>
                 </Flex>
                 {isExpanded && changed.length > 0 && (
                   <Flex flexDirection="column" style={{ marginTop: 6 }}>
@@ -711,14 +711,14 @@ function DetailSection({ title, icon, color, caps, dk, card, border, textSec, te
                       const rem = CRITERION_ACTIONS[cr.id];
                       return (
                         <Flex flexDirection="column" key={cr.id} style={{ padding: "6px 0 6px 20px", borderTop: `1px solid ${border}`, marginTop: 4 }}>
-                          <Flex alignItems="center" gap={6} style={{ fontSize: 11 }}>
+                          <Flex alignItems="center" gap={6} style={{ fontSize: 12 }}>
                             <Text style={{ color: deltaColor(cr.pointsDelta) }}>{cr.pointsDelta > 0 ? "▲" : "▼"}</Text>
                             <Text style={{ flex: 1, fontWeight: 600, color: textSec }}>{cr.label}</Text>
                             <Text style={{ color: textTert }}>{cr.isRatio ? `${cr.prevValue}%` : cr.prevValue} → {cr.isRatio ? `${cr.currValue}%` : cr.currValue}</Text>
                             <Text style={{ fontWeight: 700, color: deltaColor(cr.pointsDelta) }}>{cr.pointsDelta > 0 ? "✓ Gained" : "✗ Lost"}</Text>
                           </Flex>
                           {rem && (
-                            <Flex flexDirection="column" style={{ marginTop: 4, paddingLeft: 14, fontSize: 11, lineHeight: "16px" }}>
+                            <Flex flexDirection="column" style={{ marginTop: 4, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
                               <Text style={{ color: textSec }}>{rem.action}</Text>
                               <ExternalLink href={rem.docUrl} style={{ marginLeft: 6 }}>
                                 📖 {rem.docLabel}
@@ -742,7 +742,7 @@ function DetailSection({ title, icon, color, caps, dk, card, border, textSec, te
 /* ── Styles ── */
 function btnStyle(dk: boolean): React.CSSProperties {
   return {
-    padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", borderRadius: 6,
+    padding: "8px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", borderRadius: 6,
     border: `1px solid ${dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
     background: dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
     color: Colors.Text.Neutral.Default,
