@@ -219,10 +219,10 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     }
 
     // ── Connector lines + capability labels (matching coverage chart style) ──
-    const labelR = R + Math.max(Math.min(w, h) * 0.085, 38);
-    const fs1 = Math.max(Math.min(w, h) * 0.020, 11);
-    const fs2 = Math.max(Math.min(w, h) * 0.017, 9);
-    const maxLabelW = Math.max(w * 0.20, 80);
+    const labelR = R + Math.max(Math.min(w, h) * 0.075, 34);
+    const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
+    const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
+    const maxLabelW = Math.max(w * 0.26, 110);
     const labelPad = 6; // padding from canvas edge
     const labelH = fs1 + fs2 + 6;
 
@@ -354,9 +354,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const h = rect.height;
 
     // Check label areas first (higher priority)
-    const labelR = R + Math.max(Math.min(w, h) * 0.085, 38);
-    const fs1 = Math.max(Math.min(w, h) * 0.020, 11);
-    const fs2 = Math.max(Math.min(w, h) * 0.017, 9);
+    const labelR = R + Math.max(Math.min(w, h) * 0.075, 34);
+    const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
+    const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const labelH = fs1 + fs2 + 6;
     for (let i = 0; i < N; i++) {
       const midA = i * SEG + SEG / 2 - Math.PI / 2;
@@ -710,9 +710,9 @@ export function renderRadarToDataURL(
   }
 
   // Connector lines + capability labels
-  const labelR = R + Math.max(Math.min(w, h) * 0.085, 38);
-  const fs1 = Math.max(Math.min(w, h) * 0.023, 11);
-  const fs2 = Math.max(Math.min(w, h) * 0.018, 9);
+  const labelR = R + Math.max(Math.min(w, h) * 0.075, 34);
+  const fs1 = Math.max(Math.min(w, h) * 0.020, 10);
+  const fs2 = Math.max(Math.min(w, h) * 0.016, 8);
   const labelH = fs1 + fs2 + 6;
   for (let i = 0; i < N; i++) {
     const midA = i * SEG + SEG / 2 - Math.PI / 2;
