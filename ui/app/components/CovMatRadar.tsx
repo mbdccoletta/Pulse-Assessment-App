@@ -88,11 +88,12 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const N = data.length;
     if (N === 0) return;
     const SEG = (Math.PI * 2) / N;
-    const legendSpace = 32;
+    const legendSpace = 22;
     const cx = w / 2;
     const cy = (h - legendSpace) / 2;
-    const labelMargin = Math.max(Math.min(w, h) * 0.30, 110); // space for labels around the radar
-    const R = (Math.min(w, h - legendSpace) - labelMargin) / 2;
+    const labelMarginW = Math.max(w * 0.46, 160); // horizontal margin based on width
+    const labelMarginH = Math.max(h * 0.38, 130); // vertical margin based on height
+    const R = Math.min((w - labelMarginW) / 2, (h - legendSpace - labelMarginH) / 2);
     geoRef.current = { cx, cy, R, N, SEG };
 
     ctx.clearRect(0, 0, w, h);
@@ -132,8 +133,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     }
 
     // ── Coverage polygon ──
-    const hR = Math.max(Math.min(w, h) * 0.09, 40);
-    const dotSizeBase = Math.max(Math.min(w, h) * 0.024, 13);
+    const hR = Math.max(Math.min(w, h) * 0.065, 28);
+    const dotSizeBase = Math.max(Math.min(w, h) * 0.018, 10);
     const minBlipR = hR + 6 + dotSizeBase + 4; // hub visual edge + dot radius + gap
     drawPoly(ctx, data.map(d => d.coverage), cx, cy, R, N, SEG, COV_C, dk, false, minBlipR);
 
@@ -169,7 +170,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
 
     // Center text
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    const fSize = Math.max(Math.min(w, h) * 0.038, 18);
+    const fSize = Math.max(Math.min(w, h) * 0.028, 14);
     ctx.fillStyle = COV_C;
     ctx.font = `800 ${fSize}px system-ui,sans-serif`;
     ctx.fillText(avgCov + "%", cx, cy - hR * 0.22);
@@ -221,7 +222,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const labelR = R + Math.max(Math.min(w, h) * 0.085, 38);
     const fs1 = Math.max(Math.min(w, h) * 0.020, 11);
     const fs2 = Math.max(Math.min(w, h) * 0.017, 9);
-    const maxLabelW = Math.max(Math.min(w, h) * 0.28, 120);
+    const maxLabelW = Math.max(w * 0.20, 80);
+    const labelPad = 6; // padding from canvas edge
     const labelH = fs1 + fs2 + 6;
 
     for (let i = 0; i < N; i++) {
@@ -239,9 +241,12 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const blipDotSize = (act ? dotBase * 1.35 : dotBase) + 4;
       const startR = outerBlipR + blipDotSize;
 
-      // Label position
-      const lx = cx + cos * labelR;
+      // Label position — clamped to canvas bounds
+      let lx = cx + cos * labelR;
       const ly = cy + sin * labelR;
+      // Clamp: for right-aligned labels, ensure lx + maxLabelW < w; for left-aligned, lx - maxLabelW > 0
+      if (isR) lx = Math.min(lx, w - maxLabelW - labelPad);
+      else if (isL) lx = Math.max(lx, maxLabelW + labelPad);
 
       // Connector stop before label
       const stopR = labelR - labelH / 2 - 6;
@@ -260,14 +265,6 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
         ctx.setLineDash([5, 4]); ctx.lineWidth = act ? 3 : 2; ctx.stroke(); ctx.setLineDash([]);
       }
 
-      // Accent bar below label
-      const barY = ly + labelH / 2 + 3;
-      const barW = act ? 60 : 44;
-      const barStartX = isR ? lx : isL ? lx - barW : lx - barW / 2;
-      ctx.beginPath(); ctx.moveTo(barStartX, barY); ctx.lineTo(barStartX + barW, barY);
-      ctx.strokeStyle = ml.color; ctx.globalAlpha = act ? 0.85 : 0.4;
-      ctx.lineWidth = act ? 3.5 : 2.5; ctx.lineCap = "round"; ctx.stroke(); ctx.lineCap = "butt";
-
       // Label text — line 1 (possibly wrapped): name, line 2: coverage / maturity scores
       ctx.textAlign = isR ? "left" : isL ? "right" : "center";
       ctx.textBaseline = "middle";
@@ -281,18 +278,36 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       for (let li = 0; li < nameLines.length; li++) {
         ctx.fillText(nameLines[li], lx, nameStartY + li * lineH);
       }
-      // Line 2: scores
+      // Line 2: scores — centered below name
       ctx.fillStyle = ml.color;
       ctx.font = `700 ${fs2}px system-ui,sans-serif`;
       const scorePrefix1 = legendLabels ? "A" : "C";
       const scorePrefix2 = legendLabels ? "B" : "M";
-      ctx.fillText(`${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].maturity)}%`, lx, nameStartY + nameBlockH + 2);
+      const scoreY = nameStartY + nameBlockH + 2;
+      // Measure name width to center score beneath it
+      ctx.font = `${act ? 800 : 700} ${fs1}px system-ui,sans-serif`;
+      const maxNameW = Math.max(...nameLines.map(l => ctx.measureText(l).width));
+      const nameCenterX = isR ? lx + maxNameW / 2 : isL ? lx - maxNameW / 2 : lx;
+      ctx.font = `700 ${fs2}px system-ui,sans-serif`;
+      const savedAlign = ctx.textAlign;
+      ctx.textAlign = "center";
+      ctx.fillText(`${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].maturity)}%`, nameCenterX, scoreY);
+      ctx.textAlign = savedAlign;
+      ctx.globalAlpha = 1;
+
+      // Accent bar below all text
+      const barY = scoreY + fs2 / 2 + 4;
+      const barW = act ? 60 : 44;
+      const barStartX = isR ? lx : isL ? lx - barW : lx - barW / 2;
+      ctx.beginPath(); ctx.moveTo(barStartX, barY); ctx.lineTo(barStartX + barW, barY);
+      ctx.strokeStyle = ml.color; ctx.globalAlpha = act ? 0.85 : 0.4;
+      ctx.lineWidth = act ? 3.5 : 2.5; ctx.lineCap = "round"; ctx.stroke(); ctx.lineCap = "butt";
       ctx.globalAlpha = 1;
     }
 
     // ── Legend ──
-    const legFont = Math.max(w * 0.024, 11);
-    const legY = h - 14;
+    const legFont = Math.max(Math.min(w * 0.016, 9), 7);
+    const legY = h - 8;
     ctx.font = `700 ${legFont}px system-ui,sans-serif`;
     // Measure text widths for centering
     const covLabel = legendLabels?.[0] ?? "Coverage";
@@ -358,8 +373,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     }
 
     // Check blip positions
-    const hR2 = Math.max(Math.min(w, h) * 0.09, 40);
-    const dotSz = Math.max(Math.min(w, h) * 0.024, 13);
+    const hR2 = Math.max(Math.min(w, h) * 0.065, 28);
+    const dotSz = Math.max(Math.min(w, h) * 0.018, 10);
     const minR2 = hR2 + 6 + dotSz + 4;
     const hitRadius = dotSz * 2.2;
     let best = -1, bestD = Infinity;
