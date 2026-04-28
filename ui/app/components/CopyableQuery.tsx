@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import Typography from "@dynatrace/strato-design-tokens/typography";
+import { Button } from "@dynatrace/strato-components/buttons";
+import { Flex } from "@dynatrace/strato-components/layouts";
+import { Text, Strong, Code } from "@dynatrace/strato-components/typography";
 
 interface Props {
   query: string;
@@ -18,18 +21,12 @@ const CopyBtn: React.FC<{ text: string; dk: boolean; label?: string; small?: boo
     }).catch(() => {});
   };
   return (
-    <button
+    <Button
       onClick={handleCopy}
-      style={{
-        flexShrink: 0, padding: small ? "2px 6px" : "3px 10px", fontSize: 11, cursor: "pointer",
-        background: copied ? (dk ? "rgba(0,200,83,0.15)" : "rgba(0,200,83,0.1)") : "transparent",
-        border: `1px solid ${copied ? "#36B37E" : (dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)")}`,
-        borderRadius: 4,
-        color: copied ? "#36B37E" : (dk ? "#9898b0" : "#666"),
-        fontWeight: 600, transition: "all 0.2s",
-      }}
+      size="condensed"
+      color={copied ? "success" : "neutral"}
       aria-label={copied ? "Copied" : (label || "Copy query")}
-    >{copied ? (small ? "✓" : "✓ Copied") : (small ? "⎘" : "⎘ Copy")}</button>
+    >{copied ? (small ? "✓" : "✓ Copied") : (small ? "⎎" : "⎎ Copy")}</Button>
   );
 };
 
@@ -47,49 +44,49 @@ export const CopyableQuery: React.FC<Props> = ({ query, dk, textSec, inline }) =
 
   if (inline) {
     return (
-      <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-        <span style={{ color: dk ? "#7878a0" : "#888" }}>DQL: </span>
-        <code style={{
+      <Flex flexDirection="row" alignItems="baseline" gap={4}>
+        <Text style={{ color: dk ? "#7878a0" : "#888" }}>DQL: </Text>
+        <Code style={{
           fontSize: 11, fontFamily: Typography.Code.Small.Default.Family, wordBreak: "break-all",
           color: dk ? "#b0b0d0" : "#555", flex: 1,
-        }}>{queryA}</code>
+        }}>{queryA}</Code>
         <CopyBtn text={queryA} dk={dk} small />
-      </div>
+      </Flex>
     );
   }
 
   if (isDual) {
     return (
-      <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: textSec, textTransform: "uppercase", letterSpacing: 0.8 }}>Numerator (A)</div>
+      <Flex flexDirection="column">
+        <Flex flexDirection="row" alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
+          <Text style={{ fontSize: 11, fontWeight: 700, color: textSec, textTransform: "uppercase", letterSpacing: 0.8 }}>Numerator (A)</Text>
           <CopyBtn text={queryA} dk={dk} />
-        </div>
-        <code style={codeStyle}>{queryA}</code>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, margin: "6px 0", color: dk ? "#9898b0" : "#888", fontSize: 13 }}>
-          <span style={{ flex: 1, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
-          <span style={{ fontWeight: 700 }}>÷</span>
-          <span style={{ flex: 1, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: textSec, textTransform: "uppercase", letterSpacing: 0.8 }}>Denominator (B)</div>
+        </Flex>
+        <Code style={codeStyle}>{queryA}</Code>
+        <Flex flexDirection="row" alignItems="center" justifyContent="center" gap={6} style={{ margin: "6px 0", color: dk ? "#9898b0" : "#888", fontSize: 13 }}>
+          <Text style={{ flex: 1, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
+          <Strong>÷</Strong>
+          <Text style={{ flex: 1, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
+        </Flex>
+        <Flex flexDirection="row" alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
+          <Text style={{ fontSize: 11, fontWeight: 700, color: textSec, textTransform: "uppercase", letterSpacing: 0.8 }}>Denominator (B)</Text>
           <CopyBtn text={queryB} dk={dk} />
-        </div>
-        <code style={codeStyle}>{queryB}</code>
-        <div style={{ fontSize: 11, color: dk ? "#7878a0" : "#999", marginTop: 6, fontStyle: "italic" }}>
+        </Flex>
+        <Code style={codeStyle}>{queryB}</Code>
+        <Text style={{ fontSize: 11, color: dk ? "#7878a0" : "#999", marginTop: 6, fontStyle: "italic" }}>
           Result = A ÷ B × 100 (cross-entity coverage %)
-        </div>
-      </div>
+        </Text>
+      </Flex>
     );
   }
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: textSec, textTransform: "uppercase", letterSpacing: 0.8 }}>DQL Query</div>
+    <Flex flexDirection="column">
+      <Flex flexDirection="row" alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
+        <Text style={{ fontSize: 11, fontWeight: 700, color: textSec, textTransform: "uppercase", letterSpacing: 0.8 }}>DQL Query</Text>
         <CopyBtn text={query} dk={dk} />
-      </div>
-      <code style={codeStyle}>{query}</code>
-    </div>
+      </Flex>
+      <Code style={codeStyle}>{query}</Code>
+    </Flex>
   );
 };

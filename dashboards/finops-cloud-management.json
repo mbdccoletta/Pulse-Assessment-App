@@ -1,0 +1,320 @@
+{
+  "name": "Cloud FinOps Management",
+  "type": "dashboard",
+  "content": {
+    "version": 21,
+    "variables": [
+      {
+        "version": 2,
+        "key": "AccountFilter",
+        "type": "query",
+        "visible": true,
+        "editable": true,
+        "input": "smartscapeNodes \"AWS_*\" | summarize by: {aws.account.id} | fields aws.account.id | sort aws.account.id asc",
+        "multiple": true,
+        "defaultValue": "3420b2ac-f1cf-4b24-b62d-61ba1ba8ed05*"
+      },
+      {
+        "version": 2,
+        "key": "RegionFilter",
+        "type": "query",
+        "visible": true,
+        "editable": true,
+        "input": "smartscapeNodes \"AWS_*\" | summarize by: {aws.region} | fields aws.region | sort aws.region asc",
+        "multiple": true,
+        "defaultValue": "3420b2ac-f1cf-4b24-b62d-61ba1ba8ed05*"
+      }
+    ],
+    "tiles": {
+      "0": {
+        "type": "markdown",
+        "content": "# ☁️ Cloud FinOps Management\nVisibilidade de custos, otimização de recursos e governança multi-cloud"
+      },
+      "1": {
+        "type": "markdown",
+        "content": "## 📊 Visão Geral de Recursos"
+      },
+      "2": {
+        "type": "data",
+        "title": "Total de Recursos AWS",
+        "query": "smartscapeNodes \"AWS_*\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| summarize total = count()",
+        "visualization": "singleValue",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "3": {
+        "type": "data",
+        "title": "Instâncias EC2",
+        "query": "smartscapeNodes \"AWS_EC2_INSTANCE\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd state = awsjson[configuration][state][name]\n| filter state == \"running\"\n| summarize total = count()",
+        "visualization": "singleValue",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "4": {
+        "type": "data",
+        "title": "Volumes EBS Não Anexados",
+        "query": "smartscapeNodes \"AWS_EC2_VOLUME\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd state = awsjson[configuration][state]\n| filter state == \"available\"\n| summarize total = count()",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "color": {
+              "fixedColor": "var(--dt-colors-charts-status-critical-default)"
+            }
+          }
+        },
+        "querySettings": {}
+      },
+      "5": {
+        "type": "data",
+        "title": "IPs Elásticos Não Associados",
+        "query": "smartscapeNodes \"AWS_EC2_EIP\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd associationId = awsjson[configuration][associationId]\n| filter isNull(associationId)\n| summarize total = count()",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "color": {
+              "fixedColor": "var(--dt-colors-charts-status-warning-default)"
+            }
+          }
+        },
+        "querySettings": {}
+      },
+      "6": {
+        "type": "data",
+        "title": "Funções Lambda",
+        "query": "smartscapeNodes \"AWS_LAMBDA_FUNCTION\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| summarize total = count()",
+        "visualization": "singleValue",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "7": {
+        "type": "markdown",
+        "content": "## 📦 Distribuição de Recursos"
+      },
+      "8": {
+        "type": "data",
+        "title": "Recursos por Tipo de Serviço",
+        "query": "smartscapeNodes \"AWS_*\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| summarize resource_count = count(), by: {type}\n| sort resource_count desc\n| limit 15",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "9": {
+        "type": "data",
+        "title": "Recursos por Conta e Região",
+        "query": "smartscapeNodes \"AWS_*\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| summarize resource_count = count(), by: {aws.account.id, aws.region}\n| sort resource_count desc",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "10": {
+        "type": "markdown",
+        "content": "## 💰 Otimização de Compute"
+      },
+      "11": {
+        "type": "data",
+        "title": "Distribuição de Tipos de Instância EC2",
+        "query": "smartscapeNodes \"AWS_EC2_INSTANCE\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd instanceType = awsjson[configuration][instanceType],\n            state = awsjson[configuration][state][name]\n| filter state == \"running\"\n| summarize instance_count = count(), by: {instanceType}\n| sort instance_count desc",
+        "visualization": "pieChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "12": {
+        "type": "data",
+        "title": "Classes de Instância RDS",
+        "query": "smartscapeNodes \"AWS_RDS_DBINSTANCE\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd instanceClass = awsjson[configuration][dbInstanceClass]\n| summarize db_count = count(), by: {instanceClass, aws.region}\n| sort db_count desc",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "13": {
+        "type": "data",
+        "title": "CPU Médio das Instâncias EC2",
+        "query": "timeseries cpu = avg(cloud.aws.ec2.CPUUtilization.By.InstanceId), by: {dt.smartscape_source.id}",
+        "visualization": "lineChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "14": {
+        "type": "markdown",
+        "content": "## 💾 Custos de Armazenamento"
+      },
+      "15": {
+        "type": "data",
+        "title": "Volumes EBS por Tipo e Estado",
+        "query": "smartscapeNodes \"AWS_EC2_VOLUME\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd volumeType = awsjson[configuration][volumeType],\n            size = awsjson[configuration][size],\n            state = awsjson[configuration][state]\n| summarize total_volumes = count(), total_size_gb = sum(size), by: {volumeType, state}\n| sort total_size_gb desc",
+        "visualization": "table",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "16": {
+        "type": "data",
+        "title": "Snapshots RDS por Tipo",
+        "query": "smartscapeNodes \"AWS_RDS_DBCLUSTERSNAPSHOT\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd snapshotType = awsjson[configuration][snapshotType]\n| summarize snapshot_count = count(), by: {snapshotType, aws.region}\n| sort snapshot_count desc",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "17": {
+        "type": "markdown",
+        "content": "## ⚡ Serverless & Networking"
+      },
+      "18": {
+        "type": "data",
+        "title": "Distribuição de Runtimes Lambda",
+        "query": "smartscapeNodes \"AWS_LAMBDA_FUNCTION\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd runtime = awsjson[configuration][runtime]\n| summarize function_count = count(), by: {runtime}\n| sort function_count desc",
+        "visualization": "pieChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "19": {
+        "type": "data",
+        "title": "Alocação de Memória Lambda",
+        "query": "smartscapeNodes \"AWS_LAMBDA_FUNCTION\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd memory = awsjson[configuration][memorySize]\n| summarize function_count = count(), by: {memory}\n| sort memory desc",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "20": {
+        "type": "data",
+        "title": "NAT Gateways por VPC",
+        "query": "smartscapeNodes \"AWS_EC2_NATGATEWAY\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd state = awsjson[configuration][state]\n| filter state == \"available\"\n| summarize nat_count = count(), by: {aws.vpc.id, aws.availability_zone}\n| sort nat_count desc",
+        "visualization": "table",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "21": {
+        "type": "data",
+        "title": "ElastiCache - Tipos de Nó",
+        "query": "smartscapeNodes \"AWS_ELASTICACHE_REPLICATIONGROUP\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd nodeType = awsjson[configuration][cacheNodeType]\n| summarize cluster_count = count(), by: {nodeType, aws.region}\n| sort cluster_count desc",
+        "visualization": "table",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "22": {
+        "type": "markdown",
+        "content": "## 🏷️ Governança & Tag Compliance"
+      },
+      "23": {
+        "type": "data",
+        "title": "Cobertura de Tags por Tipo de Recurso",
+        "query": "smartscapeNodes \"AWS_*\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| fieldsAdd has_env_tag = if(isNotNull(tags[Environment]), 1)\n| fieldsAdd has_owner_tag = if(isNotNull(tags[Owner]), 1)\n| summarize\n    total = count(),\n    with_env = sum(has_env_tag),\n    with_owner = sum(has_owner_tag),\n  by: {type}\n| fieldsAdd\n    env_coverage_pct = round((with_env * 100.0) / total, decimals: 1),\n    owner_coverage_pct = round((with_owner * 100.0) / total, decimals: 1)\n| sort env_coverage_pct asc\n| limit 20",
+        "visualization": "table",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "24": {
+        "type": "data",
+        "title": "Recursos Sem Nenhuma Tag",
+        "query": "smartscapeNodes \"AWS_*\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| filter isNull(tags)\n| summarize untagged_count = count(), by: {type}\n| sort untagged_count desc\n| limit 15",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "25": {
+        "type": "markdown",
+        "content": "## 🗑️ Detecção de Desperdício"
+      },
+      "26": {
+        "type": "data",
+        "title": "Volumes EBS Não Anexados (Detalhes)",
+        "query": "smartscapeNodes \"AWS_EC2_VOLUME\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd state = awsjson[configuration][state],\n            volumeType = awsjson[configuration][volumeType],\n            size = awsjson[configuration][size]\n| filter state == \"available\"\n| fields name, aws.resource.id, volumeType, size, aws.region, aws.account.id\n| sort size desc",
+        "visualization": "table",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "27": {
+        "type": "data",
+        "title": "IPs Elásticos Não Associados (Detalhes)",
+        "query": "smartscapeNodes \"AWS_EC2_EIP\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd associationId = awsjson[configuration][associationId]\n| filter isNull(associationId)\n| fields name, aws.resource.id, aws.region, aws.account.id",
+        "visualization": "table",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "28": {
+        "type": "data",
+        "title": "Recursos Deletados Recentemente",
+        "query": "smartscapeNodes \"AWS_*\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| filter cloud.acquisition.status == \"DELETED\"\n| summarize deleted_count = count(), by: {type}\n| sort deleted_count desc\n| limit 10",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "29": {
+        "type": "markdown",
+        "content": "## 📈 Capacidade & Performance"
+      },
+      "30": {
+        "type": "data",
+        "title": "Auto Scaling - Capacidade e Headroom",
+        "query": "smartscapeNodes \"AWS_AUTOSCALING_AUTOSCALINGGROUP\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd minSize = awsjson[configuration][minSize],\n            maxSize = awsjson[configuration][maxSize],\n            desiredCapacity = awsjson[configuration][desiredCapacity]\n| fields name, minSize, maxSize, desiredCapacity, aws.region\n| sort desiredCapacity desc",
+        "visualization": "table",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "31": {
+        "type": "data",
+        "title": "Disponibilidade de IPs em Subnets",
+        "query": "smartscapeNodes \"AWS_EC2_SUBNET\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| parse aws.object, \"JSON:awsjson\"\n| fieldsAdd availableIpCount = awsjson[configuration][availableIpAddressCount],\n            cidrBlock = awsjson[configuration][cidrBlock]\n| fields name, cidrBlock, availableIpCount, aws.vpc.id, aws.availability_zone\n| sort availableIpCount asc\n| limit 20",
+        "visualization": "table",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "32": {
+        "type": "markdown",
+        "content": "## 🏢 Ownership & Chargeback"
+      },
+      "33": {
+        "type": "data",
+        "title": "Recursos por CostCenter",
+        "query": "smartscapeNodes \"AWS_*\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| filter isNotNull(tags[CostCenter])\n| summarize resource_count = count(), by: {tags[CostCenter], type}\n| sort resource_count desc\n| limit 20",
+        "visualization": "categoricalBarChart",
+        "visualizationSettings": {},
+        "querySettings": {}
+      },
+      "34": {
+        "type": "data",
+        "title": "Multi-Account - Resumo de Recursos",
+        "query": "smartscapeNodes \"AWS_*\"\n| filter in(aws.account.id, array($AccountFilter))\n| filter in(aws.region, array($RegionFilter))\n| summarize resource_count = count(), by: {aws.account.id, type}\n| sort resource_count desc\n| limit 30",
+        "visualization": "table",
+        "visualizationSettings": {},
+        "querySettings": {}
+      }
+    },
+    "layouts": {
+      "0":  { "x": 0,  "y": 0,  "w": 20, "h": 2 },
+      "1":  { "x": 0,  "y": 2,  "w": 20, "h": 1 },
+      "2":  { "x": 0,  "y": 3,  "w": 4,  "h": 4 },
+      "3":  { "x": 4,  "y": 3,  "w": 4,  "h": 4 },
+      "4":  { "x": 8,  "y": 3,  "w": 4,  "h": 4 },
+      "5":  { "x": 12, "y": 3,  "w": 4,  "h": 4 },
+      "6":  { "x": 16, "y": 3,  "w": 4,  "h": 4 },
+      "7":  { "x": 0,  "y": 7,  "w": 20, "h": 1 },
+      "8":  { "x": 0,  "y": 8,  "w": 10, "h": 8 },
+      "9":  { "x": 10, "y": 8,  "w": 10, "h": 8 },
+      "10": { "x": 0,  "y": 16, "w": 20, "h": 1 },
+      "11": { "x": 0,  "y": 17, "w": 10, "h": 8 },
+      "12": { "x": 10, "y": 17, "w": 10, "h": 8 },
+      "13": { "x": 0,  "y": 25, "w": 20, "h": 8 },
+      "14": { "x": 0,  "y": 33, "w": 20, "h": 1 },
+      "15": { "x": 0,  "y": 34, "w": 10, "h": 8 },
+      "16": { "x": 10, "y": 34, "w": 10, "h": 8 },
+      "17": { "x": 0,  "y": 42, "w": 20, "h": 1 },
+      "18": { "x": 0,  "y": 43, "w": 10, "h": 8 },
+      "19": { "x": 10, "y": 43, "w": 10, "h": 8 },
+      "20": { "x": 0,  "y": 51, "w": 10, "h": 8 },
+      "21": { "x": 10, "y": 51, "w": 10, "h": 8 },
+      "22": { "x": 0,  "y": 59, "w": 20, "h": 1 },
+      "23": { "x": 0,  "y": 60, "w": 20, "h": 8 },
+      "24": { "x": 0,  "y": 68, "w": 20, "h": 8 },
+      "25": { "x": 0,  "y": 76, "w": 20, "h": 1 },
+      "26": { "x": 0,  "y": 77, "w": 10, "h": 8 },
+      "27": { "x": 10, "y": 77, "w": 10, "h": 8 },
+      "28": { "x": 0,  "y": 85, "w": 20, "h": 8 },
+      "29": { "x": 0,  "y": 93, "w": 20, "h": 1 },
+      "30": { "x": 0,  "y": 94, "w": 10, "h": 8 },
+      "31": { "x": 10, "y": 94, "w": 10, "h": 8 },
+      "32": { "x": 0,  "y": 102, "w": 20, "h": 1 },
+      "33": { "x": 0,  "y": 103, "w": 10, "h": 8 },
+      "34": { "x": 10, "y": 103, "w": 10, "h": 8 }
+    }
+  }
+}

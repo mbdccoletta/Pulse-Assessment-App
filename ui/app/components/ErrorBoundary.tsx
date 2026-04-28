@@ -1,4 +1,7 @@
 import React, { Component } from "react";
+import { Button } from "@dynatrace/strato-components/buttons";
+import { Flex } from "@dynatrace/strato-components/layouts";
+import { Text, Heading } from "@dynatrace/strato-components/typography";
 
 interface State { hasError: boolean; error: Error | null }
 
@@ -16,25 +19,20 @@ export class ErrorBoundary extends Component<{ children: React.ReactNode }, Stat
   render() {
     if (this.state.hasError) {
       return (
-        <div role="alert" style={{
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          minHeight: "100vh", gap: 16, padding: 32, fontFamily: "inherit",
-        }}>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Something went wrong</div>
-          <div style={{ fontSize: 13, opacity: 0.7, maxWidth: 400, textAlign: "center" }}>
+        <Flex role="alert" flexDirection="column" alignItems="center" justifyContent="center"
+          style={{ minHeight: "100vh", gap: 16, padding: 32 }}>
+          <Heading level={4}>Something went wrong</Heading>
+          <Text style={{ opacity: 0.7, maxWidth: 400, textAlign: "center" }}>
             {this.state.error?.message || "An unexpected error occurred."}
-          </div>
-          <button
+          </Text>
+          <Button
             onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
-            style={{
-              marginTop: 8, padding: "8px 24px", fontSize: 13, fontWeight: 600,
-              cursor: "pointer", borderRadius: 8, border: "1px solid #4169E1",
-              background: "#4169E1", color: "#fff",
-            }}
+            variant="emphasized"
+            color="primary"
           >
             Reload App
-          </button>
-        </div>
+          </Button>
+        </Flex>
       );
     }
     return this.props.children;
