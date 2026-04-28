@@ -9,7 +9,6 @@ import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-comp
 import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
 import { CovMatRadar } from "../components/CovMatRadar";
-import { CapabilityScatter } from "../components/CapabilityScatter";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_TIERS } from "../data/criterionTiers";
 import { CAPABILITIES } from "../queries";
@@ -364,13 +363,10 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
                 <ExpandChartButton onClick={() => setExpandedRadar(true)} />
               </Flex>
               <Flex flexDirection="column" style={{ flex: 1, minHeight: 340 }}>
-                <CapabilityScatter
-                  data={radarSnap === "A"
-                    ? comparison.capDiffs.map(c => ({ name: c.name, x: c.currScore, y: c.currMaturity, color: c.color }))
-                    : comparison.capDiffs.map(c => ({ name: c.name, x: c.prevScore, y: c.prevMaturity, color: c.color }))
-                  }
-                  dotRadius={10}
-                  showLegend={true}
+                <CovMatRadar data={radarSnap === "A"
+                  ? comparison.capDiffs.map(c => ({ name: c.name, coverage: c.currScore, maturity: c.currMaturity, color: c.color }))
+                  : comparison.capDiffs.map(c => ({ name: c.name, coverage: c.prevScore, maturity: c.prevMaturity, color: c.color }))
+                }
                   activeIdx={selectedCap ? comparison.capDiffs.findIndex(c => c.name === selectedCap) : null}
                   onSelect={(idx) => setSelectedCap(idx !== null && idx >= 0 ? comparison.capDiffs[idx]?.name ?? null : null)}
                 />
@@ -399,13 +395,10 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           {/* Expanded Radar Modal */}
           <ExpandableChartModal open={expandedRadar} onClose={() => setExpandedRadar(false)} title={`Coverage vs Maturity by Capability — ${radarSnap === "A" ? "A (Newer)" : "B (Older)"}`}>
             <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
-              <CapabilityScatter
-                data={radarSnap === "A"
-                  ? comparison.capDiffs.map(c => ({ name: c.name, x: c.currScore, y: c.currMaturity, color: c.color }))
-                  : comparison.capDiffs.map(c => ({ name: c.name, x: c.prevScore, y: c.prevMaturity, color: c.color }))
-                }
-                dotRadius={12}
-                showLegend={true}
+              <CovMatRadar data={radarSnap === "A"
+                ? comparison.capDiffs.map(c => ({ name: c.name, coverage: c.currScore, maturity: c.currMaturity, color: c.color }))
+                : comparison.capDiffs.map(c => ({ name: c.name, coverage: c.prevScore, maturity: c.prevMaturity, color: c.color }))
+              }
                 activeIdx={selectedCap ? comparison.capDiffs.findIndex(c => c.name === selectedCap) : null}
                 onSelect={(idx) => setSelectedCap(idx !== null && idx >= 0 ? comparison.capDiffs[idx]?.name ?? null : null)}
               />
