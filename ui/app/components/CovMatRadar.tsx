@@ -386,8 +386,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     <Flex ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }}>
       <canvas
         ref={canvasRef}
-        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: hoveredIdx !== null && hoveredIdx >= 0 ? "pointer" : "default" }}
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: hoveredIdx !== null && hoveredIdx >= 0 ? "pointer" : "default", touchAction: "none" }}
         onClick={handleClick}
+        onDoubleClick={(e) => e.preventDefault()}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
       />
