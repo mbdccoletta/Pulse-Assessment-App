@@ -1004,7 +1004,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
           <ExpandChartButton onClick={() => setExpandedChart("bubble")} />
         </Flex>
         <Flex flexDirection="column" style={{ height: "calc(100vh - 320px)", minHeight: 380 }}>
-          <CapabilityScatter data={scatterPoints} dotRadius={10} />
+          <CapabilityScatter data={scatterPoints} dotRadius={10} showLegend={false} />
         </Flex>
       </Flex>
       </Flex>
@@ -1012,7 +1012,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
       {/* ── Expanded Scatter Chart Modal ── */}
       <ExpandableChartModal open={expandedChart === "bubble"} onClose={() => setExpandedChart(null)} title="Capability Map — Coverage × Maturity">
         <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
-          <CapabilityScatter data={scatterPoints} dotRadius={12} />
+          <CapabilityScatter data={scatterPoints} dotRadius={12} showLegend={false} />
         </Flex>
       </ExpandableChartModal>
 
