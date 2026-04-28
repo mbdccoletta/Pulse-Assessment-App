@@ -85,6 +85,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
   const [exporting, setExporting] = useState(false);
   const [expandedPolar, setExpandedPolar] = useState(false);
   const radarHandleRef = useRef<CovMatRadarHandle | null>(null);
+  const wasLoadingRef = useRef(false);
 
   const t0 = useRef<number>(0);
   const dk = useCurrentTheme() === "dark";
@@ -102,8 +103,15 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
       }
     }, 0);
   }, [capabilities, exporting, tenant, date, stats, entityCounts, totalScore]);
+
+  // Save snapshot only when an assessment run finishes (loading transitions true → false)
   useEffect(() => {
-    if (!loading && capabilities.length > 0) {
+    if (loading) {
+      wasLoadingRef.current = true;
+      return;
+    }
+    if (wasLoadingRef.current && capabilities.length > 0) {
+      wasLoadingRef.current = false;
       const sig = capabilities.map(c => `${c.name}:${c.score}`).join(",");
       if (sig !== lastSavedRef.current) {
         lastSavedRef.current = sig;
