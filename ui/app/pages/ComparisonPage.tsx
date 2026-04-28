@@ -341,7 +341,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           </Grid>
 
           {/* ══════ RADAR CHART + CAPABILITY BARS (side by side) ══════ */}
-          <Flex gap={16} style={{ marginBottom: 24 }} flexWrap={isMobile ? "wrap" : "nowrap"}>
+          <Flex gap={16} style={{ marginBottom: 24 }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
             {/* Left: CovMatRadar */}
             <Flex flexDirection="column" style={{
               flex: isMobile ? "1 1 100%" : "1 1 55%", minWidth: 0,
