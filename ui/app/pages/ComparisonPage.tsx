@@ -114,7 +114,6 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   const [showListA, setShowListA] = useState(false);
   const [showListB, setShowListB] = useState(false);
   const [dimension, setDimension] = useState<"coverage" | "maturity">("coverage");
-  const [radarSnap, setRadarSnap] = useState<"A" | "B">("A");
   const [expandedRadar, setExpandedRadar] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -217,13 +216,13 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
     const mat = snap ? Math.round(snap.capabilities.reduce((s, c) => s + computeMaturity(c.criteriaResults), 0) / (snap.capabilities.length || 1)) : 0;
     return (
     <Button onClick={(e: React.MouseEvent<Element>) => { e.stopPropagation(); toggle(); }} style={{
-      display: "flex", alignItems: "center", gap: 10,
-      padding: "8px 14px",
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "5px 10px",
       border: `1px solid ${color}55`,
       background: dk ? `${color}15` : `${color}08`,
-      minWidth: 220,
+      minWidth: 180,
     }}>
-      <Text style={{ fontWeight: 800, color, fontSize: 15, minWidth: 14 }}>{label}</Text>
+      <Text style={{ fontWeight: 800, color, fontSize: 13, minWidth: 12 }}>{label}</Text>
       {snap ? (
         <Flex alignItems="center" gap={12} style={{ flex: 1 }}>
           <Text style={{ whiteSpace: "nowrap", fontSize: 12 }}>{fmtShort(snap.timestamp)}</Text>
@@ -269,31 +268,18 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
 
   return (
     <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, minHeight: "100vh", padding: "8px 12px", overflow: "auto" }}>
-      {/* Header */}
-      <Flex alignItems="center" gap={12} flexWrap="wrap" style={{ marginBottom: 16 }}>
+      {/* Header + A/B Selectors — compact single row */}
+      <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 8 }} onClick={(e) => e.stopPropagation()}>
         <Tooltip text="Return to the main assessment page." position="bottom">
         <Button onClick={() => navigate("/")} size="condensed">← Back</Button>
         </Tooltip>
-        <Flex flexDirection="column" style={{ flex: 1, minWidth: 0 }}>
-          <Tooltip text="Compare two assessment snapshots side by side. Select Snapshot A and Snapshot B to see differences." position="bottom">
-          <Text style={{ fontSize: 16, fontWeight: 700 }}>Evolution Over Time</Text>
-          </Tooltip>
-          <Text style={{ fontSize: 12, color: textSec }}>
-            {comparison
-              ? `Comparing ${fmtShort(comparison.baseline.timestamp)} → ${fmtShort(comparison.current.timestamp)} (${comparison.timeSpan})`
-              : "Select two different snapshots to compare"}
-          </Text>
-        </Flex>
-      </Flex>
-
-      {/* A/B Snapshot Selectors */}
-      <Flex alignItems="center" gap={12} flexWrap="wrap" style={{ marginBottom: 16 }} onClick={(e) => e.stopPropagation()}>
-        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 220, maxWidth: 380 }}>
+        <Text style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap" }}>Evolution Over Time</Text>
+        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 340 }}>
           {snapPickerBtn("A", snapA, showListA, () => { setShowListA(v => !v); setShowListB(false); }, Colors.Charts.Categorical.Color01.Default)}
           {showListA && snapDropdown(idxA, (i) => { setIdxA(i); setShowListA(false); }, idxB, Colors.Charts.Categorical.Color01.Default)}
         </Flex>
-        <Text style={{ color: textTert, fontSize: 13, fontWeight: 700, padding: "0 2px" }}>vs</Text>
-        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 220, maxWidth: 380 }}>
+        <Text style={{ color: textTert, fontSize: 12, fontWeight: 700 }}>vs</Text>
+        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 340 }}>
           {snapPickerBtn("B", snapB, showListB, () => { setShowListB(v => !v); setShowListA(false); }, Colors.Charts.Categorical.Color14.Default)}
           {showListB && snapDropdown(idxB, (i) => { setIdxB(i); setShowListB(false); }, idxA, Colors.Charts.Categorical.Color14.Default)}
         </Flex>
@@ -305,68 +291,56 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
 
       {comparison && (
         <>
-          {/* Time context banner */}
-          <Flex alignItems="center" justifyContent="center" gap={isMobile ? 12 : 24} flexWrap="wrap" style={{ marginBottom: 16, padding: "10px 16px",
-            background: dk ? "rgba(65,105,225,0.06)" : "rgba(65,105,225,0.04)", border: `1px solid ${dk ? "rgba(65,105,225,0.15)" : "rgba(65,105,225,0.1)"}`, borderRadius: 8 }}>
-            <Flex flexDirection="column" style={{ textAlign: "center" }}>
-              <Text style={{ fontSize: 11, color: Colors.Charts.Categorical.Color14.Default, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>B (Older)</Text>
-              <Text style={{ fontSize: 13, fontWeight: 700 }}>{fmtShort(comparison.baseline.timestamp)}</Text>
-              <Text style={{ fontSize: 11, color: textTert }}>{relativeTime(comparison.baseline.timestamp)}</Text>
+          {/* KPI Summary — compact inline */}
+          <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 10 }}>
+            <Flex alignItems="center" gap={4} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${border}`, background: card }}>
+              <Text style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Coverage</Text>
+              <Text style={{ fontSize: 13, fontWeight: 800 }}>{comparison.baseline.totalScore}%→{comparison.current.totalScore}%</Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.totalDelta) }}>{comparison.totalDelta > 0 ? "+" : ""}{comparison.totalDelta}%</Text>
             </Flex>
-            <Flex flexDirection="column" style={{ fontSize: 11, color: textTert, textAlign: "center" }}>
-              <Text style={{ fontSize: 18 }}>→</Text>
-              <Text style={{ fontSize: 11, fontWeight: 600 }}>{comparison.timeSpan}</Text>
+            <Flex alignItems="center" gap={4} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${border}`, background: card }}>
+              <Text style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Maturity</Text>
+              <Text style={{ fontSize: 13, fontWeight: 800 }}>{comparison.baselineMaturity}%→{comparison.currentMaturity}%</Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.maturityDelta) }}>{comparison.maturityDelta > 0 ? "+" : ""}{comparison.maturityDelta}%</Text>
             </Flex>
-            <Flex flexDirection="column" style={{ textAlign: "center" }}>
-              <Text style={{ fontSize: 11, color: Colors.Charts.Categorical.Color01.Default, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>A (Newer)</Text>
-              <Text style={{ fontSize: 13, fontWeight: 700 }}>{fmtShort(comparison.current.timestamp)}</Text>
-              <Text style={{ fontSize: 11, color: textTert }}>{relativeTime(comparison.current.timestamp)}</Text>
+            <Flex alignItems="center" gap={6} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${border}`, background: card }}>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: Colors.Text.Success.Default }}>↑{comparison.improved.length}</Text>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: Colors.Text.Critical.Default }}>↓{comparison.degraded.length}</Text>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: textTert }}>={comparison.unchanged.length}</Text>
             </Flex>
+            <Text style={{ fontSize: 11, color: textTert }}>{comparison.timeSpan}</Text>
           </Flex>
 
-          {/* KPI Summary */}
-          <Grid gridTemplateColumns={"repeat(auto-fit, minmax(140px, 1fr))"} gap={12} style={{ marginBottom: 16 }}>
-            <KpiCard dk={dk} card={card} border={border} label="Coverage" value={`${comparison.baseline.totalScore}% → ${comparison.current.totalScore}%`}
-              sub={<Text style={{ color: deltaColor(comparison.totalDelta), fontWeight: 700, fontSize: 14 }}>{comparison.totalDelta > 0 ? "+" : ""}{comparison.totalDelta}%</Text>} />
-            <KpiCard dk={dk} card={card} border={border} label="Maturity" value={`${comparison.baselineMaturity}% → ${comparison.currentMaturity}%`}
-              sub={<Text style={{ color: deltaColor(comparison.maturityDelta), fontWeight: 700, fontSize: 14 }}>{comparison.maturityDelta > 0 ? "+" : ""}{comparison.maturityDelta}%</Text>} />
-            <KpiCard dk={dk} card={card} border={border} label="Improved" value={`${comparison.improved.length}`}
-              sub={<Text style={{ color: Colors.Text.Success.Default, fontSize: 11 }}>capabilities improved</Text>}
-              accent={Colors.Text.Success.Default} />
-            <KpiCard dk={dk} card={card} border={border} label="Degraded" value={`${comparison.degraded.length}`}
-              sub={<Text style={{ color: Colors.Text.Critical.Default, fontSize: 11 }}>capabilities degraded</Text>}
-              accent={Colors.Text.Critical.Default} />
-            <KpiCard dk={dk} card={card} border={border} label="Unchanged" value={`${comparison.unchanged.length}`}
-              sub={<Text style={{ color: textTert, fontSize: 11 }}>capabilities stable</Text>} />
-          </Grid>
-
           {/* ══════ RADAR CHART + CAPABILITY BARS (side by side) ══════ */}
-          <Flex gap={16} style={{ marginBottom: 24, height: isMobile ? "auto" : "calc(100vh - 260px)" }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
+          <Flex gap={16} style={{ marginBottom: 24, height: isMobile ? "auto" : "calc(100vh - 160px)" }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
             {/* Left: CovMatRadar */}
             <Flex flexDirection="column" style={{
               flex: isMobile ? "1 1 100%" : "1 1 55%", minWidth: 0, minHeight: 0,
               borderRadius: 12, border: `1px solid ${border}`, background: card,
-              padding: "12px 14px 14px", overflow: "hidden",
+              padding: "12px 14px 14px", overflow: "visible",
             }}>
               <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 6 }}>
                 <Flex alignItems="center" gap={8} flexWrap="wrap">
-                  <Text style={{ fontSize: 12, fontWeight: 700, color: textSec, letterSpacing: 0.5 }}>Coverage vs Maturity by Capability</Text>
-                  <ToggleButtonGroup value={radarSnap} onChange={(val: string) => setRadarSnap(val as "A" | "B")}>
-                    <ToggleButtonGroupItem value="A">
-                      <Text style={{ color: Colors.Charts.Categorical.Color01.Default, fontWeight: 700, fontSize: 11 }}>A</Text> {fmtShort(comparison.current.timestamp)}
-                    </ToggleButtonGroupItem>
-                    <ToggleButtonGroupItem value="B">
-                      <Text style={{ color: Colors.Charts.Categorical.Color14.Default, fontWeight: 700, fontSize: 11 }}>B</Text> {fmtShort(comparison.baseline.timestamp)}
-                    </ToggleButtonGroupItem>
+                  <Text style={{ fontSize: 12, fontWeight: 700, color: textSec, letterSpacing: 0.5 }}>{dimension === "coverage" ? "Coverage" : "Maturity"} Comparison</Text>
+                  <ToggleButtonGroup value={dimension} onChange={(val: string) => setDimension(val as "coverage" | "maturity")}>
+                    <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
+                    <ToggleButtonGroupItem value="maturity">Maturity</ToggleButtonGroupItem>
                   </ToggleButtonGroup>
                 </Flex>
                 <ExpandChartButton onClick={() => setExpandedRadar(true)} />
               </Flex>
               <Flex flexDirection="column" style={{ flex: 1, minHeight: 340 }}>
-                <CovMatRadar data={radarSnap === "A"
-                  ? comparison.capDiffs.map(c => ({ name: c.name, coverage: c.currScore, maturity: c.currMaturity, color: c.color }))
-                  : comparison.capDiffs.map(c => ({ name: c.name, coverage: c.prevScore, maturity: c.prevMaturity, color: c.color }))
-                }
+                <CovMatRadar
+                  data={comparison.capDiffs.map(c => ({
+                    name: c.name,
+                    coverage: dimension === "coverage" ? c.currScore : c.currMaturity,
+                    maturity: dimension === "coverage" ? c.prevScore : c.prevMaturity,
+                    color: c.color,
+                  }))}
+                  coverageColor="#134fc9"
+                  maturityColor="#d56b1a"
+                  legendLabels={[`A ${fmtShort(comparison.current.timestamp)}`, `B ${fmtShort(comparison.baseline.timestamp)}`]}
+                  activeIdx={selectedCap ? comparison.capDiffs.findIndex(c => c.name === selectedCap) : null}
                   onSelect={(idx) => setSelectedCap(idx !== null && idx >= 0 ? comparison.capDiffs[idx]?.name ?? null : null)}
                 />
               </Flex>
@@ -392,13 +366,18 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           </Flex>
 
           {/* Expanded Radar Modal */}
-          <ExpandableChartModal open={expandedRadar} onClose={() => setExpandedRadar(false)} title={`Coverage vs Maturity by Capability — ${radarSnap === "A" ? "A (Newer)" : "B (Older)"}`}>
+          <ExpandableChartModal open={expandedRadar} onClose={() => setExpandedRadar(false)} title={`${dimension === "coverage" ? "Coverage" : "Maturity"} Comparison`}>
             <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
-              <CovMatRadar data={radarSnap === "A"
-                ? comparison.capDiffs.map(c => ({ name: c.name, coverage: c.currScore, maturity: c.currMaturity, color: c.color }))
-                : comparison.capDiffs.map(c => ({ name: c.name, coverage: c.prevScore, maturity: c.prevMaturity, color: c.color }))
-              }
-                onSelect={(idx) => setSelectedCap(idx !== null && idx >= 0 ? comparison.capDiffs[idx]?.name ?? null : null)}
+              <CovMatRadar
+                data={comparison.capDiffs.map(c => ({
+                  name: c.name,
+                  coverage: dimension === "coverage" ? c.currScore : c.currMaturity,
+                  maturity: dimension === "coverage" ? c.prevScore : c.prevMaturity,
+                  color: c.color,
+                }))}
+                coverageColor="#134fc9"
+                maturityColor="#d56b1a"
+                legendLabels={[`A ${fmtShort(comparison.current.timestamp)}`, `B ${fmtShort(comparison.baseline.timestamp)}`]}
               />
             </Flex>
           </ExpandableChartModal>

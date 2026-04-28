@@ -14,6 +14,20 @@ function bandForScore(s: number) {
   return { label: "N/A", color: "#CD3C44" };
 }
 
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  if (ctx.measureText(text).width <= maxWidth) return [text];
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let cur = words[0];
+  for (let i = 1; i < words.length; i++) {
+    const test = cur + " " + words[i];
+    if (ctx.measureText(test).width <= maxWidth) { cur = test; }
+    else { lines.push(cur); cur = words[i]; }
+  }
+  lines.push(cur);
+  return lines;
+}
+
 const BANDS = [
   { min: 0, max: 20, label: "N/A", color: "#CD3C44" },
   { min: 20, max: 40, label: "Low", color: "#DC671E" },
@@ -33,6 +47,7 @@ interface Props {
   data: DataPoint[];
   coverageColor?: string;
   maturityColor?: string;
+  legendLabels?: [string, string];
   activeIdx?: number | null;
   onSelect?: (idx: number | null) => void;
 }
@@ -41,7 +56,7 @@ export interface CovMatRadarHandle {
   toDataURL: () => string | null;
 }
 
-export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(function CovMatRadar({ data, coverageColor, maturityColor, activeIdx: controlledIdx, onSelect }, ref) {
+export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(function CovMatRadar({ data, coverageColor, maturityColor, legendLabels, activeIdx: controlledIdx, onSelect }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dk = useCurrentTheme() === "dark";
@@ -76,7 +91,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const legendSpace = 32;
     const cx = w / 2;
     const cy = (h - legendSpace) / 2;
-    const labelMargin = Math.max(Math.min(w, h) * 0.26, 95); // space for labels around the radar
+    const labelMargin = Math.max(Math.min(w, h) * 0.30, 110); // space for labels around the radar
     const R = (Math.min(w, h - legendSpace) - labelMargin) / 2;
     geoRef.current = { cx, cy, R, N, SEG };
 
@@ -162,8 +177,10 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     ctx.fillText(avgMat + "%", cx, cy + hR * 0.22);
     ctx.fillStyle = dk ? "#c0c0e0" : "#555570";
     ctx.font = `600 ${Math.max(fSize * 0.42, 7)}px system-ui,sans-serif`;
-    ctx.fillText("COV", cx, cy - hR * 0.55);
-    ctx.fillText("MAT", cx, cy + hR * 0.55);
+    const hubLabel1 = legendLabels ? "A" : "COV";
+    const hubLabel2 = legendLabels ? "B" : "MAT";
+    ctx.fillText(hubLabel1, cx, cy - hR * 0.55);
+    ctx.fillText(hubLabel2, cx, cy + hR * 0.55);
 
     // ── Blips with gradient & score (drawn after hub so they appear on top) ──
     const dotBase = dotSizeBase;
@@ -201,9 +218,10 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     }
 
     // ── Connector lines + capability labels (matching coverage chart style) ──
-    const labelR = R + Math.max(Math.min(w, h) * 0.095, 42);
-    const fs1 = Math.max(Math.min(w, h) * 0.028, 13);
-    const fs2 = Math.max(Math.min(w, h) * 0.023, 11);
+    const labelR = R + Math.max(Math.min(w, h) * 0.085, 38);
+    const fs1 = Math.max(Math.min(w, h) * 0.020, 11);
+    const fs2 = Math.max(Math.min(w, h) * 0.017, 9);
+    const maxLabelW = Math.max(Math.min(w, h) * 0.28, 120);
     const labelH = fs1 + fs2 + 6;
 
     for (let i = 0; i < N; i++) {
@@ -250,17 +268,25 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       ctx.strokeStyle = ml.color; ctx.globalAlpha = act ? 0.85 : 0.4;
       ctx.lineWidth = act ? 3.5 : 2.5; ctx.lineCap = "round"; ctx.stroke(); ctx.lineCap = "butt";
 
-      // Label text — line 1: name, line 2: coverage / maturity scores
+      // Label text — line 1 (possibly wrapped): name, line 2: coverage / maturity scores
       ctx.textAlign = isR ? "left" : isL ? "right" : "center";
       ctx.textBaseline = "middle";
       ctx.globalAlpha = dim ? 0.35 : 1;
       ctx.fillStyle = act ? data[i].color : dk ? "#e0e0f0" : "#1a1a2e";
       ctx.font = `${act ? 800 : 700} ${fs1}px system-ui,sans-serif`;
-      ctx.fillText(data[i].name, lx, ly - fs2 / 2 - 1);
+      const nameLines = wrapText(ctx, data[i].name, maxLabelW);
+      const lineH = fs1 + 2;
+      const nameBlockH = nameLines.length * lineH;
+      const nameStartY = ly - fs2 / 2 - 1 - (nameBlockH - lineH) / 2;
+      for (let li = 0; li < nameLines.length; li++) {
+        ctx.fillText(nameLines[li], lx, nameStartY + li * lineH);
+      }
       // Line 2: scores
       ctx.fillStyle = ml.color;
       ctx.font = `700 ${fs2}px system-ui,sans-serif`;
-      ctx.fillText(`C ${Math.round(data[i].coverage)}% / M ${Math.round(data[i].maturity)}%`, lx, ly + fs1 / 2 + 1);
+      const scorePrefix1 = legendLabels ? "A" : "C";
+      const scorePrefix2 = legendLabels ? "B" : "M";
+      ctx.fillText(`${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].maturity)}%`, lx, nameStartY + nameBlockH + 2);
       ctx.globalAlpha = 1;
     }
 
@@ -269,8 +295,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const legY = h - 14;
     ctx.font = `700 ${legFont}px system-ui,sans-serif`;
     // Measure text widths for centering
-    const covLabel = "Coverage";
-    const matLabel = "Maturity";
+    const covLabel = legendLabels?.[0] ?? "Coverage";
+    const matLabel = legendLabels?.[1] ?? "Maturity";
     const covW = ctx.measureText(covLabel).width;
     const matW = ctx.measureText(matLabel).width;
     const iconR = 5;
@@ -298,7 +324,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     ctx.fill();
     ctx.fillStyle = dk ? "#e0e0f8" : "#2a2a3e";
     ctx.fillText(matLabel, matIconX + iconR + iconGap, legY);
-  }, [data, dk, COV_C, MAT_C, activeIdx]);
+  }, [data, dk, COV_C, MAT_C, activeIdx, legendLabels]);
 
   const hitTest = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -314,8 +340,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
 
     // Check label areas first (higher priority)
     const labelR = R + Math.max(Math.min(w, h) * 0.085, 38);
-    const fs1 = Math.max(Math.min(w, h) * 0.023, 11);
-    const fs2 = Math.max(Math.min(w, h) * 0.018, 9);
+    const fs1 = Math.max(Math.min(w, h) * 0.020, 11);
+    const fs2 = Math.max(Math.min(w, h) * 0.017, 9);
     const labelH = fs1 + fs2 + 6;
     for (let i = 0; i < N; i++) {
       const midA = i * SEG + SEG / 2 - Math.PI / 2;
@@ -323,7 +349,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const lx = cx + cos * labelR;
       const ly = cy + sin * labelR;
       const isR = cos > 0.15, isL = cos < -0.15;
-      const labelW = 80;
+      const labelW = 120;
       const left = isR ? lx - 4 : isL ? lx - labelW + 4 : lx - labelW / 2;
       const top = ly - labelH / 2 - 4;
       if (mx >= left && mx <= left + labelW && my >= top && my <= top + labelH + 12) {
@@ -333,8 +359,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
 
     // Check blip positions
     const hR2 = Math.max(Math.min(w, h) * 0.09, 40);
-    const dotSz = Math.max(Math.min(w, h) * 0.016, 9);
+    const dotSz = Math.max(Math.min(w, h) * 0.024, 13);
     const minR2 = hR2 + 6 + dotSz + 4;
+    const hitRadius = dotSz * 2.2;
     let best = -1, bestD = Infinity;
     for (let i = 0; i < N; i++) {
       const midA = i * SEG + SEG / 2 - Math.PI / 2;
@@ -343,8 +370,19 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
         const bx = cx + Math.cos(midA) * r;
         const by = cy + Math.sin(midA) * r;
         const d = Math.hypot(mx - bx, my - by);
-        if (d < 22 && d < bestD) { best = i; bestD = d; }
+        if (d < hitRadius && d < bestD) { best = i; bestD = d; }
       }
+    }
+    if (best >= 0) return best;
+
+    // Fallback: click anywhere in a sector selects that capability
+    const dx = mx - cx, dy = my - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > hR2 + 10 && dist < labelR) {
+      let angle = Math.atan2(dy, dx) + Math.PI / 2; // rotate so 0 is top
+      if (angle < 0) angle += Math.PI * 2;
+      const sectorIdx = Math.floor(angle / SEG);
+      if (sectorIdx >= 0 && sectorIdx < N) return sectorIdx;
     }
     return best;
   }, [data]);
