@@ -341,12 +341,12 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           </Grid>
 
           {/* ══════ RADAR CHART + CAPABILITY BARS (side by side) ══════ */}
-          <Flex gap={16} style={{ marginBottom: 24 }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
+          <Flex gap={16} style={{ marginBottom: 24, height: isMobile ? "auto" : "calc(100vh - 260px)" }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
             {/* Left: CovMatRadar */}
             <Flex flexDirection="column" style={{
-              flex: isMobile ? "1 1 100%" : "1 1 55%", minWidth: 0,
+              flex: isMobile ? "1 1 100%" : "1 1 55%", minWidth: 0, minHeight: 0,
               borderRadius: 12, border: `1px solid ${border}`, background: card,
-              padding: "12px 14px 14px",
+              padding: "12px 14px 14px", overflow: "hidden",
             }}>
               <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 6 }}>
                 <Flex alignItems="center" gap={8} flexWrap="wrap">
@@ -374,9 +374,9 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
 
             {/* Right: Score per Capability */}
             <Flex flexDirection="column" style={{
-              flex: isMobile ? "1 1 100%" : "1 1 45%", minWidth: 0,
+              flex: isMobile ? "1 1 100%" : "1 1 45%", minWidth: 0, minHeight: 0,
               background: card, border: `1px solid ${border}`, borderRadius: 12,
-              padding: "14px 16px", overflowY: "auto", maxHeight: isMobile ? "none" : "calc(100vh - 260px)",
+              padding: "14px 16px", overflowY: "auto",
             }}>
               <Flex alignItems="center" gap={8} style={{ marginBottom: 10 }}>
                 <Text style={{ fontSize: 12, fontWeight: 700, color: textSec, flex: 1 }}>Score per Capability</Text>
