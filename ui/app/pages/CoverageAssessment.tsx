@@ -1,48 +1,38 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { jsPDF } from "jspdf";
 import { useNavigate } from "react-router-dom";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
+import { Button } from "@dynatrace/strato-components/buttons";
+import { ExternalLink, Text, Strong, Code } from "@dynatrace/strato-components/typography";
+import { Flex, Grid } from "@dynatrace/strato-components/layouts";
+import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-components-preview/buttons";
+import { Menu } from "@dynatrace/strato-components-preview/navigation";
+import { ProgressBar } from "@dynatrace/strato-components/content";
 import type { CoverageData, ViewMode, CapabilityResult } from "../hooks/useCoverageData";
-import { PolarChart, maturity } from "../components/PolarChart";
+import { TechRadar, maturity } from "../components/TechRadar";
 import { ConnectorLines } from "../components/ConnectorLines";
 import { ChartLabels } from "../components/ChartLabels";
 import { CapabilityCards } from "../components/CapabilityCards";
 import { Tooltip } from "../components/Tooltip";
+import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
 import { CAPABILITIES } from "../queries";
 import { CAP_SUMMARIES } from "../data/capSummaries";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
 import { CRITERION_REMEDIATION } from "../data/criterionRemediation";
 import { APP_ICON } from "../data/appIcon";
+import { type ReportLang } from "../reports/reportI18n";
+import { generateFirstDayReport } from "../reports/generateFirstDayReport";
 import { usePreflight, type PreflightCheck } from "../hooks/usePreflight";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  RadialLinearScale,
-  BarController,
-  LineController,
-  BubbleController,
-  RadarController,
-  BarElement,
-  PointElement,
-  LineElement,
-  Legend,
-  Tooltip as ChartTooltip,
-  Filler,
-  type ChartOptions,
-} from "chart.js";
-import { Chart, Bar, Radar, Bubble } from "react-chartjs-2";
-
-ChartJS.register(CategoryScale, LinearScale, RadialLinearScale, BarController, LineController, BubbleController, RadarController, BarElement, PointElement, LineElement, Legend, ChartTooltip, Filler);
+import { CovMatRadar, renderRadarToDataURL, type CovMatRadarHandle } from "../components/CovMatRadar";
+import { CapabilityScatter, renderScatterToDataURL } from "../components/CapabilityScatter";
 
 const SCALE = [
-  { l: "N/A", c: "#CD3C44", r: "0-19%", tip: "Critical gaps — the capability is barely adopted or has no data flowing." },
-  { l: "Low", c: "#DC671E", r: "20-39%", tip: "Early adoption — some data exists but significant gaps remain." },
-  { l: "Moderate", c: "#EEA746", r: "40-59%", tip: "Partial coverage — key areas configured but important criteria still missing." },
-  { l: "Good", c: "#5EB1A9", r: "60-79%", tip: "Strong adoption — most criteria met with room for further optimization." },
-  { l: "Excellent", c: "#36B37E", r: "80-100%", tip: "Full or near-full coverage — the capability is well-adopted and comprehensive." },
+  { l: "N/A", c: Colors.Charts.Status.Critical.Default, r: "0-19%", tip: "Critical gaps — the capability is barely adopted or has no data flowing." },
+  { l: "Low", c: Colors.Charts.Categorical.Color14.Default, r: "20-39%", tip: "Early adoption — some data exists but significant gaps remain." },
+  { l: "Moderate", c: Colors.Charts.Status.Warning.Default, r: "40-59%", tip: "Partial coverage — key areas configured but important criteria still missing." },
+  { l: "Good", c: Colors.Charts.Categorical.Color07.Default, r: "60-79%", tip: "Strong adoption — most criteria met with room for further optimization." },
+  { l: "Excellent", c: Colors.Charts.Status.Ideal.Default, r: "80-100%", tip: "Full or near-full coverage — the capability is well-adopted and comprehensive." },
 ];
 
 const R_RATIO = 0.34;
@@ -54,9 +44,9 @@ function formatRecords(n: number): string {
 import { scoreColor as maturityBandColor } from "../utils/colors";
 
 const TIER_META: { key: "foundation" | "bestPractice" | "excellence"; label: string; color: string }[] = [
-  { key: "foundation", label: "Foundation", color: "#5B6ACF" },
-  { key: "bestPractice", label: "Best Practice", color: "#EEA746" },
-  { key: "excellence", label: "Excellence", color: "#36B37E" },
+  { key: "foundation", label: "Foundation", color: Colors.Charts.Categorical.Color01.Default },
+  { key: "bestPractice", label: "Best Practice", color: Colors.Charts.Status.Warning.Default },
+  { key: "excellence", label: "Excellence", color: Colors.Charts.Status.Ideal.Default },
 ];
 
 function criterionTooltipContent(id: string, description: string, tier: string): string {
@@ -80,501 +70,38 @@ interface Props {
 }
 
 export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) => {
-  const { capabilities, totalScore, overallMaturityLevel, loading, idle, progress, error, tenant, date, stats, liveScannedRecords, start, refresh, reset, goHome, resume } = coverageData;
+  const { capabilities, totalScore, overallMaturityLevel, loading, idle, progress, error, tenant, date, stats, entityCounts, liveScannedRecords, start, refresh, reset, goHome, resume } = coverageData;
   const navigate = useNavigate();
   const lastSavedRef = useRef<string>("");
   const [anim, setAnim] = useState(0);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const [chartSize, setChartSize] = useState(500);
+  const [isMobile, setIsMobile] = useState(false);
   const [selectedCap, setSelectedCap] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("coverage");
   const [collapseKey, setCollapseKey] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [reportMenu, setReportMenu] = useState(false);
+  const [expandedPolar, setExpandedPolar] = useState(false);
+  const radarHandleRef = useRef<CovMatRadarHandle | null>(null);
 
   const t0 = useRef<number>(0);
   const dk = useCurrentTheme() === "dark";
 
-  /* ── PDF Report Generator ── */
-  const generateReport = useCallback((mode: "coverage" | "maturity") => {
+
+  /* ── First Day Results Report (Value & Impact) ── */
+  const generateClientReport = useCallback((lang: ReportLang = "en") => {
     if (exporting || capabilities.length === 0) return;
     setExporting(true);
-    setReportMenu(false);
-    // Defer to next frame so the UI updates (shows "Generating...") before blocking
     setTimeout(() => {
-    try {
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const W = 210, H = 297, M = 15, CW = W - 2 * M;
-      let y = 0;
-      const hexToRgb = (hex: string): [number, number, number] => [
-        parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16),
-      ];
-      const paintBg = () => { pdf.setFillColor(11, 11, 26); pdf.rect(0, 0, W, H, "F"); };
-      const ensureSpace = (need: number) => {
-        if (y + need > H - M) { pdf.addPage(); paintBg(); y = M; }
-      };
-      const isCoverage = mode === "coverage";
-      const modeLabel = isCoverage ? "Coverage" : "Maturity";
-
-      /* ── Cover Page ── */
-      paintBg();
-      pdf.setTextColor(232, 232, 240);
-      pdf.setFontSize(26); pdf.setFont("helvetica", "bold");
-      pdf.text("Pulse Assessment Report", W / 2, 55, { align: "center" });
-      pdf.setFontSize(13); pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(160, 160, 192);
-      pdf.text(`${modeLabel} Analysis`, W / 2, 66, { align: "center" });
-      pdf.setFontSize(10);
-      pdf.text(`Tenant: ${tenant}`, W / 2, 82, { align: "center" });
-      pdf.text(`Generated: ${new Date().toLocaleString()}`, W / 2, 88, { align: "center" });
-      if (date) pdf.text(`Assessment Date: ${date}`, W / 2, 94, { align: "center" });
-
-      // Overall score
-      const ov = maturity(totalScore);
-      const ovScore = isCoverage ? totalScore : Math.round(capabilities.reduce((s, c) => s + c.maturity.maturityScore, 0) / capabilities.length);
-      const ovM = maturity(ovScore);
-      pdf.setFontSize(44); pdf.setFont("helvetica", "bold");
-      const [ovR, ovG, ovB] = hexToRgb(ovM.color);
-      pdf.setTextColor(ovR, ovG, ovB);
-      pdf.text(`${ovScore}%`, W / 2, 128, { align: "center" });
-      pdf.setFontSize(13); pdf.setTextColor(160, 160, 192);
-      pdf.text(`Overall ${modeLabel}: ${ovM.label}`, W / 2, 138, { align: "center" });
-
-      if (stats) {
-        pdf.setFontSize(9);
-        pdf.text(`${stats.succeeded}/${stats.total} queries OK  |  ${formatRecords(stats.scannedRecords)} records scanned`, W / 2, 152, { align: "center" });
+      try {
+        generateFirstDayReport({ capabilities, totalScore, tenant, date, stats, entityCounts }, lang);
+      } finally {
+        setExporting(false);
       }
-
-      // Summary table
-      y = 170;
-      pdf.setFontSize(8); pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(100, 100, 130);
-      pdf.text("CAPABILITY", M, y);
-      if (isCoverage) {
-        pdf.text("COVERAGE", M + 95, y);
-        pdf.text("BAND", M + 140, y);
-      } else {
-        pdf.text("MATURITY", M + 95, y);
-        pdf.text("LEVEL", M + 130, y);
-        pdf.text("F / BP / E", M + 158, y);
-      }
-      y += 2;
-      pdf.setDrawColor(50, 50, 70); pdf.line(M, y, W - M, y);
-      y += 5;
-      pdf.setFont("helvetica", "normal");
-      capabilities.forEach((cap) => {
-        const score = isCoverage ? cap.score : cap.maturity.maturityScore;
-        const m = maturity(score);
-        const [cr, cg, cb] = hexToRgb(cap.color);
-        pdf.setFillColor(cr, cg, cb);
-        pdf.circle(M + 2, y - 1.2, 1.5, "F");
-        pdf.setTextColor(220, 220, 235); pdf.setFontSize(8);
-        pdf.text(cap.name, M + 6, y);
-        // Bar
-        const barX = M + 95, barW = 32, barH = 3;
-        pdf.setFillColor(30, 30, 50);
-        pdf.roundedRect(barX, y - 3, barW, barH, 1, 1, "F");
-        const [mr, mg, mb] = hexToRgb(m.color);
-        pdf.setFillColor(mr, mg, mb);
-        if (score > 0) pdf.roundedRect(barX, y - 3, Math.max(barW * score / 100, 2), barH, 1, 1, "F");
-        pdf.setTextColor(mr, mg, mb);
-        pdf.text(`${score}%`, barX + barW + 2, y);
-        if (isCoverage) {
-          pdf.setTextColor(150, 150, 175);
-          pdf.text(m.label, M + 140, y);
-        } else {
-          pdf.setTextColor(150, 150, 175);
-          pdf.text(cap.maturity.levelLabel, M + 130, y);
-          pdf.setTextColor(120, 120, 150); pdf.setFontSize(7);
-          pdf.text(`${cap.maturity.foundation.passed}/${cap.maturity.foundation.total}  ${cap.maturity.bestPractice.passed}/${cap.maturity.bestPractice.total}  ${cap.maturity.excellence.passed}/${cap.maturity.excellence.total}`, M + 158, y);
-        }
-        y += 7;
-      });
-
-      /* ── Capability Detail Pages ── */
-      capabilities.forEach((cap, ci) => {
-        pdf.addPage(); paintBg(); y = M;
-        const score = isCoverage ? cap.score : cap.maturity.maturityScore;
-        const m = maturity(score);
-
-        // Header
-        const [hR, hG, hB] = hexToRgb(cap.color);
-        pdf.setFillColor(hR, hG, hB);
-        pdf.roundedRect(M, y, CW, 16, 2, 2, "F");
-        pdf.setFontSize(13); pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(255, 255, 255);
-        pdf.text(`${ci + 1}. ${cap.name}`, M + 6, y + 10);
-        const [smr, smg, smb] = hexToRgb(m.color);
-        pdf.setFontSize(11);
-        pdf.text(`${score}%`, W - M - 6, y + 10, { align: "right" });
-        y += 22;
-
-        // Score details
-        pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
-        if (isCoverage) {
-          pdf.setTextColor(smr, smg, smb);
-          pdf.text(`Coverage: ${cap.score}% (${maturity(cap.score).label})`, M, y);
-          pdf.setTextColor(140, 140, 170);
-          pdf.text(`Maturity: ${cap.maturity.levelLabel}  |  Maturity Score: ${cap.maturity.maturityScore}%`, M + 80, y);
-        } else {
-          pdf.setTextColor(smr, smg, smb);
-          pdf.text(`Maturity Score: ${cap.maturity.maturityScore}% (${cap.maturity.maturityBand})`, M, y);
-          pdf.setTextColor(140, 140, 170);
-          pdf.text(`Level: ${cap.maturity.levelLabel}  |  Coverage: ${cap.score}%`, M + 85, y);
-        }
-        y += 5;
-
-        // Tier breakdown
-        pdf.setFontSize(8); pdf.setTextColor(120, 120, 155);
-        const { foundation, bestPractice, excellence } = cap.maturity;
-        pdf.text(`Foundation: ${foundation.passed}/${foundation.total}  |  Best Practice: ${bestPractice.passed}/${bestPractice.total}  |  Excellence: ${excellence.passed}/${excellence.total}`, M, y);
-        y += 5;
-
-        // Capability summary
-        const summary = CAP_SUMMARIES[cap.name];
-        if (summary) {
-          pdf.setFontSize(7.5); pdf.setTextColor(150, 150, 185);
-          const sumLines = pdf.splitTextToSize(summary, CW);
-          ensureSpace(sumLines.length * 4 + 4);
-          pdf.text(sumLines, M, y);
-          y += sumLines.length * 4 + 3;
-        }
-
-        // Separator
-        pdf.setDrawColor(50, 50, 70); pdf.line(M, y, W - M, y);
-        y += 5;
-
-        // Group criteria by tier for maturity mode, flat list for coverage
-        const tiers: { key: string; label: string; color: string; criteria: typeof cap.criteriaResults }[] = isCoverage
-          ? [{ key: "all", label: "", color: "", criteria: cap.criteriaResults }]
-          : [
-              { key: "foundation", label: "Foundation (60% weight)", color: "#5B6ACF", criteria: cap.criteriaResults.filter(cr => cr.tier === "foundation") },
-              { key: "bestPractice", label: "Best Practice (25% weight)", color: "#EEA746", criteria: cap.criteriaResults.filter(cr => cr.tier === "bestPractice") },
-              { key: "excellence", label: "Excellence (15% weight)", color: "#36B37E", criteria: cap.criteriaResults.filter(cr => cr.tier === "excellence") },
-            ];
-
-        tiers.forEach((tierGroup) => {
-          if (tierGroup.criteria.length === 0) return;
-
-          // Tier header (maturity mode only)
-          if (!isCoverage) {
-            ensureSpace(10);
-            const [tR, tG, tB] = hexToRgb(tierGroup.color);
-            pdf.setFillColor(tR, tG, tB);
-            pdf.roundedRect(M, y - 1, 3, 5, 1, 1, "F");
-            pdf.setFontSize(10); pdf.setFont("helvetica", "bold");
-            pdf.setTextColor(tR, tG, tB);
-            pdf.text(tierGroup.label, M + 5, y + 2.5);
-            const passed = tierGroup.criteria.filter(cr => cr.points > 0).length;
-            pdf.setFontSize(8); pdf.setFont("helvetica", "normal");
-            pdf.setTextColor(140, 140, 170);
-            pdf.text(`${passed}/${tierGroup.criteria.length} passed`, M + 75, y + 2.5);
-            y += 8;
-          }
-
-          tierGroup.criteria.forEach((cr) => {
-            const passed = cr.points > 0;
-            const tierLabel = cr.tier === "foundation" ? "Foundation" : cr.tier === "bestPractice" ? "Best Practice" : "Excellence";
-
-            // Calculate space needed
-            const labelLines = pdf.splitTextToSize(cr.label, 100);
-            let needH = labelLines.length * 4.5 + 4;
-            const descLines = pdf.splitTextToSize(cr.description, CW - 10);
-            needH += descLines.length * 4;
-            const importance = CRITERION_IMPORTANCE[cr.id];
-            if (importance) needH += 12;
-            if (!passed && CRITERION_REMEDIATION[cr.id]) needH += 12;
-            ensureSpace(Math.min(needH + 8, 70));
-
-            // Status bar
-            pdf.setFillColor(passed ? 54 : 205, passed ? 179 : 60, passed ? 126 : 68);
-            pdf.rect(M, y - 2.5, 1.5, 4, "F");
-
-            // Label
-            pdf.setFontSize(8.5); pdf.setFont("helvetica", "bold");
-            pdf.setTextColor(225, 225, 240);
-            pdf.text(labelLines, M + 4, y);
-
-            // Right side: tier + value + status
-            pdf.setFontSize(7); pdf.setFont("helvetica", "normal");
-            if (isCoverage) {
-              pdf.setTextColor(110, 110, 145);
-              pdf.text(tierLabel, W - M - 52, y);
-            }
-            pdf.setTextColor(160, 160, 195);
-            pdf.text(`${cr.value}`, W - M - 22, y);
-            pdf.setTextColor(passed ? 54 : 205, passed ? 179 : 60, passed ? 126 : 68);
-            pdf.setFont("helvetica", "bold");
-            pdf.text(passed ? "PASS" : "FAIL", W - M - 8, y);
-
-            y += Math.max(labelLines.length * 4.5, 5) + 1;
-
-            // Description
-            pdf.setFontSize(7); pdf.setFont("helvetica", "normal");
-            pdf.setTextColor(120, 120, 155);
-            ensureSpace(descLines.length * 4);
-            pdf.text(descLines, M + 5, y);
-            y += descLines.length * 4;
-
-            // Importance
-            if (importance) {
-              pdf.setFontSize(7); pdf.setTextColor(95, 95, 135);
-              const impLines = pdf.splitTextToSize(`Why it matters: ${importance}`, CW - 10);
-              y += 1;
-              ensureSpace(impLines.length * 4);
-              pdf.text(impLines, M + 5, y);
-              y += impLines.length * 4;
-            }
-
-            // Remediation (failed only)
-            if (!passed) {
-              const rem = CRITERION_REMEDIATION[cr.id];
-              if (rem) {
-                pdf.setFontSize(7);
-                pdf.setTextColor(220, 130, 40);
-                const remLines = pdf.splitTextToSize(`Fix: ${rem.action}`, CW - 10);
-                y += 1;
-                ensureSpace(remLines.length * 4);
-                pdf.text(remLines, M + 5, y);
-                y += remLines.length * 4;
-              }
-            }
-
-            y += 4;
-            pdf.setDrawColor(35, 35, 55);
-            pdf.line(M + 4, y, W - M, y);
-            y += 5;
-          });
-
-          if (!isCoverage) y += 3; // extra space between tiers
-        });
-      });
-
-      /* ── Footer on every page ── */
-      const pageCount = pdf.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(70, 70, 100);
-        pdf.text(`Pulse Assessment - ${modeLabel} Report  |  ${tenant}  |  ${date}`, M, H - 5);
-        pdf.text(`Page ${i} / ${pageCount}`, W - M, H - 5, { align: "right" });
-      }
-
-      pdf.save(`pulse-${mode}-report-${new Date().toISOString().slice(0, 10)}.pdf`);
-    } finally {
-      setExporting(false);
-    }
     }, 0);
-  }, [capabilities, exporting, tenant, date, stats, totalScore]);
-
-  /* ── Summary Report (Coverage vs Maturity) ── */
-  const generateSummaryReport = useCallback(() => {
-    if (exporting || capabilities.length === 0) return;
-    setExporting(true);
-    setReportMenu(false);
-    setTimeout(() => {
-    try {
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const W = 210, H = 297, M = 15, CW = W - 2 * M;
-      let y = 0;
-      const hexToRgb = (hex: string): [number, number, number] => [
-        parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16),
-      ];
-      const paintBg = () => { pdf.setFillColor(11, 11, 26); pdf.rect(0, 0, W, H, "F"); };
-      const ensureSpace = (need: number) => {
-        if (y + need > H - M) { pdf.addPage(); paintBg(); y = M; }
-      };
-
-      const ovCov = totalScore;
-      const ovMat = Math.round(capabilities.reduce((s, c) => s + c.maturity.maturityScore, 0) / capabilities.length);
-      const mCov = maturity(ovCov);
-      const mMat = maturity(ovMat);
-      const totalCriteria = capabilities.reduce((s, c) => s + c.criteriaResults.length, 0);
-      const passedCriteria = capabilities.reduce((s, c) => s + c.criteriaResults.filter(cr => cr.points > 0).length, 0);
-
-      /* ── Cover Page ── */
-      paintBg();
-      pdf.setTextColor(232, 232, 240);
-      pdf.setFontSize(26); pdf.setFont("helvetica", "bold");
-      pdf.text("Pulse Assessment", W / 2, 50, { align: "center" });
-      pdf.setFontSize(14); pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(160, 160, 192);
-      pdf.text("Summary Report", W / 2, 62, { align: "center" });
-      pdf.setFontSize(10);
-      pdf.text(`Tenant: ${tenant}`, W / 2, 78, { align: "center" });
-      pdf.text(`Generated: ${new Date().toLocaleString()}`, W / 2, 85, { align: "center" });
-      if (date) pdf.text(`Assessment Date: ${date}`, W / 2, 92, { align: "center" });
-
-      if (stats) {
-        pdf.setFontSize(8); pdf.setTextColor(100, 100, 135);
-        pdf.text(`${stats.succeeded}/${stats.total} queries OK  |  ${formatRecords(stats.scannedRecords)} records  |  ${passedCriteria}/${totalCriteria} criteria passed`, W / 2, 102, { align: "center" });
-      }
-
-      // Two score boxes
-      const boxW = 72, boxH = 44, gap = 16;
-      const boxY = 115;
-      const covX = W / 2 - boxW - gap / 2;
-      const matX = W / 2 + gap / 2;
-
-      pdf.setFillColor(20, 20, 40);
-      pdf.roundedRect(covX, boxY, boxW, boxH, 3, 3, "F");
-      pdf.setFontSize(9); pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(130, 130, 165);
-      pdf.text("COVERAGE", covX + boxW / 2, boxY + 10, { align: "center" });
-      const [ccR, ccG, ccB] = hexToRgb(mCov.color);
-      pdf.setFontSize(30); pdf.setTextColor(ccR, ccG, ccB);
-      pdf.text(`${ovCov}%`, covX + boxW / 2, boxY + 28, { align: "center" });
-      pdf.setFontSize(9); pdf.text(mCov.label, covX + boxW / 2, boxY + 38, { align: "center" });
-
-      pdf.setFillColor(20, 20, 40);
-      pdf.roundedRect(matX, boxY, boxW, boxH, 3, 3, "F");
-      pdf.setFontSize(9); pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(130, 130, 165);
-      pdf.text("MATURITY", matX + boxW / 2, boxY + 10, { align: "center" });
-      const [mmR, mmG, mmB] = hexToRgb(mMat.color);
-      pdf.setFontSize(30); pdf.setTextColor(mmR, mmG, mmB);
-      pdf.text(`${ovMat}%`, matX + boxW / 2, boxY + 28, { align: "center" });
-      pdf.setFontSize(9); pdf.text(mMat.label, matX + boxW / 2, boxY + 38, { align: "center" });
-
-      /* ═══════════════════════════════════════
-         SECTION 1 — COVERAGE
-         ═══════════════════════════════════════ */
-      y = boxY + boxH + 22;
-
-      // Section header
-      pdf.setFillColor(30, 55, 120);
-      pdf.roundedRect(M, y - 4, CW, 12, 2, 2, "F");
-      pdf.setFontSize(12); pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(255, 255, 255);
-      pdf.text("Coverage", M + 6, y + 4);
-      pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(200, 210, 240);
-      pdf.text(`Overall: ${ovCov}% (${mCov.label})`, W - M - 6, y + 4, { align: "right" });
-      y += 16;
-
-      // Coverage table header
-      pdf.setFontSize(7.5); pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(100, 100, 135);
-      pdf.text("CAPABILITY", M, y);
-      pdf.text("SCORE", M + 90, y);
-      pdf.text("BAND", M + 140, y);
-      y += 2;
-      pdf.setDrawColor(50, 50, 70); pdf.line(M, y, W - M, y);
-      y += 5;
-
-      capabilities.forEach((cap) => {
-        ensureSpace(9);
-        const sc = cap.score;
-        const mc = maturity(sc);
-        const [cr, cg, cb] = hexToRgb(cap.color);
-
-        pdf.setFillColor(cr, cg, cb);
-        pdf.circle(M + 2, y - 1.2, 1.5, "F");
-        pdf.setTextColor(220, 220, 235); pdf.setFontSize(8.5);
-        pdf.setFont("helvetica", "normal");
-        pdf.text(cap.name, M + 6, y);
-
-        // Bar
-        const barX = M + 90, barW = 36, barH = 3.5;
-        pdf.setFillColor(30, 30, 50);
-        pdf.roundedRect(barX, y - 3.2, barW, barH, 1, 1, "F");
-        const [mr, mg, mb] = hexToRgb(mc.color);
-        pdf.setFillColor(mr, mg, mb);
-        if (sc > 0) pdf.roundedRect(barX, y - 3.2, Math.max(barW * sc / 100, 2), barH, 1, 1, "F");
-        pdf.setFontSize(8); pdf.setTextColor(mr, mg, mb);
-        pdf.text(`${sc}%`, barX + barW + 3, y);
-
-        pdf.setTextColor(150, 150, 175); pdf.setFontSize(7.5);
-        pdf.text(mc.label, M + 140, y);
-
-        y += 8;
-      });
-
-      /* ═══════════════════════════════════════
-         SECTION 2 — MATURITY
-         ═══════════════════════════════════════ */
-      y += 6;
-      ensureSpace(30);
-
-      // Section header
-      pdf.setFillColor(80, 50, 20);
-      pdf.roundedRect(M, y - 4, CW, 12, 2, 2, "F");
-      pdf.setFontSize(12); pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(255, 255, 255);
-      pdf.text("Maturity", M + 6, y + 4);
-      pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(240, 210, 170);
-      pdf.text(`Overall: ${ovMat}% (${mMat.label})`, W - M - 6, y + 4, { align: "right" });
-      y += 16;
-
-      // Maturity table header
-      pdf.setFontSize(7.5); pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(100, 100, 135);
-      pdf.text("CAPABILITY", M, y);
-      pdf.text("SCORE", M + 78, y);
-      pdf.text("LEVEL", M + 122, y);
-      pdf.text("FOUNDATION", M + 148, y);
-      pdf.text("BEST PRACTICE", M + 166, y);
-      y += 2;
-      pdf.setDrawColor(50, 50, 70); pdf.line(M, y, W - M, y);
-      y += 5;
-
-      capabilities.forEach((cap) => {
-        ensureSpace(9);
-        const sc = cap.maturity.maturityScore;
-        const mm = maturity(sc);
-        const [cr, cg, cb] = hexToRgb(cap.color);
-
-        pdf.setFillColor(cr, cg, cb);
-        pdf.circle(M + 2, y - 1.2, 1.5, "F");
-        pdf.setTextColor(220, 220, 235); pdf.setFontSize(8.5);
-        pdf.setFont("helvetica", "normal");
-        pdf.text(cap.name, M + 6, y);
-
-        // Bar
-        const barX = M + 78, barW = 30, barH = 3.5;
-        pdf.setFillColor(30, 30, 50);
-        pdf.roundedRect(barX, y - 3.2, barW, barH, 1, 1, "F");
-        const [mr, mg, mb] = hexToRgb(mm.color);
-        pdf.setFillColor(mr, mg, mb);
-        if (sc > 0) pdf.roundedRect(barX, y - 3.2, Math.max(barW * sc / 100, 2), barH, 1, 1, "F");
-        pdf.setFontSize(8); pdf.setTextColor(mr, mg, mb);
-        pdf.text(`${sc}%`, barX + barW + 3, y);
-
-        // Level
-        pdf.setTextColor(150, 150, 175); pdf.setFontSize(7.5);
-        pdf.text(cap.maturity.levelLabel, M + 122, y);
-
-        // Tier breakdown
-        pdf.setTextColor(120, 120, 155); pdf.setFontSize(7);
-        const { foundation, bestPractice, excellence } = cap.maturity;
-        pdf.text(`${foundation.passed}/${foundation.total}`, M + 152, y);
-        pdf.text(`${bestPractice.passed}/${bestPractice.total}`, M + 173, y);
-
-        y += 8;
-      });
-
-      /* ── Footer ── */
-      const pageCount = pdf.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(70, 70, 100);
-        pdf.text(`Pulse Assessment - Summary Report  |  ${tenant}  |  ${date}`, M, H - 5);
-        pdf.text(`Page ${i} / ${pageCount}`, W - M, H - 5, { align: "right" });
-      }
-
-      pdf.save(`pulse-summary-report-${new Date().toISOString().slice(0, 10)}.pdf`);
-    } finally {
-      setExporting(false);
-    }
-    }, 0);
-  }, [capabilities, exporting, tenant, date, stats, totalScore]);
-
-
-  // Auto-save snapshot when assessment completes
+  }, [capabilities, exporting, tenant, date, stats, entityCounts, totalScore]);
   useEffect(() => {
     if (!loading && capabilities.length > 0) {
       const sig = capabilities.map(c => `${c.name}:${c.score}`).join(",");
@@ -603,12 +130,20 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
     const calc = () => {
       const vh = window.innerHeight;
       const vw = rootRef.current ? rootRef.current.offsetWidth : window.innerWidth;
-      setChartSize(Math.max(Math.min(vh - 200, vw - 16, 720), 300));
+      const mobile = vw < 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setChartSize(Math.max(Math.min(vh - 200, vw - 32, 720), 260));
+      } else {
+        setChartSize(Math.max(Math.min(vh - 200, vw - 400, 720), 300));
+      }
     };
     calc();
     window.addEventListener("resize", calc);
     return () => window.removeEventListener("resize", calc);
   }, []);
+
+
 
   const hitTest = useCallback((e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -629,30 +164,27 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
   const bgPrimary = Colors.Background.Container.Primary.Default;
   const text = Colors.Text.Neutral.Default;
   const textSec = Colors.Text.Neutral.Subdued;
-  const textTert = dk ? "#9a9abc" : "#6e6e82";
+  const textTert = Colors.Text.Neutral.Disabled;
   const accent = Colors.Text.Primary.Default;
   const border = Colors.Border.Neutral.Default;
   const borderPri = Colors.Border.Primary.Default;
 
   return (
-    <div ref={rootRef}
+    <Flex flexDirection="column" ref={rootRef}
       onMouseDown={(e) => { mouseDownPos.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => {
         const sel = window.getSelection();
         if (sel && sel.toString().length > 0) return;
         const dp = mouseDownPos.current;
         if (dp && (Math.abs(e.clientX - dp.x) > 5 || Math.abs(e.clientY - dp.y) > 5)) return;
-        setActiveIdx(null); setSelectedCap(null); setCollapseKey(k => k + 1); setReportMenu(false);
-      }}
-      style={{
-      display: "flex", flexDirection: "column", height: "100%",
+        setActiveIdx(null); setSelectedCap(null); setCollapseKey(k => k + 1);
+      }} style={{ height: "100%",
       overflow: "hidden", boxSizing: "border-box", padding: "8px 0",
       fontFamily: "inherit",
-      background: bg, color: text, transition: "background 0.4s, color 0.4s",
-    }}>
+      background: bg, color: text, transition: "background 0.4s, color 0.4s" }}>
       {/* Idle State — capability overview + start */}
       {idle && !loading && (
-        <div style={{ flex: 1, display: "grid", gridTemplateColumns: "380px 1fr", gridTemplateRows: "minmax(0,1fr)", minHeight: 0, overflow: "hidden" }}>
+        <Grid gridTemplateColumns="380px 1fr" gridTemplateRows="minmax(0,1fr)" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {/* Left panel — memoized so it never re-renders on card interactions */}
           <IdleLeftPanel
             dk={dk} text={text} textSec={textSec} textTert={textTert}
@@ -660,10 +192,12 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             border={border} borderPri={borderPri}
             tenant={tenant} start={start} resume={resume}
             totalScore={totalScore} hasResults={capabilities.length > 0}
+            exporting={exporting}
+            onGenerateReport={(lang: ReportLang) => generateClientReport(lang)}
           />
 
           {/* Right panel — Capability cards */}
-          <div onClick={(e) => e.stopPropagation()} style={{ overflowY: "scroll", padding: "20px 24px", minHeight: 0 }}>
+          <Flex flexDirection="column" onClick={(e) => e.stopPropagation()} style={{ overflowY: "scroll", padding: "20px 24px", minHeight: 0 }}>
             {selectedCap ? (
               <IdleCapDetail
                 cap={CAPABILITIES.find(c => c.name === selectedCap)!}
@@ -674,174 +208,109 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               />
             ) : (
               <>
-              <div style={{ marginBottom: 18, padding: "12px 16px", borderRadius: 10, background: bgPrimary, borderLeft: `3px solid ${accent}` }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: text, marginBottom: 4 }}>{CAPABILITIES.length} Capabilities Evaluated</div>
-                <div style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>
-                  Each card shows what a capability evaluates. Click to see the <strong style={{ color: text }}>full list of criteria</strong>, the DQL query behind each one, and what the app looks for in your environment.
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 16 }}>
+              <Flex flexDirection="column" style={{ marginBottom: 18, padding: "12px 16px", borderRadius: 10, background: bgPrimary, borderLeft: `3px solid ${accent}` }}>
+                <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 700, color: text, marginBottom: 4 }}>{CAPABILITIES.length} Capabilities Evaluated</Flex>
+                <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>
+                  Each card shows what a capability evaluates. Click to see the <Strong style={{ color: text }}>full list of criteria</Strong>, the DQL query behind each one, and what the app looks for in your environment.
+                </Text>
+              </Flex>
+              <Grid gridTemplateColumns="repeat(auto-fill, minmax(340px, 1fr))" gap={16}>
                 {CAPABILITIES.map((cap) => (
                   <IdleCapCard key={cap.name} cap={cap} dk={dk} text={text} textSec={textSec} textTert={textTert}
                     bgSurface={bgSurface} bgSubtle={bgSubtle} border={border}
                     onClick={() => setSelectedCap(cap.name)} />
                 ))}
-              </div>
+              </Grid>
               </>
             )}
-          </div>
-        </div>
+          </Flex>
+        </Grid>
       )}
 
       {/* Loading State */}
       {loading && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
-          <div style={{ fontSize: 14, color: textSec }}>Running assessment... {progress}%</div>
-          <div style={{ width: 240, height: 6, borderRadius: 3, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", overflow: "hidden" }}>
-            <div style={{
-              height: "100%", borderRadius: 3, background: "#5B6ACF",
-              width: `${progress}%`, transition: "width 0.3s",
-            }} />
-          </div>
-          <div style={{ fontSize: 12, color: textTert }}>Querying {capabilities.length > 0 ? capabilities.length : CAPABILITIES.length} capabilities via DQL</div>
+        <Flex flexDirection="column" alignItems="center" justifyContent="center" gap={16} style={{ flex: 1 }}>
+          <Flex flexDirection="column" style={{ fontSize: 14, color: textSec }}>Running assessment... {progress}%</Flex>
+          <Flex flexDirection="column" style={{ width: 240 }}>
+            <ProgressBar value={progress} color="primary" aria-label="Assessment progress" />
+          </Flex>
+          <Flex flexDirection="column" style={{ fontSize: 12, color: textTert }}>Querying {capabilities.length > 0 ? capabilities.length : CAPABILITIES.length} capabilities via DQL</Flex>
           {liveScannedRecords > 0 && (
-            <div style={{ fontSize: 12, color: textSec, marginTop: 4 }}>
-              Records scanned: <span style={{ fontWeight: 600, color: text }}>{formatRecords(liveScannedRecords)}</span>
-            </div>
+            <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, marginTop: 4 }}>
+              Records scanned: <Text style={{ fontWeight: 600, color: text }}>{formatRecords(liveScannedRecords)}</Text>
+            </Flex>
           )}
-        </div>
+        </Flex>
       )}
 
       {/* Chart */}
       {!idle && !loading && capabilities.length > 0 && (
         <>
           {/* Toolbar */}
-          <div style={{
-            padding: "6px 16px", flexShrink: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
-            borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
-          }}>
-            <button onClick={goHome} style={{
-              padding: "5px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", borderRadius: 6,
-              border: `1px solid ${dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
-              background: dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-              color: dk ? "#e8e8f0" : "#1a1a2e",
-            }}>← Back</button>
-            <button onClick={refresh} style={{
-              padding: "5px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", borderRadius: 6,
-              border: `1px solid ${dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
-              background: dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-              color: dk ? "#e8e8f0" : "#1a1a2e",
-            }}>↻ Refresh</button>
+          <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ padding: "6px 16px", flexShrink: 0, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` }}>
+            <Button onClick={goHome} size="condensed">← Back</Button>
+            <Button onClick={refresh} size="condensed">↻ Refresh</Button>
             {/* View Mode Toggle */}
-            <div style={{
-              display: "flex", borderRadius: 8, overflow: "hidden",
-              border: `1px solid ${dk ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
-              marginLeft: 4,
-            }}>
-              {([
-                { key: "coverage" as ViewMode, label: "Coverage" },
-                { key: "maturity" as ViewMode, label: "Maturity" },
-                { key: "recommendations" as ViewMode, label: "Executive Summary" },
-              ]).map((m) => (
-                <button key={m.key} onClick={(e) => { e.stopPropagation(); setViewMode(m.key); }} style={{
-                  padding: "5px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer",
-                  border: "none",
-                  background: viewMode === m.key
-                    ? (dk ? "rgba(65,105,225,0.25)" : "rgba(65,105,225,0.12)")
-                    : "transparent",
-                  color: viewMode === m.key ? "#5B6ACF" : (dk ? "#a0a0c0" : "#666"),
-                  transition: "background 0.2s, color 0.2s",
-                }}>{m.label}</button>
-              ))}
-            </div>
-            <button onClick={() => navigate("/compare")} style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "6px 18px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 8,
-              border: "none",
-              background: "linear-gradient(135deg, #5B6ACF 0%, #4A5AB5 100%)",
-              color: "#fff",
-              boxShadow: "0 2px 8px rgba(65,105,225,0.35)",
-              transition: "transform 0.15s, box-shadow 0.15s",
-            }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.04)"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(65,105,225,0.5)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(65,105,225,0.35)"; }}
-            >
+            <Flex flexDirection="column" onClick={(e) => e.stopPropagation()} style={{ marginLeft: 4 }}>
+              <ToggleButtonGroup value={viewMode} onChange={(val: string) => setViewMode(val as ViewMode)}>
+                <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
+                <ToggleButtonGroupItem value="maturity">Maturity</ToggleButtonGroupItem>
+                <ToggleButtonGroupItem value="recommendations">Executive Summary</ToggleButtonGroupItem>
+              </ToggleButtonGroup>
+            </Flex>
+            <Button onClick={() => navigate("/compare")} variant="emphasized" color="primary">
               Evolution Over Time
               {history.snapshots.length > 0 && (
-                <span style={{
-                  fontSize: 12, fontWeight: 800, color: "#5B6ACF",
-                  background: "#fff", borderRadius: 8,
-                  padding: "1px 6px", minWidth: 14, textAlign: "center",
-                  lineHeight: "14px",
-                }}>{Math.min(history.snapshots.length, 12)}</span>
+                <Button.Suffix>
+                  <Text style={{
+                    fontSize: 12, fontWeight: 800, color: Colors.Text.Primary.Default,
+                    background: Colors.Background.Surface.Default, borderRadius: 8,
+                    padding: "1px 6px", minWidth: 14, textAlign: "center",
+                    lineHeight: "14px",
+                  }}>{Math.min(history.snapshots.length, 12)}</Text>
+                </Button.Suffix>
               )}
-            </button>
-            <div style={{ position: "relative" }}>
-              <button onClick={(e) => { e.stopPropagation(); setReportMenu(v => !v); }} disabled={exporting} style={{
-                padding: "5px 14px", fontSize: 12, fontWeight: 600, cursor: exporting ? "wait" : "pointer", borderRadius: 6,
-                border: `1px solid ${dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
-                background: dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-                color: dk ? "#e8e8f0" : "#1a1a2e",
-                opacity: exporting ? 0.5 : 1,
-              }}>{exporting ? "Generating..." : "Generate Report"}</button>
-              {reportMenu && (
-                <div onClick={(e) => e.stopPropagation()} style={{
-                  position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 100,
-                  background: dk ? "#1a1a2e" : "#fff",
-                  border: `1px solid ${dk ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
-                  borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.3)", overflow: "hidden", minWidth: 180,
-                }}>
-                  {(["summary", "coverage", "maturity"] as const).map((key) => {
-                    const info = key === "summary"
-                      ? { label: "Summary Report", desc: "Coverage vs Maturity overview" }
-                      : key === "coverage"
-                      ? { label: "Coverage Report", desc: "Criteria pass/fail details" }
-                      : { label: "Maturity Report", desc: "Tier-based analysis (F/BP/E)" };
-                    return (
-                      <button key={key} onClick={() => key === "summary" ? generateSummaryReport() : generateReport(key)} style={{
-                        display: "block", width: "100%", padding: "10px 14px", border: "none", cursor: "pointer", textAlign: "left",
-                        background: "transparent", transition: "background 0.15s",
-                        borderBottom: key === "summary" ? `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` : "none",
-                      }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <div style={{ fontSize: 12, fontWeight: 700, color: dk ? "#e8e8f0" : "#1a1a2e" }}>{info.label}</div>
-                        <div style={{ fontSize: 11, color: dk ? "#8888aa" : "#888", marginTop: 2 }}>{info.desc}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            <span style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
-              Tenant: <span style={{ fontWeight: 600, color: text }}>{tenant}</span> · {date}
+            </Button>
+            <Menu>
+              <Menu.Trigger>
+                <Button loading={exporting} size="condensed">
+                  First Day Results
+                </Button>
+              </Menu.Trigger>
+              <Menu.Content>
+                <Menu.Item onSelect={() => generateClientReport("en")}>Download English (EN)</Menu.Item>
+                <Menu.Item onSelect={() => generateClientReport("pt")}>Download Portugues (PT)</Menu.Item>
+              </Menu.Content>
+            </Menu>
+            <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
+              Tenant: <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
               {stats && (
-                <span style={{ marginLeft: 8, fontSize: 12, color: stats.failed > 0 ? "#EEA746" : "#36B37E" }}>
+                <Text style={{ marginLeft: 8, fontSize: 12, color: stats.failed > 0 ? Colors.Text.Warning.Default : Colors.Text.Success.Default }}>
                   · {stats.succeeded}/{stats.total} queries OK{stats.failed > 0 ? ` (${stats.failed} failed)` : ""}
-                </span>
+                </Text>
               )}
               {stats && stats.scannedRecords > 0 && (
-                <span style={{ marginLeft: 8, fontSize: 12, color: dk ? "#b0b0d0" : textSec }}>
+                <Text style={{ marginLeft: 8, fontSize: 12, color: textSec }}>
                   · {formatRecords(stats.scannedRecords)} records scanned
-                </span>
+                </Text>
               )}
-            </span>
-          </div>
-          {/* Main content: chart left, cards right */}
-          <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+            </Text>
+          </Flex>
+          {/* Main content: chart left, cards right — stacks vertically on mobile */}
+          <Flex style={{ flex: 1, flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: isMobile ? "auto" : "hidden" }}>
           {viewMode === "coverage" ? (<>
             {/* Left: chart + scale */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minHeight: 0, minWidth: 0, overflow: "hidden", paddingTop: 24 }}>
-              <div style={{ position: "relative", width: chartSize, height: chartSize }}
+            <Flex flexDirection="column" alignItems="center" style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden", paddingTop: 24, position: "relative" }}>
+              <ExpandChartButton onClick={() => setExpandedPolar(true)} style={{ position: "absolute", top: 4, right: 8, zIndex: 10 }} />
+              <Flex flexDirection="column" style={{ position: "relative", width: chartSize, height: chartSize }}
                 onClick={(e) => {
                   e.stopPropagation();
                   const idx = hitTest(e);
                   const N = capabilities.length;
                   setActiveIdx(idx >= 0 && idx < N ? (activeIdx === idx ? null : idx) : null);
                 }}>
-                <PolarChart capabilities={capabilities} anim={anim} activeIdx={activeIdx} size={chartSize} />
                 <ConnectorLines capabilities={capabilities} anim={anim} activeIdx={activeIdx} size={chartSize} />
+                <TechRadar capabilities={capabilities} anim={anim} activeIdx={activeIdx} size={chartSize} />
                 <ChartLabels capabilities={capabilities} anim={anim} activeIdx={activeIdx} size={chartSize} onSelect={(idx: number | null) => {
                   setActiveIdx(idx);
                   if (idx !== null) {
@@ -851,180 +320,209 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
                     }, 100);
                   }
                 }} />
-              </div>
+              </Flex>
               {/* Scale */}
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 5, flexWrap: "wrap",
-                padding: "6px 0", flexShrink: 0,
-              }}>
+              <Flex alignItems="center" justifyContent="center" gap={4} flexWrap="wrap" style={{ padding: "6px 0", flexShrink: 0 }}>
                 {SCALE.map((x) => (
                   <Tooltip key={x.l} text={x.tip}>
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 6,
-                    background: x.c + (dk ? "20" : "12"),
-                  }}>
-                    <div style={{ width: 5, height: 5, borderRadius: "50%", background: x.c }} />
-                    <span style={{ fontSize: 12, color: dk ? "#ffffff" : "#000000", fontWeight: 600 }}>{x.l}</span>
-                    <span style={{ fontSize: 12, color: dk ? "#ffffff" : "#000000", fontWeight: 500 }}>{x.r}</span>
-                  </div>
+                  <Flex alignItems="center" gap={2} style={{ padding: "2px 8px", borderRadius: 6,
+                    background: x.c + (dk ? "20" : "12") }}>
+                    <Flex style={{ width: 5, height: 5, borderRadius: "50%", background: x.c }} />
+                    <Text style={{ fontSize: 12, color: text, fontWeight: 600 }}>{x.l}</Text>
+                    <Text style={{ fontSize: 12, color: text, fontWeight: 500 }}>{x.r}</Text>
+                  </Flex>
                   </Tooltip>
                 ))}
-              </div>
-            </div>
+              </Flex>
+            </Flex>
+
+            {/* ── Expanded TechRadar Modal ── */}
+            <ExpandableChartModal open={expandedPolar} onClose={() => setExpandedPolar(false)} maxWidth={1100} maxHeight={1000}>
+              <Flex flexDirection="column" alignItems="center" style={{ width: "100%", height: "100%" }}>
+                <Flex alignItems="center" justifyContent="center" style={{ flex: 1, minHeight: 0, width: "100%" }}>
+                  {(() => {
+                    const modalSize = Math.min(window.innerWidth * 0.75, window.innerHeight * 0.7, 900);
+                    return (
+                      <Flex flexDirection="column" style={{ position: "relative", width: modalSize, height: modalSize }}>
+                        <ConnectorLines capabilities={capabilities} anim={1} activeIdx={activeIdx} size={modalSize} />
+                        <TechRadar capabilities={capabilities} anim={1} activeIdx={activeIdx} size={modalSize} />
+                        <ChartLabels capabilities={capabilities} anim={1} activeIdx={activeIdx} size={modalSize} onSelect={(idx: number | null) => setActiveIdx(idx)} />
+                      </Flex>
+                    );
+                  })()}
+                </Flex>
+                <Flex alignItems="center" justifyContent="center" gap={4} flexWrap="wrap" style={{ padding: "8px 0 4px", flexShrink: 0 }}>
+                  {SCALE.map((x) => (
+                    <Flex key={x.l} alignItems="center" gap={2} style={{ padding: "2px 8px", borderRadius: 6,
+                      background: x.c + (dk ? "20" : "12") }}>
+                      <Flex style={{ width: 5, height: 5, borderRadius: "50%", background: x.c }} />
+                      <Text style={{ fontSize: 12, color: text, fontWeight: 600 }}>{x.l}</Text>
+                      <Text style={{ fontSize: 12, color: text, fontWeight: 500 }}>{x.r}</Text>
+                    </Flex>
+                  ))}
+                </Flex>
+              </Flex>
+            </ExpandableChartModal>
 
             {/* Right: scrollable cards */}
-            <div style={{
-              width: 360, minWidth: 320, flexShrink: 0, overflowY: "scroll", padding: "6px 10px",
-              borderLeft: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+            <Flex flexDirection="column" style={{
+              width: isMobile ? "100%" : 360,
+              minWidth: isMobile ? undefined : 320,
+              flexShrink: 0,
+              overflowY: "auto",
+              padding: "6px 10px",
+              borderLeft: isMobile ? "none" : `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+              borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
+              maxHeight: isMobile ? 300 : "calc(100vh - 160px)",
             }}>
               <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} />
-            </div>
+            </Flex>
           </>) : viewMode === "maturity" ? (
             <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} />
           ) : (
-            <RecommendationsView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} totalScore={totalScore} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} history={history} onDrilldown={setViewMode} />
+            <RecommendationsView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} totalScore={totalScore} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} history={history} onDrilldown={setViewMode} onRadarMount={(h) => { radarHandleRef.current = h; }} />
           )}
-          </div>
+          </Flex>
 
           {/* How to Analyze — footer */}
-          {viewMode === "coverage" ? (<div style={{
+          {viewMode === "coverage" ? (<Flex flexDirection="column" style={{
             flexShrink: 0,
             padding: "12px 20px 14px",
             borderTop: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"}`,
             background: dk ? "rgba(65,105,225,0.04)" : "rgba(65,105,225,0.02)",
           }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: text, marginBottom: 8, letterSpacing: 0.2 }}>How to Analyze — Coverage View</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12 }}>
+            <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 800, color: text, marginBottom: 8, letterSpacing: 0.2 }}>How to Analyze — Coverage View</Flex>
+            <Grid gridTemplateColumns={isMobile ? "1fr" : "1fr 1fr 1fr 1fr"} gap={12}>
 
-              <div style={{
+              <Flex flexDirection="column" style={{
                 padding: "8px 10px", borderRadius: 6,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 3 }}>What You're Seeing</div>
-                <div style={{ fontSize: 12, color: textSec, lineHeight: 1.55 }}>
-                  The radar chart shows <strong style={{ color: text }}>how much</strong> of each capability is used. Each of the <strong style={{ color: text }}>{capabilities.length} axes</strong> represents one capability. The <strong style={{ color: text }}>filled area</strong> reveals adoption breadth.
-                </div>
-              </div>
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 3 }}>What You're Seeing</Flex>
+                <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.55 }}>
+                  The radar chart shows <Strong style={{ color: text }}>how much</Strong> of each capability is used. Each of the <Strong style={{ color: text }}>{capabilities.length} axes</Strong> represents one capability. The <Strong style={{ color: text }}>filled area</Strong> reveals adoption breadth.
+                </Text>
+              </Flex>
 
-              <div style={{
+              <Flex flexDirection="column" style={{
                 padding: "8px 10px", borderRadius: 6,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 3 }}>How to Read the Score</div>
-                <div style={{ fontSize: 12, color: textSec, lineHeight: 1.55 }}>
-                  Each capability scores <strong style={{ color: text }}>0–100%</strong> based on <strong style={{ color: text }}>criteria met</strong>. <span style={{ color: "#36B37E", fontWeight: 700 }}>Green</span> = met, <span style={{ color: "#CD3C44", fontWeight: 700 }}>red</span> = not met. Click a capability to drill down.
-                </div>
-              </div>
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 3 }}>How to Read the Score</Flex>
+                <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.55 }}>
+                  Each capability scores <Strong style={{ color: text }}>0–100%</Strong> based on <Strong style={{ color: text }}>criteria met</Strong>. <Text style={{ color: Colors.Text.Success.Default, fontWeight: 700 }}>Green</Text> = met, <Text style={{ color: Colors.Text.Critical.Default, fontWeight: 700 }}>red</Text> = not met. Click a capability to drill down.
+                </Text>
+              </Flex>
 
-              <div style={{
+              <Flex flexDirection="column" style={{
                 padding: "8px 10px", borderRadius: 6,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 3 }}>What to Look For</div>
-                <div style={{ fontSize: 12, color: textSec, lineHeight: 1.55 }}>
-                  <strong style={{ color: text }}>Flat axes</strong> = low adoption. <strong style={{ color: text }}>Asymmetric shapes</strong> = uneven usage. Aim for a <strong style={{ color: text }}>balanced, expanded radar</strong>.
-                </div>
-              </div>
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 3 }}>What to Look For</Flex>
+                <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.55 }}>
+                  <Strong style={{ color: text }}>Flat axes</Strong> = low adoption. <Strong style={{ color: text }}>Asymmetric shapes</Strong> = uneven usage. Aim for a <Strong style={{ color: text }}>balanced, expanded radar</Strong>.
+                </Text>
+              </Flex>
 
-              <div style={{
+              <Flex flexDirection="column" style={{
                 padding: "8px 10px", borderRadius: 6,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 3 }}>Color Scale</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 3 }}>Color Scale</Flex>
+                <Flex flexDirection="column" gap={2}>
                   {[
-                    { l: "N/A", c: "#CD3C44", t: "0–19% Critical gaps" },
-                    { l: "Low", c: "#DC671E", t: "20–39% Early adoption" },
-                    { l: "Moderate", c: "#EEA746", t: "40–59% Partial" },
-                    { l: "Good", c: "#5EB1A9", t: "60–79% Strong" },
-                    { l: "Excellent", c: "#36B37E", t: "80–100% Full" },
+                    { l: "N/A", c: Colors.Charts.Status.Critical.Default, t: "0–19% Critical gaps" },
+                    { l: "Low", c: Colors.Charts.Categorical.Color14.Default, t: "20–39% Early adoption" },
+                    { l: "Moderate", c: Colors.Charts.Status.Warning.Default, t: "40–59% Partial" },
+                    { l: "Good", c: Colors.Charts.Categorical.Color07.Default, t: "60–79% Strong" },
+                    { l: "Excellent", c: Colors.Charts.Status.Ideal.Default, t: "80–100% Full" },
                   ].map((s) => (
-                    <div key={s.l} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: s.c, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: s.c, minWidth: 55 }}>{s.l}</span>
-                      <span style={{ fontSize: 12, color: textSec }}>{s.t}</span>
-                    </div>
+                    <Flex key={s.l} alignItems="center" gap={4}>
+                      <Flex style={{ width: 6, height: 6, borderRadius: "50%", background: s.c, flexShrink: 0 }} />
+                      <Text style={{ fontSize: 12, fontWeight: 700, color: s.c, minWidth: 55 }}>{s.l}</Text>
+                      <Text style={{ fontSize: 12, color: textSec }}>{s.t}</Text>
+                    </Flex>
                   ))}
-                </div>
-              </div>
+                </Flex>
+              </Flex>
 
-            </div>
-          </div>) : viewMode === "maturity" ? (<div style={{
+            </Grid>
+          </Flex>) : viewMode === "maturity" ? (<Flex flexDirection="column" style={{
             flexShrink: 0,
             padding: "12px 20px 14px",
             borderTop: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"}`,
             background: dk ? "rgba(65,105,225,0.04)" : "rgba(65,105,225,0.02)",
           }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 14, letterSpacing: 0.2 }}>How to Analyze — Maturity View</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
+            <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 14, letterSpacing: 0.2 }}>How to Analyze — Maturity View</Flex>
+            <Grid gridTemplateColumns={isMobile ? "1fr" : "1fr 1fr 1fr 1fr"} gap={16}>
 
-              <div style={{
+              <Flex flexDirection="column" style={{
                 padding: "12px 14px", borderRadius: 8,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>What You're Seeing</div>
-                <div style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
-                  Each card shows a <strong style={{ color: text }}>weighted maturity score</strong> (0–100%) per capability. The score combines three tiers with progressive scaling: <strong style={{ color: "#5B6ACF" }}>Foundation</strong> (60% weight), <strong style={{ color: "#EEA746" }}>Best Practice</strong> (25% — only counts if Foundation &ge; 80%), and <strong style={{ color: "#36B37E" }}>Excellence</strong> (15% — only counts if Best Practice &ge; 60%). Cards are sorted from lowest to highest maturity.
-                </div>
-              </div>
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>What You're Seeing</Flex>
+                <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
+                  Each card shows a <Strong style={{ color: text }}>weighted maturity score</Strong> (0–100%) per capability. The score combines three tiers: <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation</Strong> (50% weight), <Strong style={{ color: Colors.Charts.Status.Warning.Default }}>Best Practice</Strong> (30%), and <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}>Excellence</Strong> (20%). Cards are sorted from lowest to highest maturity.
+                </Text>
+              </Flex>
 
-              <div style={{
+              <Flex flexDirection="column" style={{
                 padding: "12px 14px", borderRadius: 8,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Weighted Tiers</div>
-                <div style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
-                  <strong style={{ color: "#5B6ACF" }}>Foundation (60%)</strong> — the essentials (hosts, services, basic data flow).
-                  <strong style={{ color: "#EEA746" }}> Best Practice (25%)</strong> — deeper adoption (trace correlation, advanced metrics). Only counts if Foundation &ge; 80%.
-                  <strong style={{ color: "#36B37E" }}> Excellence (15%)</strong> — advanced maturity (multi-service traces, guardrails, cost tracking). Only counts if Best Practice &ge; 60%.
-                </div>
-              </div>
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Weighted Tiers</Flex>
+                <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
+                  <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation (50%)</Strong> — the essentials (hosts, services, basic data flow).
+                  <Strong style={{ color: Colors.Charts.Status.Warning.Default }}> Best Practice (30%)</Strong> — deeper adoption (trace correlation, advanced metrics).
+                  <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}> Excellence (20%)</Strong> — advanced maturity (multi-service traces, guardrails, cost tracking).
+                </Text>
+              </Flex>
 
-              <div style={{
+              <Flex flexDirection="column" style={{
                 padding: "12px 14px", borderRadius: 8,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Maturity Bands</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, lineHeight: 1.6 }}>
-                  <div><span style={{ color: "#CD3C44", fontWeight: 700 }}>N/A</span> <span style={{ color: textSec }}>0–19% — Minimal or no adoption</span></div>
-                  <div><span style={{ color: "#DC671E", fontWeight: 700 }}>Low</span> <span style={{ color: textSec }}>20–39% — Early stage, significant gaps</span></div>
-                  <div><span style={{ color: "#EEA746", fontWeight: 700 }}>Moderate</span> <span style={{ color: textSec }}>40–59% — Partial adoption, key areas configured</span></div>
-                  <div><span style={{ color: "#5EB1A9", fontWeight: 700 }}>Good</span> <span style={{ color: textSec }}>60–79% — Strong adoption, room to optimize</span></div>
-                  <div><span style={{ color: "#36B37E", fontWeight: 700 }}>Excellent</span> <span style={{ color: textSec }}>80–100% — Comprehensive maturity</span></div>
-                </div>
-              </div>
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Maturity Bands</Flex>
+                <Flex flexDirection="column" gap={4} style={{ fontSize: 12, lineHeight: 1.6 }}>
+                  <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Status.Critical.Default, fontWeight: 700 }}>N/A</Text> <Text style={{ color: textSec }}>0–19% — Minimal or no adoption</Text></Flex>
+                  <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Categorical.Color14.Default, fontWeight: 700 }}>Low</Text> <Text style={{ color: textSec }}>20–39% — Early stage, significant gaps</Text></Flex>
+                  <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Status.Warning.Default, fontWeight: 700 }}>Moderate</Text> <Text style={{ color: textSec }}>40–59% — Partial adoption, key areas configured</Text></Flex>
+                  <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Categorical.Color07.Default, fontWeight: 700 }}>Good</Text> <Text style={{ color: textSec }}>60–79% — Strong adoption, room to optimize</Text></Flex>
+                  <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Status.Ideal.Default, fontWeight: 700 }}>Excellent</Text> <Text style={{ color: textSec }}>80–100% — Comprehensive maturity</Text></Flex>
+                </Flex>
+              </Flex>
 
-              <div style={{
+              <Flex flexDirection="column" style={{
                 padding: "12px 14px", borderRadius: 8,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>What to Look For</div>
-                <div style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
-                  Focus on <strong style={{ color: text }}>Foundation tier first</strong> — it carries the most weight (60%) and unlocks Best Practice scoring. Low-scoring capabilities need immediate attention. Click any card to see <strong style={{ color: text }}>which specific criteria</strong> are missing in each tier. Use <strong style={{ color: text }}>Evolution Over Time</strong> to track progress.
-                </div>
-              </div>
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>What to Look For</Flex>
+                <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
+                  Focus on <Strong style={{ color: text }}>Foundation tier first</Strong> — it carries the most weight (50%). Low-scoring capabilities need immediate attention. Click any card to see <Strong style={{ color: text }}>which specific criteria</Strong> are missing in each tier. Use <Strong style={{ color: text }}>Evolution Over Time</Strong> to track progress.
+                </Text>
+              </Flex>
 
-            </div>
-          </div>) : null}
+            </Grid>
+          </Flex>) : null}
         </>
       )}
 
       {/* Error State */}
       {error && (
-        <div style={{ textAlign: "center", padding: 24, color: "#CD3C44" }}>
-          <div style={{ fontSize: 14, marginBottom: 8 }}>Assessment failed</div>
-          <div style={{ fontSize: 12, color: textSec }}>{error}</div>
-        </div>
+        <Flex flexDirection="column" style={{ textAlign: "center", padding: 24, color: Colors.Text.Critical.Default }}>
+          <Flex flexDirection="column" style={{ fontSize: 14, marginBottom: 8 }}>Assessment failed</Flex>
+          <Flex flexDirection="column" style={{ fontSize: 12, color: textSec }}>{error}</Flex>
+        </Flex>
       )}
-    </div>
+    </Flex>
   );
 };
 
@@ -1056,85 +554,83 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
   const sorted = useMemo(() => [...capabilities].sort((a, b) => a.maturity.maturityScore - b.maturity.maturityScore), [capabilities]);
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+    <Flex flexDirection="column" style={{ flex: 1, overflowY: "auto", padding: 20 }}>
       <style>{maturityAnimStyle}</style>
 
       {/* ── Overall maturity hero ── */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 20, marginBottom: 20, padding: "16px 22px",
+      <Flex alignItems="center" gap={20} style={{ marginBottom: 20, padding: "16px 22px",
         background: dk ? "rgba(255,255,255,0.025)" : "rgba(0,0,0,0.015)",
         border: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
         borderRadius: 12,
-        animation: "matFadeUp 0.5s ease both",
-      }}>
+        animation: "matFadeUp 0.5s ease both" }}>
         {/* Score + band */}
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span style={{ fontSize: 32, fontWeight: 900, color: matColor, fontFamily: "system-ui, sans-serif", animation: "matCountUp 0.6s ease both 0.2s" }}>{overallMaturityLevel}%</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: matColor, opacity: 0.85 }}>{matBand}</span>
-        </div>
-        <span style={{ width: 1, alignSelf: "stretch", margin: "4px 0", background: dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)", borderRadius: 1 }} />
+        <Flex alignItems="baseline" gap={8}>
+          <Text style={{ fontSize: 32, fontWeight: 900, color: matColor, fontFamily: "system-ui, sans-serif", animation: "matCountUp 0.6s ease both 0.2s" }}>{overallMaturityLevel}%</Text>
+          <Text style={{ fontSize: 14, fontWeight: 700, color: matColor, opacity: 0.85 }}>{matBand}</Text>
+        </Flex>
+        <Text style={{ width: 1, alignSelf: "stretch", margin: "4px 0", background: dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)", borderRadius: 1 }} />
 
         {/* Overall bar */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: textSec, letterSpacing: 0.5 }}>Overall Maturity Level</span>
-          <div style={{ height: 8, borderRadius: 4, overflow: "hidden", background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}>
-            <div style={{
+        <Flex flexDirection="column" gap={4} style={{ flex: 1 }}>
+          <Text style={{ fontSize: 12, fontWeight: 600, color: textSec, letterSpacing: 0.5 }}>Overall Maturity Level</Text>
+          <Flex flexDirection="column" style={{ height: 8, borderRadius: 4, overflow: "hidden", background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}>
+            <Flex flexDirection="column" style={{
               height: "100%", borderRadius: 4,
               width: `${overallMaturityLevel}%`,
               background: `linear-gradient(90deg, ${matColor}99, ${matColor})`,
               animation: "matBarFill 0.9s ease both 0.3s",
             }} />
-          </div>
-        </div>
+          </Flex>
+        </Flex>
 
         {/* Tier pills */}
-        <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+        <Flex gap={8} style={{ flexShrink: 0 }}>
           {([
-            { label: "FND", color: "#5B6ACF", passed: totals.fnd, total: totals.fndT },
-            { label: "BP", color: "#EEA746", passed: totals.bp, total: totals.bpT },
-            { label: "EXC", color: "#36B37E", passed: totals.exc, total: totals.excT },
+            { label: "FND", color: Colors.Charts.Categorical.Color01.Default, passed: totals.fnd, total: totals.fndT },
+            { label: "BP", color: Colors.Charts.Status.Warning.Default, passed: totals.bp, total: totals.bpT },
+            { label: "EXC", color: Colors.Charts.Status.Ideal.Default, passed: totals.exc, total: totals.excT },
           ] as const).map((t, i) => {
             const pct = t.total > 0 ? Math.round((t.passed / t.total) * 100) : 0;
             return (
-              <div key={t.label} style={{
+              <Flex flexDirection="column" key={t.label} style={{
                 textAlign: "center", padding: "6px 12px", borderRadius: 8,
                 background: t.color + (dk ? "12" : "08"),
                 border: `1px solid ${t.color}20`,
                 animation: `matScaleIn 0.35s ease both ${0.4 + i * 0.1}s`,
               }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: t.color, lineHeight: 1 }}>{t.passed}/{t.total}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: t.color, opacity: 0.75, marginTop: 2, letterSpacing: 0.5 }}>{t.label} · {pct}%</div>
-              </div>
+                <Text style={{ fontSize: 14, fontWeight: 800, color: t.color, lineHeight: 1 }}>{t.passed}/{t.total}</Text>
+                <Text style={{ fontSize: 12, fontWeight: 700, color: t.color, opacity: 0.75, marginTop: 2, letterSpacing: 0.5 }}>{t.label} · {pct}%</Text>
+              </Flex>
             );
           })}
-        </div>
-      </div>
+        </Flex>
+      </Flex>
 
       {/* ── Capability cards grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
+      <Grid gridTemplateColumns="repeat(auto-fill, minmax(340px, 1fr))" gap={16}>
         {sorted.map((cap, i) => (
-          <div key={cap.name} style={{ animation: `matFadeUp 0.4s ease both ${0.15 + i * 0.06}s` }}>
+          <Flex flexDirection="column" key={cap.name} style={{ animation: `matFadeUp 0.4s ease both ${0.15 + i * 0.06}s` }}>
             <MaturityCard cap={cap} dk={dk} text={text} textSec={textSec} textTert={textTert} collapseKey={collapseKey} />
-          </div>
+          </Flex>
         ))}
-      </div>
+      </Grid>
 
       {/* Quick-start guide */}
-      <div style={{
+      <Flex flexDirection="column" style={{
         marginTop: 22, padding: "14px 18px", borderRadius: 10,
         background: dk ? "rgba(0,200,83,0.05)" : "rgba(0,200,83,0.03)",
         border: `1px solid ${dk ? "rgba(0,200,83,0.12)" : "rgba(0,200,83,0.08)"}`,
         animation: `matFadeUp 0.4s ease both ${0.15 + sorted.length * 0.06 + 0.1}s`,
       }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Suggested Approach</div>
-        <div style={{ fontSize: 12, color: textSec, lineHeight: 1.7 }}>
-          <strong style={{ color: text }}>1.</strong> Identify capabilities with <strong style={{ color: "#CD3C44" }}>low maturity scores</strong> — these need the most attention.{" "}
-          <strong style={{ color: text }}>2.</strong> For each, complete the <strong style={{ color: "#5B6ACF" }}>Foundation</strong> tier first — it carries <strong style={{ color: text }}>60% weight</strong> and unlocks Best Practice scoring.{" "}
-          <strong style={{ color: text }}>3.</strong> Then advance to <strong style={{ color: "#EEA746" }}>Best Practice</strong> (25% weight, requires Foundation &ge; 80%) and <strong style={{ color: "#36B37E" }}>Excellence</strong> (15% weight, requires Best Practice &ge; 60%).{" "}
-          <strong style={{ color: text }}>4.</strong> Click any card to see <strong style={{ color: text }}>which specific criteria</strong> are missing in each tier.
-        </div>
-      </div>
-    </div>
+        <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Suggested Approach</Flex>
+        <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.7 }}>
+          <Strong style={{ color: text }}>1.</Strong> Identify capabilities with <Strong style={{ color: Colors.Text.Critical.Default }}>low maturity scores</Strong> — these need the most attention.{" "}
+          <Strong style={{ color: text }}>2.</Strong> For each, complete the <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation</Strong> tier first — it carries <Strong style={{ color: text }}>50% weight</Strong>.{" "}
+          <Strong style={{ color: text }}>3.</Strong> Then advance to <Strong style={{ color: Colors.Charts.Status.Warning.Default }}>Best Practice</Strong> (30% weight) and <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}>Excellence</Strong> (20% weight).{" "}
+          <Strong style={{ color: text }}>4.</Strong> Click any card to see <Strong style={{ color: text }}>which specific criteria</Strong> are missing in each tier.
+        </Text>
+      </Flex>
+    </Flex>
   );
 }
 
@@ -1154,22 +650,22 @@ const recAnimStyle = `
 }
 `;
 
-function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalScore, overallMaturityLevel, collapseKey, history, onDrilldown }: {
+function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalScore, overallMaturityLevel, collapseKey, history, onDrilldown, onRadarMount }: {
   capabilities: CapabilityResult[];
   dk: boolean; text: string; textSec: string; textTert: string;
   totalScore: number; overallMaturityLevel: number; collapseKey: number;
   history: ReturnType<typeof useAssessmentHistory>;
   onDrilldown: (mode: ViewMode) => void;
+  onRadarMount: (handle: CovMatRadarHandle | null) => void;
 }) {
   const borderSub = dk ? "rgba(91,106,207,0.25)" : "rgba(0,0,0,0.08)";
   const card = dk ? "rgba(20,22,40,0.85)" : "rgba(248,249,252,0.9)";
   const cardGlow = dk ? "0 0 12px rgba(91,106,207,0.12), inset 0 1px 0 rgba(255,255,255,0.04)" : "0 1px 6px rgba(0,0,0,0.06)";
-  const COV_C = "#4C9AFF";
-  const MAT_C = "#B07AE8";
+  const COV_C = Colors.Charts.Categorical.Color01.Default;
+  const MAT_C = Colors.Charts.Categorical.Color08.Default;
   const covBandC = maturityBandColor(totalScore);
   const matBandC = maturityBandColor(overallMaturityLevel);
-  const gridC = dk ? "rgba(91,106,207,0.12)" : "rgba(0,0,0,0.06)";
-  const labelC = dk ? "#d0d0e8" : "#4a4a5e";
+  const labelC = Colors.Text.Neutral.Subdued;
   const bandLabel = (s: number) => s >= 80 ? "Excellent" : s >= 60 ? "Good" : s >= 40 ? "Moderate" : s >= 20 ? "Low" : "N/A";
 
   // ── Criterion → Tier map ──
@@ -1196,9 +692,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
     const fP = ti.foundation.t > 0 ? ti.foundation.p / ti.foundation.t : 0;
     const bP = ti.bestPractice.t > 0 ? ti.bestPractice.p / ti.bestPractice.t : 0;
     const eP = ti.excellence.t > 0 ? ti.excellence.p / ti.excellence.t : 0;
-    const effB = fP >= 0.8 ? bP : 0;
-    const effE = effB >= 0.6 ? eP : 0;
-    return { date: snap.timestamp, cov: snap.totalScore, mat: Math.round(fP * 60 + effB * 25 + effE * 15) };
+    return { date: snap.timestamp, cov: snap.totalScore, mat: Math.round(fP * 50 + bP * 30 + eP * 20) };
   }), [sortedSnaps, tierMap]);
 
   // ── Deltas from previous snapshot ──
@@ -1219,113 +713,18 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   );
   const totalGaps = capGaps.reduce((s, c) => s + c.total, 0);
 
-  // ── Chart.js — Combo Bar (Coverage) + Line (Maturity) ──
+  // ── Sorted capabilities for charts ──
   const sorted = useMemo(() => [...capabilities].sort((a, b) => a.name.localeCompare(b.name)), [capabilities]);
 
-  const RADAR_COV = dk ? "#00E5FF" : "#0097A7";  // cyan (dark) / dark cyan (light)
-  const RADAR_MAT = dk ? "#D500F9" : "#9C27B0"; // magenta (dark) / purple (light)
-
-  const comboData = useMemo(() => ({
-    labels: sorted.map(c => c.name),
-    datasets: [
-      {
-        label: "Coverage %",
-        data: sorted.map(c => c.score),
-        fill: true,
-        backgroundColor: RADAR_COV + "18",
-        borderColor: RADAR_COV,
-        borderWidth: 2,
-        borderDash: [],
-        pointBackgroundColor: sorted.map(c => c.color),
-        pointBorderColor: sorted.map(c => c.color),
-        pointBorderWidth: 2,
-        pointRadius: 5,
-        pointHoverRadius: 8,
-        pointHoverBackgroundColor: sorted.map(c => c.color),
-      },
-      {
-        label: "Maturity %",
-        data: sorted.map(c => c.maturity.maturityScore),
-        fill: true,
-        backgroundColor: RADAR_MAT + "18",
-        borderColor: RADAR_MAT,
-        borderWidth: 2,
-        borderDash: [6, 3],
-        pointBackgroundColor: sorted.map(c => c.color),
-        pointBorderColor: sorted.map(c => c.color),
-        pointBorderWidth: 2,
-        pointRadius: 5,
-        pointHoverRadius: 8,
-        pointHoverBackgroundColor: sorted.map(c => c.color),
-      },
-    ],
-  }), [sorted, dk]);
-
-  const comboOptions = useMemo<ChartOptions<"radar">>(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: {
-      duration: 1200,
-      easing: "easeOutQuart" as const,
-    },
-    plugins: {
-      legend: {
-        position: "top",
-        labels: {
-          color: dk ? "#FFFFFF" : "#1A1A2E",
-          font: { size: 12, weight: "bold" },
-          usePointStyle: true,
-          pointStyle: "line",
-          pointStyleWidth: 20,
-          padding: 12,
-          generateLabels: (chart: any) =>
-            chart.data.datasets.map((ds: any, i: number) => ({
-              text: ds.label,
-              fontColor: dk ? "#FFFFFF" : "#1A1A2E",
-              fillStyle: "transparent",
-              strokeStyle: ds.borderColor,
-              lineWidth: 2,
-              lineDash: ds.borderDash || [],
-              pointStyle: "line",
-              hidden: !chart.isDatasetVisible(i),
-              datasetIndex: i,
-            })),
-        },
-      },
-      tooltip: {
-        backgroundColor: dk ? "rgba(18,20,36,0.95)" : "#fff",
-        titleColor: labelC,
-        bodyColor: labelC,
-        borderColor: dk ? "rgba(91,106,207,0.35)" : "rgba(0,0,0,0.1)",
-        borderWidth: 1,
-        padding: 12,
-        cornerRadius: 8,
-        callbacks: {
-          label: (ctx: any) => `${ctx.dataset.label}: ${ctx.parsed.r}%`,
-        },
-      },
-    },
-    scales: {
-      r: {
-        min: 0,
-        max: 100,
-        beginAtZero: true,
-        ticks: {
-          stepSize: 20,
-          color: labelC,
-          font: { size: 12, weight: "600" as any },
-          backdropColor: "transparent",
-          callback: (v: any) => `${v}%`,
-        },
-        pointLabels: {
-          color: labelC,
-          font: { size: 12, weight: "600" as any },
-        },
-        grid: { color: gridC },
-        angleLines: { color: gridC },
-      },
-    },
-  }), [dk, labelC, gridC]);
+  const scatterPoints = useMemo(() =>
+    capabilities.map(c => ({
+      name: c.name,
+      x: c.score,
+      y: c.maturity.maturityScore,
+      color: c.color,
+    })),
+    [capabilities]
+  );
 
   // ── KPI helpers ──
   const totalCriteria = capabilities.reduce((s, c) => s + c.criteriaResults.length, 0);
@@ -1345,328 +744,283 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   const fullCoverageCaps = capabilities.filter(c => c.score === 100);
   const zeroCoverageCaps = capabilities.filter(c => c.score === 0);
 
+  const [expandedChart, setExpandedChart] = useState<"radar" | "bubble" | null>(null);
+
   const MiniBar = ({ pct, color, h = 6, delay = 0.3 }: { pct: number; color: string; h?: number; delay?: number }) => (
-    <div style={{ width: "100%", height: h, borderRadius: h / 2, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", overflow: "hidden" }}>
-      <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, borderRadius: h / 2, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
-    </div>
+    <Flex flexDirection="column" style={{ width: "100%", height: h, borderRadius: h / 2, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+      <Flex style={{ height: "100%", width: `${Math.min(100, pct)}%`, borderRadius: h / 2, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
+    </Flex>
   );
 
   return (
-    <div data-rec-root style={{ flex: 1, overflow: "hidden", padding: "12px 20px", display: "flex", flexDirection: "column" as const }}>
+    <Flex data-rec-root flexDirection="column" style={{ flex: 1, overflow: "hidden", padding: "12px 20px" }}>
       <style>{recAnimStyle}</style>
 
-      <div style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 2, letterSpacing: 0.2, animation: "recFadeUp 0.3s ease both" }}>
+      <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 2, letterSpacing: 0.2, animation: "recFadeUp 0.3s ease both" }}>
         Executive Summary
-      </div>
-      <div style={{ fontSize: 12, color: textSec, marginBottom: 12, lineHeight: 1.4, animation: "recFadeUp 0.3s ease both 0.05s" }}>
+      </Flex>
+      <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, marginBottom: 12, lineHeight: 1.4, animation: "recFadeUp 0.3s ease both 0.05s" }}>
         Overall assessment of observability coverage and maturity across {capabilities.length} capabilities · {totalCriteria} criteria evaluated
-      </div>
+      </Flex>
 
       {/* ═══ SECTION 1: Highlights ═══ */}
-      <div style={{
+      <Flex flexDirection="column" style={{
         borderRadius: 10, border: `1px solid ${borderSub}`, background: card,
         padding: "14px 18px", boxShadow: cardGlow, marginBottom: 14,
         animation: "recFadeUp 0.5s ease both",
       }}>
 
         {/* ── Row 1: Scores ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 12, flexWrap: "wrap" as const }}>
+        <Flex alignItems="center" gap={0} flexWrap="wrap" style={{ marginBottom: 12 }}>
 
           {/* Coverage score */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "1 1 200px", padding: "6px 0" }}>
-            <div style={{ width: 4, height: 36, borderRadius: 2, background: covBandC, boxShadow: dk ? `0 0 6px ${covBandC}40` : "none" }} />
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 1 }}>COVERAGE</div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                <span style={{ fontSize: 24, fontWeight: 900, color: covBandC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{totalScore}%</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: covBandC, opacity: 0.8 }}>{bandLabel(totalScore)}</span>
+          <Flex alignItems="center" gap={12} style={{ flex: "1 1 200px", padding: "6px 0" }}>
+            <Flex style={{ width: 4, height: 36, borderRadius: 2, background: covBandC, boxShadow: dk ? `0 0 6px ${covBandC}40` : "none" }} />
+            <Flex flexDirection="column">
+              <Text style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 1 }}>COVERAGE</Text>
+              <Flex alignItems="baseline" gap={6}>
+                <Text style={{ fontSize: 24, fontWeight: 900, color: covBandC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{totalScore}%</Text>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: covBandC, opacity: 0.8 }}>{bandLabel(totalScore)}</Text>
                 {covDelta !== null && covDelta !== 0 && (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: covDelta > 0 ? "#36B37E" : "#CD3C44" }}>
+                  <Text style={{ fontSize: 12, fontWeight: 700, color: covDelta > 0 ? Colors.Text.Success.Default : Colors.Text.Critical.Default }}>
                     {covDelta > 0 ? "\u25B2" : "\u25BC"}{Math.abs(covDelta)}pp
-                  </span>
+                  </Text>
                 )}
-              </div>
-            </div>
+              </Flex>
+            </Flex>
             <MiniBar pct={totalScore} color={covBandC} />
-          </div>
+          </Flex>
 
-          <div style={{ width: 1, height: 32, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 16px", flexShrink: 0 }} />
+          <Flex style={{ width: 1, height: 32, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 16px", flexShrink: 0 }} />
 
           {/* Maturity score */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "1 1 200px", padding: "6px 0" }}>
-            <div style={{ width: 4, height: 36, borderRadius: 2, background: matBandC, boxShadow: dk ? `0 0 6px ${matBandC}40` : "none" }} />
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 1 }}>MATURITY</div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                <span style={{ fontSize: 24, fontWeight: 900, color: matBandC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{overallMaturityLevel}%</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: matBandC, opacity: 0.8 }}>{bandLabel(overallMaturityLevel)}</span>
+          <Flex alignItems="center" gap={12} style={{ flex: "1 1 200px", padding: "6px 0" }}>
+            <Flex style={{ width: 4, height: 36, borderRadius: 2, background: matBandC, boxShadow: dk ? `0 0 6px ${matBandC}40` : "none" }} />
+            <Flex flexDirection="column">
+              <Text style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 1 }}>MATURITY</Text>
+              <Flex alignItems="baseline" gap={6}>
+                <Text style={{ fontSize: 24, fontWeight: 900, color: matBandC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{overallMaturityLevel}%</Text>
+                <Text style={{ fontSize: 12, fontWeight: 600, color: matBandC, opacity: 0.8 }}>{bandLabel(overallMaturityLevel)}</Text>
                 {matDelta !== null && matDelta !== 0 && (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: matDelta > 0 ? "#36B37E" : "#CD3C44" }}>
+                  <Text style={{ fontSize: 12, fontWeight: 700, color: matDelta > 0 ? Colors.Text.Success.Default : Colors.Text.Critical.Default }}>
                     {matDelta > 0 ? "\u25B2" : "\u25BC"}{Math.abs(matDelta)}pp
-                  </span>
+                  </Text>
                 )}
-              </div>
-            </div>
+              </Flex>
+            </Flex>
             <MiniBar pct={overallMaturityLevel} color={matBandC} />
-          </div>
+          </Flex>
 
-          <div style={{ width: 1, height: 32, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 16px", flexShrink: 0 }} />
+          <Flex style={{ width: 1, height: 32, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 16px", flexShrink: 0 }} />
 
           {/* Quick stats */}
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexShrink: 0 }}>
-            <div style={{ textAlign: "center" as const }}>
-              <div style={{ fontSize: 16, fontWeight: 900, color: "#5B6ACF", lineHeight: 1 }}>{capabilities.length}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: labelC, marginTop: 2, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Capabilities</div>
-            </div>
-            <div style={{ textAlign: "center" as const }}>
-              <div style={{ fontSize: 16, fontWeight: 900, color: "#5B6ACF", lineHeight: 1 }}>{passedCriteria}<span style={{ fontSize: 12, fontWeight: 600, color: labelC }}>/{totalCriteria}</span></div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: labelC, marginTop: 2, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Criteria Met</div>
-            </div>
-          </div>
-        </div>
+          <Flex alignItems="center" gap={12} style={{ flexShrink: 0 }}>
+            <Flex flexDirection="column" style={{ textAlign: "center" as const }}>
+              <Text style={{ fontSize: 16, fontWeight: 900, color: Colors.Text.Primary.Default, lineHeight: 1 }}>{capabilities.length}</Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: labelC, marginTop: 2, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Capabilities</Text>
+            </Flex>
+            <Flex flexDirection="column" style={{ textAlign: "center" as const }}>
+              <Flex alignItems="baseline" style={{ fontSize: 16, fontWeight: 900, color: Colors.Text.Primary.Default, lineHeight: 1, justifyContent: "center" }}>{passedCriteria}<Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>/{totalCriteria}</Text></Flex>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: labelC, marginTop: 2, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Criteria Met</Text>
+            </Flex>
+          </Flex>
+        </Flex>
 
         {/* ── Row 2: Achievements vs Gaps (side by side) ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Grid gridTemplateColumns="1fr 1fr" gap={12}>
 
           {/* Achievements column */}
-          <div style={{
+          <Flex flexDirection="column" style={{
             borderRadius: 8, padding: "10px 14px",
             background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
-            borderLeft: "3px solid #36B37E",
+            borderLeft: "3px solid " + Colors.Text.Success.Default,
             animation: "recScaleIn 0.35s ease both 0.55s",
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 14 }}>✓</span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: "#36B37E", letterSpacing: 0.5, textTransform: "uppercase" as const }}>Achievements</span>
-              <span style={{ fontSize: 14, fontWeight: 900, color: text, marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{passedCriteria}</span>
-            </div>
+            <Flex alignItems="center" gap={6} style={{ marginBottom: 8 }}>
+              <Text style={{ fontSize: 14 }}>✓</Text>
+              <Text style={{ fontSize: 12, fontWeight: 800, color: Colors.Text.Success.Default, letterSpacing: 0.5, textTransform: "uppercase" as const }}>Achievements</Text>
+              <Text style={{ fontSize: 14, fontWeight: 900, color: text, marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{passedCriteria}</Text>
+            </Flex>
 
-            <div style={{ display: "flex", flexDirection: "column" as const, gap: 5 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Criteria passed</span>
-                <span style={{ fontSize: 14, fontWeight: 800, color: text }}>{passedCriteria}<span style={{ color: labelC, fontWeight: 600 }}>/{totalCriteria}</span></span>
-              </div>
+            <Flex flexDirection="column" gap={4}>
+              <Flex alignItems="center" justifyContent="space-between">
+                <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Criteria passed</Text>
+                <Text style={{ fontSize: 14, fontWeight: 800, color: text }}>{passedCriteria}<Text style={{ color: labelC, fontWeight: 600 }}>/{totalCriteria}</Text></Text>
+              </Flex>
 
               {/* Excellent capabilities */}
               {excellentCount > 0 && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Excellent capabilities (≥80%)</span>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: text }}>{excellentCount}</span>
-                </div>
+                <Flex alignItems="center" justifyContent="space-between">
+                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Excellent capabilities (≥80%)</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 800, color: text }}>{excellentCount}</Text>
+                </Flex>
               )}
 
               {/* Good capabilities */}
               {goodCount > 0 && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Good capabilities (60–79%)</span>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: text }}>{goodCount}</span>
-                </div>
+                <Flex alignItems="center" justifyContent="space-between">
+                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Good capabilities (60–79%)</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 800, color: text }}>{goodCount}</Text>
+                </Flex>
               )}
 
               {/* Full coverage */}
               {fullCoverageCaps.length > 0 && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Full coverage (100%)</span>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: text }}>{fullCoverageCaps.length}</span>
-                </div>
+                <Flex alignItems="center" justifyContent="space-between">
+                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Full coverage (100%)</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 800, color: text }}>{fullCoverageCaps.length}</Text>
+                </Flex>
               )}
 
               {/* Best capability */}
               {bestCap && (
-                <div style={{ marginTop: 4, padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>TOP CAPABILITY</div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestCap.name}</span>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: maturityBandColor(bestCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestCap.score}%</span>
-                  </div>
-                </div>
+                <Flex flexDirection="column" style={{ marginTop: 4, padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>TOP CAPABILITY</Flex>
+                  <Flex alignItems="center" justifyContent="space-between">
+                    <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestCap.name}</Text>
+                    <Text style={{ fontSize: 14, fontWeight: 900, color: maturityBandColor(bestCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestCap.score}%</Text>
+                  </Flex>
+                </Flex>
               )}
 
               {/* Best maturity */}
               {bestMatCap && bestMatCap.name !== bestCap?.name && (
-                <div style={{ padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>TOP MATURITY</div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestMatCap.name}</span>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: maturityBandColor(bestMatCap.maturity.maturityScore), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestMatCap.maturity.maturityScore}%</span>
-                  </div>
-                </div>
+                <Flex flexDirection="column" style={{ padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>TOP MATURITY</Flex>
+                  <Flex alignItems="center" justifyContent="space-between">
+                    <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestMatCap.name}</Text>
+                    <Text style={{ fontSize: 14, fontWeight: 900, color: maturityBandColor(bestMatCap.maturity.maturityScore), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestMatCap.maturity.maturityScore}%</Text>
+                  </Flex>
+                </Flex>
               )}
-            </div>
-          </div>
+            </Flex>
+          </Flex>
 
           {/* Gaps column */}
-          <div style={{
+          <Flex flexDirection="column" style={{
             borderRadius: 8, padding: "10px 14px",
             background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
-            borderLeft: "3px solid #CD3C44",
+            borderLeft: "3px solid " + Colors.Text.Critical.Default,
             animation: "recScaleIn 0.35s ease both 0.65s",
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 14 }}>✗</span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: "#CD3C44", letterSpacing: 0.5, textTransform: "uppercase" as const }}>Gaps</span>
-              <span style={{ fontSize: 14, fontWeight: 900, color: totalGaps > 0 ? "#CD3C44" : "#36B37E", marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{totalGaps}</span>
-            </div>
+            <Flex alignItems="center" gap={6} style={{ marginBottom: 8 }}>
+              <Text style={{ fontSize: 14 }}>✗</Text>
+              <Text style={{ fontSize: 12, fontWeight: 800, color: Colors.Text.Critical.Default, letterSpacing: 0.5, textTransform: "uppercase" as const }}>Gaps</Text>
+              <Text style={{ fontSize: 14, fontWeight: 900, color: totalGaps > 0 ? Colors.Text.Critical.Default : Colors.Text.Success.Default, marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{totalGaps}</Text>
+            </Flex>
 
-            <div style={{ display: "flex", flexDirection: "column" as const, gap: 5 }}>
+            <Flex flexDirection="column" gap={4}>
               {/* Gap breakdown */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Critical gaps (value = 0)</span>
-                <span style={{ fontSize: 14, fontWeight: 800, color: totalCritical > 0 ? "#CD3C44" : text }}>{totalCritical}</span>
-              </div>
+              <Flex alignItems="center" justifyContent="space-between">
+                <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Critical gaps (value = 0)</Text>
+                <Text style={{ fontSize: 14, fontWeight: 800, color: totalCritical > 0 ? Colors.Text.Critical.Default : text }}>{totalCritical}</Text>
+              </Flex>
 
               {/* Low/Critical caps */}
               {criticalCount > 0 && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Critical capabilities (&lt;20%)</span>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: "#CD3C44" }}>{criticalCount}</span>
-                </div>
+                <Flex alignItems="center" justifyContent="space-between">
+                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Critical capabilities (&lt;20%)</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 800, color: Colors.Text.Critical.Default }}>{criticalCount}</Text>
+                </Flex>
               )}
               {lowCount > 0 && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Low capabilities (20–39%)</span>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: "#DC671E" }}>{lowCount}</span>
-                </div>
+                <Flex alignItems="center" justifyContent="space-between">
+                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Low capabilities (20–39%)</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 800, color: Colors.Text.Warning.Default }}>{lowCount}</Text>
+                </Flex>
               )}
 
               {/* Worst capability */}
               {worstCap && (
-                <div style={{ marginTop: 4, padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>NEEDS MOST ATTENTION</div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{worstCap.name}</span>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: maturityBandColor(worstCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{worstCap.score}%</span>
-                  </div>
-                </div>
+                <Flex flexDirection="column" style={{ marginTop: 4, padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>NEEDS MOST ATTENTION</Flex>
+                  <Flex alignItems="center" justifyContent="space-between">
+                    <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{worstCap.name}</Text>
+                    <Text style={{ fontSize: 14, fontWeight: 900, color: maturityBandColor(worstCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{worstCap.score}%</Text>
+                  </Flex>
+                </Flex>
               )}
 
               {/* Most gaps capability */}
               {topGapCap && topGapCap.name !== worstCap?.name && (
-                <div style={{ padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>MOST GAPS</div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{topGapCap.name}</span>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: "#EEA746", flexShrink: 0, marginLeft: 8 }}>{topGapCap.total} gaps</span>
-                  </div>
-                </div>
+                <Flex flexDirection="column" style={{ padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>MOST GAPS</Flex>
+                  <Flex alignItems="center" justifyContent="space-between">
+                    <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{topGapCap.name}</Text>
+                    <Text style={{ fontSize: 14, fontWeight: 900, color: Colors.Text.Warning.Default, flexShrink: 0, marginLeft: 8 }}>{topGapCap.total} gaps</Text>
+                  </Flex>
+                </Flex>
               )}
-            </div>
-          </div>
+            </Flex>
+          </Flex>
 
-        </div>
-      </div>
+        </Grid>
+      </Flex>
 
       {/* ═══ SECTIONS 2 & 3: Charts side by side ═══ */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 0 }}>
+      <Flex gap={12} style={{ marginBottom: 0 }}>
         {/* ── Combo Bar-Line Chart — Coverage vs Maturity ── */}
-        <div data-rec-card style={{
-          flex: "1 1 0", minWidth: 340,
+        <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 0", minWidth: 340,
           borderRadius: 12, border: `1px solid ${borderSub}`, background: card,
           padding: "12px 14px 8px",
           boxShadow: cardGlow,
-          animation: "recFadeUp 0.4s ease both 0.75s",
-          display: "flex", flexDirection: "column" as const,
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.5, marginBottom: 6 }}>
-            Coverage vs Maturity by Capability
-          </div>
-          <div style={{ height: "calc(100vh - 560px)", minHeight: 160 }}>
-            <Radar data={comboData as any} options={comboOptions as any} />
-          </div>
-        </div>
+          animation: "recFadeUp 0.4s ease both 0.75s" }}>
+          <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 6 }}>
+            <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.5 }}>
+              Coverage vs Maturity by Capability
+            </Flex>
+            <ExpandChartButton onClick={() => setExpandedChart("radar")} />
+          </Flex>
+          <Flex flexDirection="column" style={{ height: "calc(100vh - 420px)", minHeight: 280 }}>
+            <CovMatRadar ref={(h: CovMatRadarHandle | null) => { onRadarMount(h); }} data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.maturity.maturityScore, color: c.color }))} />
+          </Flex>
+        </Flex>
 
-        {/* ── Bubble Chart — Capability Map ── */}
-        <div data-rec-card style={{
-          flex: "1 1 0", minWidth: 340,
+        {/* ── Expanded Radar Chart Modal ── */}
+        <ExpandableChartModal open={expandedChart === "radar"} onClose={() => setExpandedChart(null)} title="Coverage vs Maturity by Capability">
+          <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
+            <CovMatRadar data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.maturity.maturityScore, color: c.color }))} />
+          </Flex>
+        </ExpandableChartModal>
+
+        {/* ── Scatter Chart — Capability Map ── */}
+        <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 0", minWidth: 340,
           borderRadius: 12, border: `1px solid ${borderSub}`, background: card,
           padding: "12px 14px 8px",
           boxShadow: cardGlow,
-          animation: "recFadeUp 0.4s ease both 0.85s",
-          display: "flex", flexDirection: "column" as const,
-        }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.5, marginBottom: 6 }}>
-          Capability Map — Coverage × Maturity × Gaps
-        </div>
-        <div style={{ height: "calc(100vh - 560px)", minHeight: 160 }}>
-          <Bubble
-            data={{
-              datasets: capabilities.map(c => {
-                const gaps = c.criteriaResults.filter(cr => !cr.error && cr.points === 0).length;
-                return {
-                  label: c.name,
-                  data: [{ x: c.score, y: c.maturity.maturityScore, r: Math.max(6, Math.min(30, gaps * 4)) }],
-                  backgroundColor: c.color + "70",
-                  borderColor: c.color,
-                  borderWidth: 1.5,
-                  hoverBackgroundColor: c.color + "A0",
-                  hoverBorderWidth: 2,
-                };
-              }),
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              animation: {
-                duration: 1400,
-                easing: "easeOutQuart" as const,
-              },
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  backgroundColor: dk ? "rgba(18,20,36,0.95)" : "#fff",
-                  titleColor: labelC,
-                  bodyColor: labelC,
-                  borderColor: dk ? "rgba(91,106,207,0.35)" : "rgba(0,0,0,0.1)",
-                  borderWidth: 1,
-                  padding: 12,
-                  cornerRadius: 8,
-                  callbacks: {
-                    label: (ctx: any) => {
-                      const d = ctx.raw;
-                      const gaps = Math.round((d.r - 2) / 4);
-                      return [`Coverage: ${d.x}%`, `Maturity: ${d.y}%`, `Gaps: ${gaps > 0 ? gaps : 0}`];
-                    },
-                  },
-                },
-              },
-              scales: {
-                x: {
-                  min: 0, max: 100,
-                  title: { display: true, text: "Coverage %", color: labelC, font: { size: 12, weight: "bold" } },
-                  ticks: { color: labelC, font: { size: 12, weight: "600" as any }, stepSize: 20, callback: (v: any) => `${v}%` },
-                  grid: { color: gridC },
-                  border: { color: dk ? "rgba(91,106,207,0.2)" : "rgba(0,0,0,0.08)" },
-                },
-                y: {
-                  min: 0, max: 100,
-                  title: { display: true, text: "Maturity %", color: labelC, font: { size: 12, weight: "bold" } },
-                  ticks: { color: labelC, font: { size: 12, weight: "600" as any }, stepSize: 20, callback: (v: any) => `${v}%` },
-                  grid: { color: gridC },
-                  border: { color: dk ? "rgba(91,106,207,0.2)" : "rgba(0,0,0,0.08)" },
-                },
-              },
-            }}
-          />
-        </div>
-      </div>
-      </div>
+          animation: "recFadeUp 0.4s ease both 0.85s" }}>
+        <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 6 }}>
+          <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.5 }}>
+            Capability Map — Coverage × Maturity
+          </Flex>
+          <ExpandChartButton onClick={() => setExpandedChart("bubble")} />
+        </Flex>
+        <Flex flexDirection="column" style={{ height: "calc(100vh - 320px)", minHeight: 380 }}>
+          <CapabilityScatter data={scatterPoints} dotRadius={10} />
+        </Flex>
+      </Flex>
+      </Flex>
+
+      {/* ── Expanded Scatter Chart Modal ── */}
+      <ExpandableChartModal open={expandedChart === "bubble"} onClose={() => setExpandedChart(null)} title="Capability Map — Coverage × Maturity">
+        <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
+          <CapabilityScatter data={scatterPoints} dotRadius={12} />
+        </Flex>
+      </ExpandableChartModal>
 
       {/* ═══ Unified Legend ═══ */}
-      <div style={{
-        display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center",
-        gap: "6px 16px", marginBottom: 0, marginTop: 10, padding: "8px 14px",
-        borderRadius: 10, border: `1px solid ${borderSub}`, background: card, boxShadow: cardGlow,
-      }}>
+      <Flex alignItems="center" justifyContent="center" flexWrap="wrap" style={{ gap: "6px 16px", marginBottom: 0, marginTop: 10, padding: "8px 14px",
+        borderRadius: 10, border: `1px solid ${borderSub}`, background: card, boxShadow: cardGlow }}>
         {/* Capability dots */}
         {capabilities.map(c => (
-          <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <div style={{ width: 9, height: 9, borderRadius: "50%", background: c.color, boxShadow: dk ? `0 0 4px ${c.color}80` : "none" }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: labelC }}>{c.name}</span>
-          </div>
+          <Flex key={c.name} alignItems="center" gap={4}>
+            <Flex style={{ width: 9, height: 9, borderRadius: "50%", background: c.color, boxShadow: dk ? `0 0 4px ${c.color}80` : "none" }} />
+            <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>{c.name}</Text>
+          </Flex>
         ))}
-      </div>
+      </Flex>
 
-    </div>
+    </Flex>
   );
 }
 
@@ -1681,11 +1035,11 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
   const scoreColor = maturityBandColor(m.maturityScore);
 
   return (
-    <div
+    <Flex flexDirection="column"
       onClick={(e) => { e.stopPropagation(); if (isTextSelection()) return; setExpanded(!expanded); }}
       style={{
-        background: dk ? "#161630" : "#ffffff",
-        border: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+        background: Colors.Background.Container.Neutral.Default,
+        border: `1px solid ${Colors.Border.Neutral.Default}`,
         borderRadius: 12, padding: "16px 18px",
         borderLeft: `4px solid ${cap.color}`,
         cursor: "pointer",
@@ -1695,84 +1049,84 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
       onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "translateY(0)"; }}
     >
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: text, flex: 1 }}>{cap.name}</span>
-        <span style={{
+      <Flex alignItems="center" gap={8} style={{ marginBottom: 10 }}>
+        <Text style={{ fontSize: 14, fontWeight: 700, color: text, flex: 1 }}>{cap.name}</Text>
+        <Text style={{
           fontSize: 12, fontWeight: 800, padding: "2px 10px", borderRadius: 6,
           background: scoreColor + (dk ? "25" : "15"),
           color: scoreColor, fontFamily: "system-ui, sans-serif",
-        }}>{m.maturityScore}%</span>
-        <span style={{
+        }}>{m.maturityScore}%</Text>
+        <Text style={{
           fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
           color: scoreColor, opacity: 0.8,
-        }}>{m.maturityBand}</span>
-        <span style={{ fontSize: 12, color: textSec, fontWeight: 600 }}>{expanded ? "▾" : "▸"}</span>
-      </div>
+        }}>{m.maturityBand}</Text>
+        <Text style={{ fontSize: 12, color: textSec, fontWeight: 600 }}>{expanded ? "▾" : "▸"}</Text>
+      </Flex>
 
       {/* Overall maturity bar */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{
+      <Flex flexDirection="column" style={{ marginBottom: 10 }}>
+        <Flex flexDirection="column" style={{
           height: 8, borderRadius: 4, overflow: "hidden",
           background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
         }}>
-          <div style={{
+          <Flex flexDirection="column" style={{
             height: "100%", borderRadius: 4,
             width: `${m.maturityScore}%`,
             background: `linear-gradient(90deg, ${scoreColor}cc, ${scoreColor})`,
             animation: "matBarFill 0.8s ease both 0.3s",
           }} />
-        </div>
-      </div>
+        </Flex>
+      </Flex>
 
       {/* Tier bars */}
       {TIER_META.map((t, ti) => {
         const tier = m[t.key];
         const pct = tier.total > 0 ? Math.round((tier.passed / tier.total) * 100) : 0;
-        const weight = t.key === "foundation" ? "60%" : t.key === "bestPractice" ? "25%" : "15%";
+        const weight = t.key === "foundation" ? "50%" : t.key === "bestPractice" ? "30%" : "20%";
         return (
-          <div key={t.key} style={{ marginBottom: 5 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: textSec }}>{t.label} <span style={{ fontWeight: 400, color: textTert }}>({weight})</span></span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: pct === 100 ? "#36B37E" : pct > 0 ? text : textTert }}>
+          <Flex flexDirection="column" key={t.key} style={{ marginBottom: 5 }}>
+            <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: textSec }}>{t.label} <Text style={{ fontWeight: 400, color: textTert }}>({weight})</Text></Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: pct === 100 ? Colors.Text.Success.Default : pct > 0 ? text : textTert }}>
                 {tier.passed}/{tier.total}
-              </span>
-            </div>
-            <div style={{
+              </Text>
+            </Flex>
+            <Flex flexDirection="column" style={{
               height: 5, borderRadius: 3, overflow: "hidden",
               background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
             }}>
-              <div style={{
+              <Flex flexDirection="column" style={{
                 height: "100%", borderRadius: 3,
                 width: `${pct}%`,
-                background: pct === 100 ? "#36B37E" : t.color,
+                background: pct === 100 ? Colors.Text.Success.Default : t.color,
                 animation: `matBarFill 0.7s ease both ${0.45 + ti * 0.15}s`,
               }} />
-            </div>
-          </div>
+            </Flex>
+          </Flex>
         );
       })}
 
       {/* Expanded: show criteria by tier with drilldown */}
       {expanded && (
-        <div style={{ marginTop: 10, borderTop: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingTop: 10 }}>
+        <Flex flexDirection="column" style={{ marginTop: 10, borderTop: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingTop: 10 }}>
           {TIER_META.map(t => {
             const criteria = cap.criteriaResults.filter(cr => cr.tier === t.key);
             if (criteria.length === 0) return null;
             return (
-              <div key={t.key} style={{ marginBottom: 10 }}>
-                <div style={{
+              <Flex flexDirection="column" key={t.key} style={{ marginBottom: 10 }}>
+                <Flex flexDirection="column" style={{
                   fontSize: 12, fontWeight: 700, color: t.color,
                   textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4,
-                }}>{t.label}</div>
+                }}>{t.label}</Flex>
                 {criteria.map(cr => (
                   <MaturityCriterionRow key={cr.id} cr={cr} dk={dk} text={text} textSec={textSec} textTert={textTert} collapseKey={collapseKey} />
                 ))}
-              </div>
+              </Flex>
             );
           })}
-        </div>
+        </Flex>
       )}
-    </div>
+    </Flex>
   );
 }
 
@@ -1789,8 +1143,8 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
   const remediation = CRITERION_REMEDIATION[cr.id];
 
   return (
-    <div style={{ marginBottom: 2 }}>
-      <div
+    <Flex flexDirection="column" style={{ marginBottom: 2 }}>
+      <Flex
         onClick={(e) => { e.stopPropagation(); if (isTextSelection()) return; setOpen(!open); }}
         style={{
           display: "flex", alignItems: "center", gap: 8,
@@ -1799,144 +1153,137 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
           transition: "background 0.15s",
         }}
       >
-        <span style={{
+        <Text style={{
           width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-          background: passed ? "#36B37E" : "#CD3C44",
+          background: passed ? Colors.Text.Success.Default : Colors.Text.Critical.Default,
         }} />
         <Tooltip text={criterionTooltipContent(cr.id, cr.description, cr.tier)} containerStyle={{ flex: 1 }} maxWidth={340}>
-          <span style={{ color: passed ? text : textSec }}>{cr.label}</span>
+          <Text style={{ color: passed ? text : textSec }}>{cr.label}</Text>
         </Tooltip>
         {cr.value > 0 && (
-          <span style={{ fontSize: 12, color: textTert, fontWeight: 600 }}>{cr.isRatio ? `${cr.value}%` : cr.value.toLocaleString()}</span>
+          <Text style={{ fontSize: 12, color: textTert, fontWeight: 600 }}>{cr.isRatio ? `${cr.value}%` : cr.value.toLocaleString()}</Text>
         )}
-        <span style={{ fontSize: 12, color: textTert, fontWeight: 600 }}>{open ? "▾" : "▸"}</span>
-      </div>
+        <Text style={{ fontSize: 12, color: textTert, fontWeight: 600 }}>{open ? "▾" : "▸"}</Text>
+      </Flex>
 
       {open && (
-        <div
+        <Flex flexDirection="column"
           onClick={(e) => e.stopPropagation()}
           style={{
             margin: "4px 0 8px 16px", padding: "10px 14px", borderRadius: 8,
             background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.015)",
             border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
-            borderLeft: `3px solid ${passed ? "#36B37E" : "#CD3C44"}`,
+            borderLeft: `3px solid ${passed ? Colors.Text.Success.Default : Colors.Text.Critical.Default}`,
             animation: "fadeIn 0.2s ease",
           }}
         >
           {/* Description */}
-          <div style={{ fontSize: 12, color: textSec, lineHeight: 1.6, marginBottom: 10 }}>
+          <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.6, marginBottom: 10 }}>
             {cr.description}
-          </div>
+          </Flex>
 
           {/* Measured value badge — shows current vs target for failed criteria */}
           {!passed && !cr.error && (
-            <div style={{
+            <Flex style={{
               display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 10,
               padding: "6px 12px", borderRadius: 6,
               background: dk ? "rgba(229,57,53,0.08)" : "rgba(229,57,53,0.05)",
               border: `1px solid ${dk ? "rgba(229,57,53,0.18)" : "rgba(229,57,53,0.12)"}`,
             }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                <span style={{ fontSize: 12, color: textTert }}>Measured:</span>
-                <span style={{ fontSize: 14, fontWeight: 800, color: "#CD3C44" }}>
+              <Flex alignItems="baseline" gap={4}>
+                <Text style={{ fontSize: 12, color: textTert }}>Measured:</Text>
+                <Text style={{ fontSize: 14, fontWeight: 800, color: Colors.Text.Critical.Default }}>
                   {cr.isRatio ? `${cr.value}%` : cr.value.toLocaleString()}
-                </span>
-              </div>
-              <span style={{ color: dk ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)" }}>│</span>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                <span style={{ fontSize: 12, color: textTert }}>Minimum:</span>
-                <span style={{ fontSize: 14, fontWeight: 800, color: "#36B37E" }}>
+                </Text>
+              </Flex>
+              <Text style={{ color: dk ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)" }}>│</Text>
+              <Flex alignItems="baseline" gap={4}>
+                <Text style={{ fontSize: 12, color: textTert }}>Minimum:</Text>
+                <Text style={{ fontSize: 14, fontWeight: 800, color: Colors.Text.Success.Default }}>
                   {cr.isRatio
                     ? `${cr.thresholds.split(", ").pop()?.match(/≥(\d+)/)?.[1] ?? "1"}%`
                     : cr.thresholds.split(", ").pop()?.match(/≥(\d+)/)?.[1] ?? "1"
                   }
-                </span>
-              </div>
-            </div>
+                </Text>
+              </Flex>
+            </Flex>
           )}
 
           {/* Error badge */}
           {cr.error && (
-            <div style={{
+            <Flex style={{
               display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 10,
               padding: "6px 12px", borderRadius: 6,
               background: dk ? "rgba(229,57,53,0.08)" : "rgba(229,57,53,0.05)",
               border: `1px solid ${dk ? "rgba(229,57,53,0.18)" : "rgba(229,57,53,0.12)"}`,
-              fontSize: 12, color: "#CD3C44", fontWeight: 600,
+              fontSize: 12, color: Colors.Text.Critical.Default, fontWeight: 600,
             }}>
               ⚠ Query execution failed — check connectivity and permissions
-            </div>
+            </Flex>
           )}
 
           {/* Why it matters */}
           {importance && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: textTert, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>Why it matters</div>
-              <div style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>{importance}</div>
-            </div>
+            <Flex flexDirection="column" style={{ marginBottom: 10 }}>
+              <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textTert, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>Why it matters</Flex>
+              <Flex flexDirection="column" style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>{importance}</Flex>
+            </Flex>
           )}
 
           {/* How to evolve */}
           {remediation && !passed && (
-            <div style={{
+            <Flex flexDirection="column" style={{
               padding: "8px 12px", borderRadius: 6,
               background: dk ? "rgba(0,200,83,0.06)" : "rgba(0,200,83,0.03)",
               border: `1px solid ${dk ? "rgba(0,200,83,0.12)" : "rgba(0,200,83,0.08)"}`,
             }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#36B37E", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>
+              <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Success.Default, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>
                 How to Evolve
-              </div>
-              <div style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>
+              </Flex>
+              <Flex flexDirection="column" style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>
                 {remediation.action}
-              </div>
+              </Flex>
               {remediation.docLink && (
-                <a
+                <ExternalLink
                   href={remediation.docLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    display: "inline-block", marginTop: 6,
-                    fontSize: 12, fontWeight: 700, color: "#5B6ACF",
-                    textDecoration: "none",
-                  }}
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  style={{ display: "inline-block", marginTop: 6 }}
                 >
                   Open Dynatrace Docs →
-                </a>
+                </ExternalLink>
               )}
-            </div>
+            </Flex>
           )}
 
           {/* Passed — confirmation */}
           {passed && (
-            <div style={{
-              padding: "6px 10px", borderRadius: 6,
-              background: dk ? "rgba(0,200,83,0.06)" : "rgba(0,200,83,0.03)",
-              display: "flex", alignItems: "center", gap: 6,
-            }}>
-              <span style={{ fontSize: 14 }}>✓</span>
-              <span style={{ fontSize: 12, color: "#36B37E", fontWeight: 600 }}>
+            <Flex alignItems="center" gap={6} style={{ padding: "6px 10px", borderRadius: 6,
+              background: dk ? "rgba(0,200,83,0.06)" : "rgba(0,200,83,0.03)" }}>
+              <Text style={{ fontSize: 14 }}>✓</Text>
+              <Text style={{ fontSize: 12, color: Colors.Text.Success.Default, fontWeight: 600 }}>
                 {cr.isRatio
                   ? `Criterion met — ${cr.value}% coverage`
                   : cr.value > 0
                     ? `Criterion met — ${cr.value.toLocaleString()} detected`
                     : `Criterion met`
                 }
-              </span>
-            </div>
+              </Text>
+            </Flex>
           )}
-        </div>
+        </Flex>
       )}
-    </div>
+    </Flex>
   );
 }
 
 /* ── Left panel — memoized to prevent re-renders during card interactions ── */
-const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, totalScore, hasResults }: {
+const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, totalScore, hasResults, exporting, onGenerateReport }: {
   dk: boolean; text: string; textSec: string; textTert: string;
   accent: string; bgSubtle: string; bgPrimary: string; border: string; borderPri: string;
   tenant: string; start: () => void; resume: () => void;
   totalScore: number; hasResults: boolean;
+  exporting: boolean;
+  onGenerateReport: (lang: ReportLang) => void;
 }) {
   const preflight = usePreflight();
 
@@ -1957,191 +1304,169 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
     }
   }, [preflight.allPassed, preflight.markValidated, preflight.reset, start]);
   return (
-    <div style={{
-      display: "flex", flexDirection: "column",
-      alignItems: "center", textAlign: "center",
-      padding: "36px 28px", gap: 22, overflowY: "auto",
+    <Flex flexDirection="column" alignItems="center" gap={20} style={{ textAlign: "center",
+      padding: "36px 28px", overflowY: "auto",
       background: bgSubtle,
-      borderRight: `1px solid ${border}`,
-    }}>
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", color: accent, marginBottom: 8, opacity: 0.8 }}>
+      borderRight: `1px solid ${border}` }}>
+      <Flex flexDirection="column">
+        <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", color: accent, marginBottom: 8, opacity: 0.8 }}>
           Dynatrace Platform
-        </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+        </Flex>
+        <Flex alignItems="center" justifyContent="center" gap={8}>
           <img src={APP_ICON} alt="" width={36} height={36} style={{ borderRadius: 8 }} />
-          <div style={{ fontSize: 20, fontWeight: 800, color: text, letterSpacing: -0.5, lineHeight: 1.2 }}>
+          <Flex flexDirection="column" style={{ fontSize: 20, fontWeight: 800, color: text, letterSpacing: -0.5, lineHeight: 1.2 }}>
             Pulse Assessment
-          </div>
-        </div>
-      </div>
+          </Flex>
+        </Flex>
+      </Flex>
 
       {/* Run Assessment button + preflight — right below title */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <Flex flexDirection="column" alignItems="center">
         {/* Preflight validation results */}
         {(preflight.running || preflight.hasFails) && (
-          <div style={{
+          <Flex flexDirection="column" style={{
             width: "100%", maxWidth: 340, marginBottom: 12, borderRadius: 10,
             background: dk ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.03)",
             border: `1px solid ${preflight.hasFails ? Colors.Border.Critical.Default : border}`,
             overflow: "hidden",
           }}>
-            <div style={{
-              padding: "10px 14px", fontSize: 12, fontWeight: 700,
+            <Flex alignItems="center" gap={8} style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700,
               color: preflight.hasFails ? Colors.Text.Critical.Default : accent,
-              borderBottom: `1px solid ${border}`,
-              display: "flex", alignItems: "center", gap: 8,
-            }}>
+              borderBottom: `1px solid ${border}` }}>
               {preflight.running ? "⏳" : preflight.hasFails ? "⚠" : "✓"} Pre-flight Validation
-            </div>
-            <div style={{ padding: "8px 14px" }}>
+            </Flex>
+            <Flex flexDirection="column" style={{ padding: "8px 14px" }}>
               {preflight.checks.map(c => (
-                <div key={c.id} style={{
-                  display: "flex", alignItems: "flex-start", gap: 8,
-                  padding: "6px 0", borderBottom: `1px solid ${border}20`,
-                }}>
-                  <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0, marginTop: 1 }}>
+                <Flex key={c.id} alignItems="flex-start" gap={8} style={{ padding: "6px 0", borderBottom: `1px solid ${border}20` }}>
+                  <Text style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0, marginTop: 1 }}>
                     {c.status === "pending" ? "○" : c.status === "running" ? "◌" : c.status === "ok" ? "✓" : "✗"}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
+                  </Text>
+                  <Flex flexDirection="column" style={{ flex: 1, minWidth: 0 }}>
+                    <Flex flexDirection="column" style={{
                       fontSize: 12, fontWeight: 600,
                       color: c.status === "ok" ? Colors.Text.Success.Default : c.status === "fail" ? Colors.Text.Critical.Default : textSec,
                     }}>
                       {c.label}
-                    </div>
+                    </Flex>
                     {c.status === "fail" && c.detail && (
-                      <div style={{ fontSize: 11, color: Colors.Text.Critical.Default, marginTop: 2, lineHeight: 1.4 }}>
+                      <Flex flexDirection="column" style={{ fontSize: 11, color: Colors.Text.Critical.Default, marginTop: 2, lineHeight: 1.4 }}>
                         {c.detail}
-                      </div>
+                      </Flex>
                     )}
                     {c.status === "fail" && (
-                      <div style={{ fontSize: 11, color: textTert, marginTop: 2, lineHeight: 1.4 }}>
-                        Required scope: <code style={{ fontSize: 10, padding: "1px 4px", borderRadius: 3, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }}>{c.scope}</code>
-                      </div>
+                      <Flex flexDirection="column" style={{ fontSize: 11, color: textTert, marginTop: 2, lineHeight: 1.4 }}>
+                        Required scope: <Code style={{ fontSize: 10, padding: "1px 4px", borderRadius: 3, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }}>{c.scope}</Code>
+                      </Flex>
                     )}
-                  </div>
-                </div>
+                  </Flex>
+                </Flex>
               ))}
-            </div>
+            </Flex>
             {preflight.hasFails && (
-              <div style={{
+              <Flex flexDirection="column" style={{
                 padding: "10px 14px", borderTop: `1px solid ${border}`,
                 fontSize: 11, color: textSec, lineHeight: 1.6,
                 background: dk ? "rgba(205,60,68,0.06)" : "rgba(205,60,68,0.03)",
               }}>
-                <strong style={{ color: Colors.Text.Critical.Default }}>Assessment blocked.</strong> Grant the missing scopes to this app in
-                <strong style={{ color: text }}> Settings → Authorization → OAuth clients</strong>, or verify the app manifest includes all required scopes.
-                <div style={{ marginTop: 6 }}>
-                  <button
-                    onClick={() => preflight.reset()}
-                    style={{
-                      padding: "4px 14px", fontSize: 11, fontWeight: 600, cursor: "pointer",
-                      background: "transparent", color: accent,
-                      border: `1px solid ${accent}`, borderRadius: 6,
-                    }}
-                  >
+                <Strong style={{ color: Colors.Text.Critical.Default }}>Assessment blocked.</Strong> Grant the missing scopes to this app in
+                <Strong style={{ color: text }}> Settings → Authorization → OAuth clients</Strong>, or verify the app manifest includes all required scopes.
+                <Flex flexDirection="column" style={{ marginTop: 6 }}>
+                  <Button onClick={() => preflight.reset()} size="condensed" color="primary">
                     Dismiss
-                  </button>
-                </div>
-              </div>
+                  </Button>
+                </Flex>
+              </Flex>
             )}
-          </div>
+          </Flex>
         )}
-        <button
+        <Button
           onClick={preflight.running ? undefined : handleRunClick}
           disabled={preflight.running}
-          style={{
-            padding: "12px 36px", fontSize: 14, fontWeight: 700,
-            cursor: preflight.running ? "wait" : "pointer",
-            background: preflight.running ? (dk ? "rgba(71,79,207,0.4)" : "rgba(71,79,207,0.5)") : Colors.Background.Container.Primary.Accent,
-            color: "#fff",
-            border: "none", borderRadius: 10,
-            boxShadow: "0 4px 16px rgba(71,79,207,0.35)",
-            transition: "transform 0.15s, box-shadow 0.15s",
-            opacity: preflight.running ? 0.7 : 1,
-          }}
-          onMouseEnter={(e) => { if (!preflight.running) { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.boxShadow = "0 6px 24px rgba(71,79,207,0.5)"; } }}
-          onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(71,79,207,0.35)"; }}
+          loading={preflight.running}
+          variant="emphasized"
+          color="primary"
         >
-          {preflight.running ? "◌ Validating…" : "▶ Run Assessment"}
-        </button>
+          {preflight.running ? "Validating…" : "Run Assessment"}
+        </Button>
         {hasResults && (
-          <button
-            onClick={resume}
-            style={{
-              marginTop: 10, padding: "8px 24px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-              background: "transparent", color: accent,
-              border: `1px solid ${accent}`, borderRadius: 8,
-              transition: "transform 0.15s, background 0.15s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = dk ? "rgba(71,79,207,0.1)" : "rgba(71,79,207,0.06)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-          >
-            ← View Last Results ({totalScore}%)
-          </button>
+          <Flex flexDirection="column" alignItems="center" gap={6} style={{ marginTop: 10 }}>
+            <Button onClick={resume} color="primary">
+              ← View Last Results ({totalScore}%)
+            </Button>
+            <Menu>
+              <Menu.Trigger>
+                <Button loading={exporting} size="condensed">
+                  First Day Results
+                </Button>
+              </Menu.Trigger>
+              <Menu.Content>
+                <Menu.Item onSelect={() => onGenerateReport("en")}>Download English (EN)</Menu.Item>
+                <Menu.Item onSelect={() => onGenerateReport("pt")}>Download Portugues (PT)</Menu.Item>
+              </Menu.Content>
+            </Menu>
+          </Flex>
         )}
-        <div style={{ fontSize: 12, color: textTert, marginTop: 10 }}>
-          Tenant: <span style={{ fontWeight: 600, color: textSec }}>{tenant}</span>
-        </div>
-      </div>
+        <Flex flexDirection="column" style={{ fontSize: 12, color: textTert, marginTop: 10 }}>
+          Tenant: <Text style={{ fontWeight: 600, color: textSec }}>{tenant}</Text>
+        </Flex>
+      </Flex>
 
-      <div style={{ display: "flex", gap: 14 }}>
+      <Flex gap={12}>
         {[
           { value: String(CAPABILITIES.length), label: "Capabilities", color: accent, tip: `${CAPABILITIES.length} Dynatrace platform capabilities evaluated: ${CAPABILITIES.map(c => c.name).join(", ")}.` },
           { value: String(CAPABILITIES.reduce((s, c) => s + c.criteria.length, 0)), label: "Criteria", color: Colors.Text.Success.Default, tip: "Total criteria evaluated via live DQL queries. Some criteria use cross-entity coverage (two queries) to measure real adoption depth." },
         ].map((kpi) => (
           <Tooltip key={kpi.label} text={kpi.tip}>
-          <div style={{ textAlign: "center", padding: "10px 20px", borderRadius: 10, background: kpi.color + (dk ? "15" : "10"), border: `1px solid ${kpi.color}30` }}>
-            <div style={{ fontSize: 32, fontWeight: 900, color: kpi.color, lineHeight: 1 }}>{kpi.value}</div>
-            <div style={{ fontSize: 12, color: text, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginTop: 4 }}>{kpi.label}</div>
-          </div>
+          <Flex flexDirection="column" style={{ textAlign: "center", padding: "10px 20px", borderRadius: 10, background: kpi.color + (dk ? "15" : "10"), border: `1px solid ${kpi.color}30` }}>
+            <Flex flexDirection="column" style={{ fontSize: 32, fontWeight: 900, color: kpi.color, lineHeight: 1 }}>{kpi.value}</Flex>
+            <Flex flexDirection="column" style={{ fontSize: 12, color: text, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginTop: 4 }}>{kpi.label}</Flex>
+          </Flex>
           </Tooltip>
         ))}
-      </div>
+      </Flex>
 
-      <div style={{ fontSize: 12, color: textSec, lineHeight: 1.7, maxWidth: 320, textAlign: "left" }}>
-        <div style={{ fontWeight: 700, color: accent, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>How it works</div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <span style={{ color: accent, fontWeight: 800, fontSize: 14, lineHeight: 1.3 }}>1.</span>
-          <span>Click <strong style={{ color: text }}>Run Assessment</strong> — the app executes <strong style={{ color: text }}>{CAPABILITIES.reduce((s, c) => s + c.criteria.length, 0)} DQL criteria</strong> against your environment. Some criteria use <strong style={{ color: text }}>cross-entity coverage</strong> (e.g., % of hosts with CPU metrics) for deeper adoption measurement.</span>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <span style={{ color: accent, fontWeight: 800, fontSize: 14, lineHeight: 1.3 }}>2.</span>
-          <span>Results appear in <strong style={{ color: text }}>three views</strong> you can toggle anytime:</span>
-        </div>
-        <div style={{ marginBottom: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ padding: "8px 12px", borderRadius: 6, background: bgPrimary, border: `1px solid ${borderPri}` }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: accent, marginBottom: 2 }}>Coverage</div>
-            <div style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>
-              Radar chart showing <strong style={{ color: text }}>how much</strong> of each capability is adopted (0–100%). Ideal for spotting gaps and understanding breadth of platform usage.
-            </div>
-          </div>
-          <div style={{ padding: "8px 12px", borderRadius: 6, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}` }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Success.Default, marginBottom: 2 }}>Maturity</div>
-            <div style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>
-              Cards showing <strong style={{ color: text }}>how deeply</strong> each capability is used across 3 weighted tiers (Foundation → Best Practice → Excellence). Shows a <strong style={{ color: text }}>0–100% maturity score</strong> per capability using the same color scale as coverage.
-            </div>
-          </div>
-          <div style={{ padding: "8px 12px", borderRadius: 6, background: dk ? "rgba(91,106,207,0.08)" : "rgba(91,106,207,0.04)", border: `1px solid ${dk ? "rgba(91,106,207,0.15)" : "rgba(91,106,207,0.1)"}` }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#5B6ACF", marginBottom: 2 }}>Executive Summary</div>
-            <div style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>
-              Consolidated dashboard with <strong style={{ color: text }}>coverage vs maturity comparison</strong>, gap analysis, achievements, and interactive charts for a complete overview.
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <span style={{ color: accent, fontWeight: 800, fontSize: 14, lineHeight: 1.3 }}>3.</span>
-          <span>A <strong style={{ color: text }}>snapshot is saved automatically</strong> for historical comparison. Use <strong style={{ color: text }}>Evolution Over Time</strong> to track progress and identify regressions.</span>
-        </div>
-        <div style={{ fontSize: 12, color: textTert, marginTop: 4, lineHeight: 1.5 }}>
-          Each failed criterion includes <strong style={{ color: textSec }}>remediation guidance</strong> with links to Dynatrace docs.
-        </div>
-        <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}`, color: textSec }}>
-          <strong style={{ color: Colors.Text.Success.Default }}>Tip:</strong> Before running, explore the cards on the right to understand what each capability evaluates and how scores are calculated.
-        </div>
-      </div>
-    </div>
+      <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.7, maxWidth: 320, textAlign: "left" }}>
+        <Flex flexDirection="column" style={{ fontWeight: 700, color: accent, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>How it works</Flex>
+        <Flex gap={8} style={{ marginBottom: 8 }}>
+          <Text style={{ color: accent, fontWeight: 800, fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>1.</Text>
+          <Text>Click <Strong style={{ color: text }}>Run Assessment</Strong> — the app executes <Strong style={{ color: text }}>{CAPABILITIES.reduce((s, c) => s + c.criteria.length, 0)} DQL criteria</Strong> against your environment. Some criteria use <Strong style={{ color: text }}>cross-entity coverage</Strong> (e.g., % of hosts with CPU metrics) for deeper adoption measurement.</Text>
+        </Flex>
+        <Flex gap={8} style={{ marginBottom: 8 }}>
+          <Text style={{ color: accent, fontWeight: 800, fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>2.</Text>
+          <Text>Results appear in <Strong style={{ color: text }}>three views</Strong> you can toggle anytime:</Text>
+        </Flex>
+        <Flex flexDirection="column" gap={6} style={{ marginBottom: 8 }}>
+          <Flex flexDirection="column" style={{ padding: "8px 12px", borderRadius: 6, background: bgPrimary, border: `1px solid ${borderPri}` }}>
+            <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: accent, marginBottom: 2 }}>Coverage</Flex>
+            <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>
+              Radar chart showing <Strong style={{ color: text }}>how much</Strong> of each capability is adopted (0–100%). Ideal for spotting gaps and understanding breadth of platform usage.
+            </Text>
+          </Flex>
+          <Flex flexDirection="column" style={{ padding: "8px 12px", borderRadius: 6, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}` }}>
+            <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Success.Default, marginBottom: 2 }}>Maturity</Flex>
+            <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>
+              Cards showing <Strong style={{ color: text }}>how deeply</Strong> each capability is used across 3 weighted tiers (Foundation → Best Practice → Excellence). Shows a <Strong style={{ color: text }}>0–100% maturity score</Strong> per capability using the same color scale as coverage.
+            </Text>
+          </Flex>
+          <Flex flexDirection="column" style={{ padding: "8px 12px", borderRadius: 6, background: dk ? "rgba(91,106,207,0.08)" : "rgba(91,106,207,0.04)", border: `1px solid ${dk ? "rgba(91,106,207,0.15)" : "rgba(91,106,207,0.1)"}` }}>
+            <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Primary.Default, marginBottom: 2 }}>Executive Summary</Flex>
+            <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>
+              Consolidated dashboard with <Strong style={{ color: text }}>coverage vs maturity comparison</Strong>, gap analysis, achievements, and interactive charts for a complete overview.
+            </Text>
+          </Flex>
+        </Flex>
+        <Flex gap={8} style={{ marginBottom: 8 }}>
+          <Text style={{ color: accent, fontWeight: 800, fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>3.</Text>
+          <Text>A <Strong style={{ color: text }}>snapshot is saved automatically</Strong> for historical comparison. Use <Strong style={{ color: text }}>Evolution Over Time</Strong> to track progress and identify regressions.</Text>
+        </Flex>
+        <Text style={{ fontSize: 12, color: textTert, marginTop: 4, lineHeight: 1.5 }}>
+          Each failed criterion includes <Strong style={{ color: textSec }}>remediation guidance</Strong> with links to Dynatrace docs.
+        </Text>
+        <Text style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}`, color: textSec }}>
+          <Strong style={{ color: Colors.Text.Success.Default }}>Tip:</Strong> Before running, explore the cards on the right to understand what each capability evaluates and how scores are calculated.
+        </Text>
+      </Flex>
+    </Flex>
   );
 });
 
@@ -2154,29 +1479,26 @@ function IdleCapCard({ cap, dk, text, textSec, bgSurface, bgSubtle, border, onCl
 }) {
   const summary = CAP_SUMMARIES[cap.name] || "";
   return (
-    <div style={{
-      background: bgSurface,
+    <Flex flexDirection="column" style={{ background: bgSurface,
       border: `1px solid ${border}`,
       borderRadius: 12, padding: "20px 22px", borderLeft: `4px solid ${cap.color}`,
-      cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s",
-      display: "flex", flexDirection: "column" as const,
-    }}
+      cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s" } as const}
     onClick={(e) => { e.stopPropagation(); if (isTextSelection()) return; onClick(); }}
     onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 4px 16px ${cap.color}25`; }}
     onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <span style={{ width: 14, height: 14, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
-        <span style={{ fontSize: 14, fontWeight: 700, color: text, flex: 1 }}>{cap.name}</span>
-        <span style={{ fontSize: 12, color: textSec, fontWeight: 700, background: bgSubtle, padding: "3px 10px", borderRadius: 10 }}>{cap.criteria.length}</span>
-      </div>
-      <div style={{ fontSize: 12, color: textSec, lineHeight: 1.7, marginLeft: 24, flex: 1 }}>
+      <Flex alignItems="center" gap={8} style={{ marginBottom: 10 }}>
+        <Text style={{ width: 14, height: 14, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
+        <Text style={{ fontSize: 14, fontWeight: 700, color: text, flex: 1 }}>{cap.name}</Text>
+        <Text style={{ fontSize: 12, color: textSec, fontWeight: 700, background: bgSubtle, padding: "3px 10px", borderRadius: 10 }}>{cap.criteria.length}</Text>
+      </Flex>
+      <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.7, marginLeft: 24, flex: 1 }}>
         {summary}
-      </div>
-      <div style={{ fontSize: 12, color: textSec, marginTop: 14, marginLeft: 24, fontWeight: 600, opacity: 0.6 }}>
+      </Flex>
+      <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, marginTop: 14, marginLeft: 24, fontWeight: 600, opacity: 0.6 }}>
         See what is analyzed →
-      </div>
-    </div>
+      </Flex>
+    </Flex>
   );
 }
 
@@ -2188,39 +1510,32 @@ function IdleCapDetail({ cap, dk, text, textSec, textTert, bgSubtle, border, onB
   onBack: () => void; collapseKey: number;
 }) {
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{ animation: "fadeIn 0.2s ease" }}>
+    <Flex flexDirection="column" onClick={(e) => e.stopPropagation()} style={{ animation: "fadeIn 0.2s ease" }}>
       {/* Back button + header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <button onClick={onBack} style={{
-          background: bgSubtle,
-          border: `1px solid ${border}`,
-          borderRadius: 8, padding: "6px 14px", cursor: "pointer",
-          fontSize: 12, color: textSec, fontWeight: 600, display: "flex", alignItems: "center", gap: 6,
-        }}>
-          ← Back
-        </button>
-        <span style={{ width: 18, height: 18, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
-        <span style={{ fontSize: 20, fontWeight: 800, color: text }}>{cap.name}</span>
-        <span style={{ fontSize: 12, color: textTert, marginLeft: "auto" }}>{cap.criteria.length} checks</span>
-      </div>
+      <Flex alignItems="center" gap={12} style={{ marginBottom: 16 }}>
+        <Button onClick={onBack} size="condensed">← Back</Button>
+        <Text style={{ width: 18, height: 18, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
+        <Text style={{ fontSize: 20, fontWeight: 800, color: text }}>{cap.name}</Text>
+        <Text style={{ fontSize: 12, color: textTert, marginLeft: "auto" }}>{cap.criteria.length} checks</Text>
+      </Flex>
 
       {/* Summary */}
-      <div style={{
+      <Flex flexDirection="column" style={{
         fontSize: 14, color: textSec, lineHeight: 1.6, marginBottom: 16,
         padding: "12px 16px", borderRadius: 10,
         background: "transparent",
         borderLeft: `3px solid ${border}`,
       }}>
         {CAP_SUMMARIES[cap.name]}
-      </div>
+      </Flex>
 
       {/* Criteria list — detailed */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingBottom: 16 }}>
+      <Flex flexDirection="column" gap={8} style={{ paddingBottom: 16 }}>
         {cap.criteria.map((cr, i) => (
           <CriterionRow key={cr.id} cr={cr} idx={i} capColor={cap.color} dk={dk} text={text} textSec={textSec} collapseKey={collapseKey} />
         ))}
-      </div>
-    </div>
+      </Flex>
+    </Flex>
   );
 }
 
@@ -2282,24 +1597,19 @@ function QueryCode({ query, dk }: { query: string; dk: boolean }) {
     }).catch(() => {});
   };
   return (
-    <div style={{ position: "relative" }}>
-      <code style={{
+    <Flex flexDirection="column" style={{ position: "relative" }}>
+      <Code style={{
         display: "block", fontSize: 12, padding: "8px 12px 8px 12px", borderRadius: 6,
         background: dk ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0.04)",
-        color: dk ? "#b0b0d0" : "#555",
+        color: Colors.Text.Neutral.Subdued,
         fontFamily: "monospace",
         overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all",
         border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
-      }}>{query}</code>
-      <button onClick={copy} style={{
-        position: "absolute", top: 4, right: 4,
-        padding: "2px 8px", fontSize: 11, cursor: "pointer",
-        background: copied ? (dk ? "rgba(0,200,83,0.15)" : "rgba(0,200,83,0.1)") : (dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"),
-        border: `1px solid ${copied ? "#36B37E" : (dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)")}`,
-        borderRadius: 4, color: copied ? "#36B37E" : (dk ? "#9898b0" : "#666"),
-        fontWeight: 600, transition: "all 0.2s",
-      }}>{copied ? "✓" : "⎘"}</button>
-    </div>
+      }}>{query}</Code>
+      <Text style={{ position: "absolute", top: 4, right: 4 }}>
+        <Button onClick={copy} size="condensed" color={copied ? "success" : "neutral"}>{copied ? "✓" : "⎘"}</Button>
+      </Text>
+    </Flex>
   );
 }
 
@@ -2311,7 +1621,7 @@ function CriterionRow({ cr, idx, capColor, dk, text, textSec, collapseKey }: {
   useEffect(() => { setExpanded(false); }, [collapseKey]);
   const importance = CRITERION_IMPORTANCE[cr.id] || "";
   return (
-    <div
+    <Flex
       style={{
         display: "flex", gap: 12, padding: "12px 16px", borderRadius: 10,
         background: "transparent",
@@ -2322,118 +1632,112 @@ function CriterionRow({ cr, idx, capColor, dk, text, textSec, collapseKey }: {
       }}
       onClick={(e) => { e.stopPropagation(); if (isTextSelection()) return; setExpanded(!expanded); }}
     >
-      <span style={{
+      <Text style={{
         fontSize: 12, fontWeight: 700, color: textSec,
         background: Colors.Background.Container.Neutral.Subdued, borderRadius: 8,
         width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
         flexShrink: 0, marginTop: 2,
-      }}>{idx + 1}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+      }}>{idx + 1}</Text>
+      <Flex flexDirection="column" style={{ flex: 1, minWidth: 0 }}>
+        <Flex alignItems="center" gap={8} style={{ marginBottom: 4 }}>
           <Tooltip text={CRITERION_IMPORTANCE[cr.id] || cr.description} maxWidth={340}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: text }}>{cr.label}</div>
+            <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 700, color: text }}>{cr.label}</Flex>
           </Tooltip>
-          <span style={{
+          <Text style={{
             fontSize: 12, color: textSec,
             transition: "all 0.2s", fontWeight: 600, flexShrink: 0,
-          }}>{expanded ? "▾" : "▸"}</span>
-        </div>
-        <div style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>{cr.description}</div>
+          }}>{expanded ? "▾" : "▸"}</Text>
+        </Flex>
+        <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>{cr.description}</Flex>
         {/* Inline expansion with details */}
         {expanded && (
-          <div style={{
-            marginTop: 10, padding: "10px 14px", borderRadius: 8,
+          <Flex flexDirection="column" gap={12} style={{ marginTop: 10, padding: "10px 14px", borderRadius: 8,
             background: "transparent",
             borderLeft: `3px solid ${Colors.Border.Neutral.Default}`,
-            animation: "fadeIn 0.2s ease",
-            display: "flex", flexDirection: "column", gap: 12,
-          }}>
+            animation: "fadeIn 0.2s ease" }}>
             {/* ── Section 1: Why it matters ── */}
             {importance && (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: textSec, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Why it matters</div>
-                <div style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>{importance}</div>
-              </div>
+              <Flex flexDirection="column">
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textSec, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Why it matters</Flex>
+                <Flex flexDirection="column" style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>{importance}</Flex>
+              </Flex>
             )}
             {/* ── Section 2: How the score is calculated ── */}
             {cr.query && (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: textSec, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>How the score is calculated</div>
-                <div style={{
-                  padding: "12px 14px", borderRadius: 8,
+              <Flex flexDirection="column">
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textSec, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>How the score is calculated</Flex>
+                <Flex flexDirection="column" gap={12} style={{ padding: "12px 14px", borderRadius: 8,
                   background: dk ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.02)",
-                  border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
-                  display: "flex", flexDirection: "column", gap: 10,
-                }}>
+                  border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}` }}>
                   {cr.queryB ? (
                     <>
                       {/* Numerator (A) */}
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#5B6ACF", marginBottom: 4 }}>Numerator (A)</div>
-                        <div style={{ fontSize: 12, color: textSec, lineHeight: 1.5, marginBottom: 6 }}>{describeQuery(cr.query)}</div>
+                      <Flex flexDirection="column">
+                        <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Primary.Default, marginBottom: 4 }}>Numerator (A)</Flex>
+                        <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.5, marginBottom: 6 }}>{describeQuery(cr.query)}</Flex>
                         <QueryCode query={cr.query} dk={dk} />
-                      </div>
+                      </Flex>
                       {/* Divider */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: dk ? "#9898b0" : "#888", fontSize: 14 }}>
-                        <span style={{ flex: 1, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
-                        <span style={{ fontWeight: 700 }}>÷</span>
-                        <span style={{ flex: 1, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
-                      </div>
+                      <Flex alignItems="center" gap={6} style={{ color: Colors.Text.Neutral.Disabled, fontSize: 14 }}>
+                        <Text style={{ flex: 1, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
+                        <Text style={{ fontWeight: 700 }}>÷</Text>
+                        <Text style={{ flex: 1, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
+                      </Flex>
                       {/* Denominator (B) */}
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#5B6ACF", marginBottom: 4 }}>Denominator (B)</div>
-                        <div style={{ fontSize: 12, color: textSec, lineHeight: 1.5, marginBottom: 6 }}>{describeQuery(cr.queryB)}</div>
+                      <Flex flexDirection="column">
+                        <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Primary.Default, marginBottom: 4 }}>Denominator (B)</Flex>
+                        <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.5, marginBottom: 6 }}>{describeQuery(cr.queryB)}</Flex>
                         <QueryCode query={cr.queryB} dk={dk} />
-                      </div>
+                      </Flex>
                       {/* Expected Result */}
-                      <div style={{
+                      <Flex flexDirection="column" style={{
                         padding: "8px 12px", borderRadius: 6,
                         background: dk ? "rgba(91,106,207,0.08)" : "rgba(91,106,207,0.04)",
                         border: `1px solid ${dk ? "rgba(91,106,207,0.15)" : "rgba(91,106,207,0.1)"}`,
                       }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#5B6ACF", marginBottom: 2 }}>Expected Result</div>
-                        <div style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>
-                          Result = A ÷ B × 100 → a <strong>coverage percentage</strong>. The app compares this value against the pass thresholds below to determine the maturity tier (Foundation / Best Practice / Excellence).
-                        </div>
-                      </div>
+                        <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Primary.Default, marginBottom: 2 }}>Expected Result</Flex>
+                        <Text style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>
+                          Result = A ÷ B × 100 → a <Strong>coverage percentage</Strong>. The app compares this value against the pass thresholds below to determine the maturity tier (Foundation / Best Practice / Excellence).
+                        </Text>
+                      </Flex>
                     </>
                   ) : (
                     <>
-                      <div style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>{describeQuery(cr.query)}</div>
+                      <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>{describeQuery(cr.query)}</Flex>
                       <QueryCode query={cr.query} dk={dk} />
-                      <div style={{
+                      <Flex flexDirection="column" style={{
                         padding: "8px 12px", borderRadius: 6,
                         background: dk ? "rgba(91,106,207,0.08)" : "rgba(91,106,207,0.04)",
                         border: `1px solid ${dk ? "rgba(91,106,207,0.15)" : "rgba(91,106,207,0.1)"}`,
                       }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#5B6ACF", marginBottom: 2 }}>Expected Result</div>
-                        <div style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>
-                          Returns a <strong>numeric count</strong>. The app compares this value against the pass thresholds below to determine the maturity tier.
-                        </div>
-                      </div>
+                        <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Primary.Default, marginBottom: 2 }}>Expected Result</Flex>
+                        <Text style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>
+                          Returns a <Strong>numeric count</Strong>. The app compares this value against the pass thresholds below to determine the maturity tier.
+                        </Text>
+                      </Flex>
                     </>
                   )}
-                </div>
-              </div>
+                </Flex>
+              </Flex>
             )}
             {/* ── Section 3: Pass thresholds ── */}
             {cr.thresholds && cr.thresholds.length > 0 && (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: textSec, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Pass thresholds</div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <Flex flexDirection="column">
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textSec, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Pass thresholds</Flex>
+                <Flex gap={6} flexWrap="wrap">
                   {[...cr.thresholds].sort((a, b) => b.min - a.min).map((t, ti) => (
-                    <span key={ti} style={{
+                    <Text key={ti} style={{
                       fontSize: 12, padding: "3px 10px", borderRadius: 6,
                       background: Colors.Background.Container.Neutral.Subdued,
                       color: textSec, fontWeight: 600,
-                    }}>≥ {t.min}</span>
+                    }}>≥ {t.min}</Text>
                   ))}
-                </div>
-              </div>
+                </Flex>
+              </Flex>
             )}
-          </div>
+          </Flex>
         )}
-      </div>
-    </div>
+      </Flex>
+    </Flex>
   );
 }

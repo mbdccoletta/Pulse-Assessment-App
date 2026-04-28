@@ -1,8 +1,10 @@
 import React from "react";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
+import { Flex } from "@dynatrace/strato-components/layouts";
+import { Text } from "@dynatrace/strato-components/typography";
 import type { CapabilityResult } from "../hooks/useCoverageData";
-import { maturity } from "./PolarChart";
+import { maturity } from "./TechRadar";
 
 const R_RATIO = 0.34;
 
@@ -19,8 +21,8 @@ export const ChartLabels: React.FC<Props> = React.memo(({ capabilities, anim, ac
   const SEG = (Math.PI * 2) / N;
   const R = size * R_RATIO, labelR = R + size * 0.085;
   const dk = useCurrentTheme() === "dark";
-  const fs1 = Math.max(size * 0.021, 12);
-  const fs2 = Math.max(size * 0.017, 10.5);
+  const fs1 = Math.max(size * 0.023, 12.5);
+  const fs2 = Math.max(size * 0.019, 11);
 
   return (
     <>
@@ -34,7 +36,7 @@ export const ChartLabels: React.FC<Props> = React.memo(({ capabilities, anim, ac
         const ml = maturity(cap.score);
 
         return (
-          <div key={i} style={{
+          <Flex key={i} flexDirection="column" style={{
             position: "absolute",
             left: isR ? x : isL ? "auto" : x,
             right: isL ? size - x : "auto",
@@ -42,9 +44,9 @@ export const ChartLabels: React.FC<Props> = React.memo(({ capabilities, anim, ac
             transform: `translateY(-50%)${!isR && !isL ? " translateX(-50%)" : ""}`,
             textAlign: isR ? "left" : isL ? "right" : "center",
             pointerEvents: "auto", whiteSpace: "nowrap",
-            transition: "opacity 0.3s", opacity: dim ? 0.35 : 1,
+            transition: "opacity 0.3s", opacity: dim ? 0.4 : 1,
           }}>
-            <div
+            <Text
               role="button"
               tabIndex={0}
               onClick={(e) => { e.stopPropagation(); onSelect?.(act ? null : i); }}
@@ -58,13 +60,13 @@ export const ChartLabels: React.FC<Props> = React.memo(({ capabilities, anim, ac
             }}
               onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline"; }}
               onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none"; }}
-            >{cap.name}</div>
-            <div style={{ fontSize: fs2, fontWeight: 700, color: ml.color, lineHeight: 1.2,
+            >{cap.name}</Text>
+            <Text style={{ fontSize: fs2, fontWeight: 700, color: ml.color, lineHeight: 1.2,
               textShadow: dk ? "0 1px 3px rgba(0,0,0,0.6)" : "0 1px 2px rgba(255,255,255,0.7)",
             }}>
               {sv}% · {ml.label}
-            </div>
-          </div>
+            </Text>
+          </Flex>
         );
       })}
     </>

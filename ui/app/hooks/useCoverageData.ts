@@ -39,6 +39,32 @@ export interface QueryStats {
 
 export type ViewMode = "coverage" | "maturity" | "recommendations";
 
+export interface EntityCounts {
+  hosts: number;
+  services: number;
+  serviceMethods: number;
+  processGroups: number;
+  processInstances: number;
+  applications: number;
+  mobileApps: number;
+  k8sClusters: number;
+  k8sNamespaces: number;
+  k8sNodes: number;
+  syntheticTests: number;
+  syntheticLocations: number;
+  httpChecks: number;
+  networkInterfaces: number;
+  disks: number;
+  logs: number;
+  spans: number;
+  aiSpans: number;
+  events: number;
+  problems: number;
+  bizEvents: number;
+  cloudLogs: number;
+  securityEvents: number;
+}
+
 export interface CoverageData {
   capabilities: CapabilityResult[];
   totalScore: number;
@@ -50,6 +76,7 @@ export interface CoverageData {
   tenant: string;
   date: string;
   stats: QueryStats | null;
+  entityCounts: EntityCounts | null;
   liveScannedBytes: number;
   liveScannedRecords: number;
   start: () => void;
@@ -223,6 +250,7 @@ export function useCoverageData(): CoverageData {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<QueryStats | null>(null);
+  const [entityCounts, setEntityCounts] = useState<EntityCounts | null>(null);
   const [liveScannedBytes, setLiveScannedBytes] = useState(0);
   const [liveScannedRecords, setLiveScannedRecords] = useState(0);
   const [runId, setRunId] = useState(0);
@@ -339,6 +367,34 @@ export function useCoverageData(): CoverageData {
       const totalCriteria = results.reduce((s, c) => s + c.criteriaResults.length, 0);
       const errorCriteria = results.reduce((s, c) => s + c.criteriaResults.filter(cr => cr.error).length, 0);
       setStats({ total: totalCriteria, succeeded: totalCriteria - errorCriteria, failed: errorCriteria, scannedBytes: totalScannedBytes, scannedRecords: totalScannedRecords, scannedDataPoints: totalScannedDataPoints });
+
+      // Extract entity counts from cache (denominator queries)
+      const ec = (q: string) => { const v = cache.get(q); return v != null && v > 0 ? v : 0; };
+      setEntityCounts({
+        hosts: ec('fetch dt.entity.host | summarize count()'),
+        services: ec('fetch dt.entity.service | summarize count()'),
+        serviceMethods: ec('fetch dt.entity.service_method | summarize count()'),
+        processGroups: ec('fetch dt.entity.process_group | summarize count()'),
+        processInstances: ec('fetch dt.entity.process_group_instance | summarize count()'),
+        applications: ec('fetch dt.entity.application | summarize count()'),
+        mobileApps: ec('fetch dt.entity.mobile_application | summarize count()'),
+        k8sClusters: ec('fetch dt.entity.kubernetes_cluster | summarize count()'),
+        k8sNamespaces: ec('fetch dt.entity.cloud_application_namespace | summarize count()'),
+        k8sNodes: ec("timeseries val=avg(dt.kubernetes.container.cpu_usage), by:{k8s.node.name} | fields k8s.node.name | dedup k8s.node.name | summarize c=count()"),
+        syntheticTests: ec('fetch dt.entity.synthetic_test | summarize count()'),
+        syntheticLocations: ec('fetch dt.entity.synthetic_location | summarize count()'),
+        httpChecks: ec('fetch dt.entity.http_check | summarize count()'),
+        networkInterfaces: (() => { const nq = 'fetch dt.entity.network_interface | fieldsAdd belongs_to = belongs_to[dt.entity.host] | expand belongs_to | summarize count = countDistinct(belongs_to)'; const v = cache.get(nq); return v != null && v > 0 ? v : 0; })(),
+        disks: (() => { const dq = 'fetch dt.entity.disk | fieldsAdd belongs_to = belongs_to[dt.entity.host] | expand belongs_to | summarize count = countDistinct(belongs_to)'; const v = cache.get(dq); return v != null && v > 0 ? v : 0; })(),
+        logs: ec('fetch logs | filter timestamp > now() - 2h | summarize count()'),
+        spans: ec('fetch spans, from:now()-72h | summarize count()'),
+        aiSpans: ec('fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()'),
+        events: ec('fetch events | filter timestamp > now() - 2h | summarize count()'),
+        problems: ec('fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | summarize count()'),
+        bizEvents: ec('fetch bizevents | filter timestamp > now() - 2h | summarize count()'),
+        cloudLogs: ec('fetch logs | filter timestamp > now() - 2h | filter isNotNull(cloud.provider) | summarize count()'),
+        securityEvents: ec('fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 24h | fieldsAdd affected = affected_entity_ids | expand affected | summarize count = countDistinct(affected) | fields count'),
+      });
       if (DEBUG) {
         console.group(`[CCA] Assessment Complete`);
         console.log(`Queries: ${totalCriteria - errorCriteria}/${totalCriteria} succeeded, ${errorCriteria} failed`);
@@ -387,7 +443,7 @@ export function useCoverageData(): CoverageData {
 
   const startFn = useCallback(() => setRunId((n) => n + 1), []);
   const refreshFn = useCallback(() => setRunId((n) => n + 1), []);
-  const resetFn = useCallback(() => { setIdle(true); setCapabilities([]); setStats(null); setError(null); }, []);
+  const resetFn = useCallback(() => { setIdle(true); setCapabilities([]); setStats(null); setEntityCounts(null); setError(null); }, []);
   const goHomeFn = useCallback(() => { setIdle(true); }, []);
   const resumeFn = useCallback(() => {
     if (capabilities.length > 0) setIdle(false);
@@ -402,6 +458,7 @@ export function useCoverageData(): CoverageData {
     progress,
     error,
     stats,
+    entityCounts,
     liveScannedBytes,
     liveScannedRecords,
     tenant,
