@@ -244,7 +244,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
           </Flex>
           <Flex flexDirection="column" style={{ fontSize: 12, color: textTert }}>Querying {capabilities.length > 0 ? capabilities.length : CAPABILITIES.length} capabilities via DQL</Flex>
           {liveScannedRecords > 0 && (
-            <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, marginTop: 4 }}>
+            <Flex flexDirection="column" alignItems="center" style={{ fontSize: 12, color: textSec, marginTop: 4 }}>
               Records scanned: <Text style={{ fontWeight: 600, color: text }}>{formatRecords(liveScannedRecords)}</Text>
             </Flex>
           )}
