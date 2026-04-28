@@ -248,22 +248,10 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       if (isR) lx = Math.min(lx, w - maxLabelW - labelPad);
       else if (isL) lx = Math.max(lx, maxLabelW + labelPad);
 
-      // Connector stop before label
-      const stopR = labelR - labelH / 2 - 6;
-
       // Average color from coverage band
       const avgScore = (data[i].coverage + data[i].maturity) / 2;
       const ml = bandForScore(avgScore);
       const alpha = dim ? 0.2 : act ? 0.95 : 0.55;
-
-      // Dashed connector line
-      if (startR < stopR) {
-        const sx = cx + cos * startR, sy = cy + sin * startR;
-        const ex = cx + cos * stopR, ey = cy + sin * stopR;
-        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
-        ctx.strokeStyle = ml.color; ctx.globalAlpha = alpha;
-        ctx.setLineDash([5, 4]); ctx.lineWidth = act ? 3 : 2; ctx.stroke(); ctx.setLineDash([]);
-      }
 
       // Label text — line 1 (possibly wrapped): name, line 2: coverage / maturity scores
       ctx.textAlign = isR ? "left" : isL ? "right" : "center";
@@ -295,10 +283,22 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       ctx.textAlign = savedAlign;
       ctx.globalAlpha = 1;
 
-      // Accent bar below all text
+      // Accent bar below all text — connector line ends here
       const barY = scoreY + fs2 / 2 + 4;
       const barW = act ? 60 : 44;
       const barStartX = isR ? lx : isL ? lx - barW : lx - barW / 2;
+
+      // Dashed connector line from blip to accent bar
+      if (startR < labelR) {
+        const sx = cx + cos * startR, sy = cy + sin * startR;
+        // End point: at the accent bar, using the edge closest to center
+        const barEdgeX = isR ? barStartX : isL ? barStartX + barW : barStartX + barW / 2;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(barEdgeX, barY);
+        ctx.strokeStyle = ml.color; ctx.globalAlpha = alpha;
+        ctx.setLineDash([5, 4]); ctx.lineWidth = act ? 3 : 2; ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+
       ctx.beginPath(); ctx.moveTo(barStartX, barY); ctx.lineTo(barStartX + barW, barY);
       ctx.strokeStyle = ml.color; ctx.globalAlpha = act ? 0.85 : 0.4;
       ctx.lineWidth = act ? 3.5 : 2.5; ctx.lineCap = "round"; ctx.stroke(); ctx.lineCap = "butt";
