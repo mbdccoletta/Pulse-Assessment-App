@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulse Assessment — Dynatrace Observability Assessment</title>
+  <meta name="description" content="Automated observability coverage and maturity assessment for Dynatrace environments. 9 capabilities, 111 criteria, real-time DQL queries.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
+  <style>
+    :root {
+      --bg-primary: #0b0b1a;
+      --bg-secondary: #12122a;
+      --bg-card: #1a1a3e;
+      --bg-card-hover: #222255;
+      --accent-cyan: #00e5ff;
+      --accent-green: #36b37e;
+      --accent-orange: #ff8c00;
+      --text-primary: #e8e8f0;
+      --text-secondary: #a0a0c0;
+      --border-color: rgba(0, 229, 255, 0.15);
+      --glow-cyan: 0 0 20px rgba(0, 229, 255, 0.3);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    .bg-grid {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-image:
+        radial-gradient(circle at 20% 50%, rgba(0, 229, 255, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(54, 179, 126, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 50% 80%, rgba(99, 102, 241, 0.03) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ─── NAV ─── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: rgba(11, 11, 26, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      z-index: 100;
+      padding: 0 24px;
+    }
+    nav .nav-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    nav .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      text-decoration: none;
+    }
+    nav .logo span { color: var(--text-primary); }
+    nav .nav-links { display: flex; gap: 28px; list-style: none; }
+    nav .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    nav .nav-links a:hover { color: var(--accent-cyan); }
+
+    /* ─── HERO ─── */
+    .hero {
+      padding: 140px 0 80px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(0, 229, 255, 0.1);
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      border-radius: 20px;
+      padding: 6px 18px;
+      font-size: 0.8rem;
+      color: var(--accent-cyan);
+      margin-bottom: 24px;
+      letter-spacing: 0.5px;
+    }
+    .hero h1 {
+      font-size: 3.5rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #e8e8f0 0%, #00e5ff 50%, #36b37e 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 1.2rem;
+      color: var(--text-secondary);
+      max-width: 700px;
+      margin: 0 auto 36px;
+    }
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.25s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #00e5ff, #00b4d8);
+      color: #0b0b1a;
+    }
+    .btn-primary:hover {
+      box-shadow: var(--glow-cyan);
+      transform: translateY(-2px);
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      color: var(--accent-cyan);
+    }
+    .btn-secondary:hover {
+      background: rgba(0, 229, 255, 0.08);
+      border-color: var(--accent-cyan);
+    }
+
+    /* ─── STATS BAR ─── */
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      padding: 40px 0;
+      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 80px;
+      flex-wrap: wrap;
+    }
+    .stat { text-align: center; }
+    .stat-value {
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; }
+
+    /* ─── SECTIONS ─── */
+    section { padding: 80px 0; }
+    .section-header {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+    .section-header h2 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .section-header p {
+      color: var(--text-secondary);
+      font-size: 1.05rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* ─── FEATURES GRID ─── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 32px;
+      transition: all 0.3s;
+    }
+    .feature-card:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(0, 229, 255, 0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 16px;
+    }
+    .feature-card h3 {
+      font-size: 1.15rem;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    /* ─── CAPABILITIES ─── */
+    .capabilities-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .cap-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: all 0.3s;
+    }
+    .cap-card:hover {
+      background: var(--bg-card-hover);
+      transform: translateX(4px);
+    }
+    .cap-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .cap-info { flex: 1; }
+    .cap-name { font-weight: 600; font-size: 0.95rem; }
+    .cap-meta { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
+
+    /* ─── SCORING ─── */
+    .scoring-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+    .scoring-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 36px;
+    }
+    .scoring-card h3 {
+      font-size: 1.3rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .tier-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .tier-row:last-child { border: none; }
+    .tier-badge {
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      min-width: 60px;
+      text-align: center;
+    }
+    .tier-weight {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+    .tier-gate {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-left: auto;
+      font-style: italic;
+    }
+
+    /* ─── TECH STACK ─── */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+    .tech-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .tech-item:hover {
+      border-color: rgba(0, 229, 255, 0.3);
+      transform: translateY(-2px);
+    }
+    .tech-item .tech-name {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 4px;
+    }
+    .tech-item .tech-role {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    /* ─── QUICKSTART ─── */
+    .quickstart {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .step {
+      display: flex;
+      gap: 20px;
+      padding: 16px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .step:last-child { border: none; }
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(0, 229, 255, 0.15);
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step-content { flex: 1; }
+    .step-content h4 { font-size: 1rem; margin-bottom: 6px; }
+    .step-content code {
+      display: inline-block;
+      background: rgba(0, 229, 255, 0.08);
+      border: 1px solid rgba(0, 229, 255, 0.15);
+      border-radius: 6px;
+      padding: 2px 10px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.85rem;
+      color: var(--accent-cyan);
+    }
+
+    /* ─── FOOTER ─── */
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 40px 0;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+    footer a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+    }
+    footer a:hover { text-decoration: underline; }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 2.2rem; }
+      .hero p { font-size: 1rem; }
+      .stats-bar { gap: 24px; }
+      .stat-value { font-size: 1.8rem; }
+      .scoring-grid { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: 1fr; }
+      nav .nav-links { gap: 16px; }
+    }
+
+    /* ─── ANIMATIONS ─── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate { animation: fadeUp 0.6s ease-out forwards; }
+    .delay-1 { animation-delay: 0.1s; opacity: 0; }
+    .delay-2 { animation-delay: 0.2s; opacity: 0; }
+    .delay-3 { animation-delay: 0.3s; opacity: 0; }
+    .delay-4 { animation-delay: 0.4s; opacity: 0; }
+  </style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="logo">📡 Pulse<span>Assessment</span></a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#capabilities">Capabilities</a></li>
+      <li><a href="#scoring">Scoring</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+      <li><a href="https://github.com/mbdccoletta/Pulse-Assessment-App" target="_blank">GitHub ↗</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge animate">Dynatrace Native App &mdash; v2.3.49</div>
+    <h1 class="animate delay-1">Pulse Assessment</h1>
+    <p class="animate delay-2">
+      Automated observability coverage &amp; maturity assessment for Dynatrace environments.
+      <strong>9 capabilities</strong>, <strong>111 criteria</strong>, real-time DQL queries against Grail.
+    </p>
+    <div class="hero-buttons animate delay-3">
+      <a href="https://github.com/mbdccoletta/Pulse-Assessment-App" class="btn btn-primary" target="_blank">
+        ⭐ View on GitHub
+      </a>
+      <a href="#quickstart" class="btn btn-secondary">
+        🚀 Get Started
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="container">
+  <div class="stats-bar">
+    <div class="stat animate delay-1">
+      <div class="stat-value">9</div>
+      <div class="stat-label">Capabilities</div>
+    </div>
+    <div class="stat animate delay-2">
+      <div class="stat-value">111</div>
+      <div class="stat-label">Criteria</div>
+    </div>
+    <div class="stat animate delay-3">
+      <div class="stat-value">~94</div>
+      <div class="stat-label">DQL Queries</div>
+    </div>
+    <div class="stat animate delay-4">
+      <div class="stat-value">2</div>
+      <div class="stat-label">Scoring Dimensions</div>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-header">
+      <h2>Features</h2>
+      <p>Everything you need to assess, track, and improve your observability posture.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(0, 229, 255, 0.1);">🔍</div>
+        <h3>Automated Assessment</h3>
+        <p>Executes ~94 unique DQL queries (111 criteria with cross-entity ratios) against your Dynatrace tenant in real time via Grail.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(54, 179, 126, 0.1);">📊</div>
+        <h3>Dual Scoring</h3>
+        <p><strong>Coverage</strong> shows how much you cover. <strong>Maturity</strong> shows if you're covering in the right order, with progressive tier gating.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(139, 92, 246, 0.1);">🎯</div>
+        <h3>Interactive Radar Chart</h3>
+        <p>Canvas-rendered polar chart with hover tooltips and click-to-drill-down into capability details and individual criteria.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(245, 158, 11, 0.1);">🛠️</div>
+        <h3>Guided Remediation</h3>
+        <p>Specific actions and documentation links for every unmet criterion, organized by impact and difficulty.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(236, 72, 153, 0.1);">📈</div>
+        <h3>Evolution Over Time</h3>
+        <p>Auto-saved snapshots to Dynatrace Document Store with A/B comparison of any two snapshots and delta analysis per capability.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background: rgba(239, 68, 68, 0.1);">📄</div>
+        <h3>PDF Reports (EN/PT)</h3>
+        <p>First Day Results report with dark-themed A4 design, TechRadar chart, capability breakdown, and remediation priorities. Available in English and Portuguese.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CAPABILITIES -->
+<section id="capabilities" style="background: var(--bg-secondary);">
+  <div class="container">
+    <div class="section-header">
+      <h2>9 Capabilities Assessed</h2>
+      <p>Comprehensive coverage spanning infrastructure, applications, security, AI, and business observability.</p>
+    </div>
+    <div class="capabilities-grid">
+      <div class="cap-card">
+        <div class="cap-dot" style="background: #3B82F6;"></div>
+        <div class="cap-info">
+          <div class="cap-name">Infrastructure Observability</div>
+          <div class="cap-meta">22 criteria &middot; 4F / 10BP / 8E</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: #8B5CF6;"></div>
+        <div class="cap-info">
+          <div class="cap-name">Application Observability</div>
+          <div class="cap-meta">13 criteria &middot; 3F / 4BP / 6E</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: #EC4899;"></div>
+        <div class="cap-info">
+          <div class="cap-name">Digital Experience</div>
+          <div class="cap-meta">11 criteria &middot; 3F / 5BP / 3E</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: #F59E0B;"></div>
+        <div class="cap-info">
+          <div class="cap-name">Log Analytics</div>
+          <div class="cap-meta">16 criteria &middot; 4F / 6BP / 6E</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: #EF4444;"></div>
+        <div class="cap-info">
+          <div class="cap-name">Application Security</div>
+          <div class="cap-meta">11 criteria &middot; 4F / 4BP / 3E</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: #F97316;"></div>
+        <div class="cap-info">
+          <div class="cap-name">Threat Observability</div>
+          <div class="cap-meta">11 criteria &middot; 3F / 5BP / 3E</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: #06B6D4;"></div>
+        <div class="cap-info">
+          <div class="cap-name">AI Observability</div>
+          <div class="cap-meta">9 criteria &middot; 3F / 2BP / 4E</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: #10B981;"></div>
+        <div class="cap-info">
+          <div class="cap-name">Business Observability</div>
+          <div class="cap-meta">8 criteria &middot; 3F / 2BP / 3E</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: #6366F1;"></div>
+        <div class="cap-info">
+          <div class="cap-name">Software Delivery</div>
+          <div class="cap-meta">10 criteria &middot; 3F / 4BP / 3E</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCORING MODEL -->
+<section id="scoring">
+  <div class="container">
+    <div class="section-header">
+      <h2>Scoring Model</h2>
+      <p>Dual-dimension scoring with progressive maturity gating.</p>
+    </div>
+    <div class="scoring-grid">
+      <div class="scoring-card">
+        <h3>📊 Tier Weights (Progressive)</h3>
+        <div class="tier-row">
+          <span class="tier-badge" style="background: rgba(54, 179, 126, 0.2); color: #36b37e;">Foundation</span>
+          <span class="tier-weight">60% weight</span>
+          <span class="tier-gate">Always counted</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-badge" style="background: rgba(0, 229, 255, 0.2); color: #00e5ff;">Best Practice</span>
+          <span class="tier-weight">25% weight</span>
+          <span class="tier-gate">Requires Foundation ≥ 80%</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-badge" style="background: rgba(139, 92, 246, 0.2); color: #8b5cf6;">Excellence</span>
+          <span class="tier-weight">15% weight</span>
+          <span class="tier-gate">Requires Best Practice ≥ 60%</span>
+        </div>
+      </div>
+      <div class="scoring-card">
+        <h3>🏆 Maturity Levels</h3>
+        <div class="tier-row">
+          <span class="tier-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">L0</span>
+          <span class="tier-weight">Not Adopted</span>
+          <span class="tier-gate">Foundation &lt; 50%</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">L1</span>
+          <span class="tier-weight">Foundation</span>
+          <span class="tier-gate">Foundation ≥ 50%</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-badge" style="background: rgba(54, 179, 126, 0.2); color: #36b37e;">L2</span>
+          <span class="tier-weight">Operational</span>
+          <span class="tier-gate">F = 100% &amp; BP ≥ 50%</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-badge" style="background: rgba(0, 229, 255, 0.2); color: #00e5ff;">L3</span>
+          <span class="tier-weight">Optimized</span>
+          <span class="tier-gate">F+BP = 100% &amp; E ≥ 50%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section style="background: var(--bg-secondary);">
+  <div class="container">
+    <div class="section-header">
+      <h2>Tech Stack</h2>
+      <p>Built with modern tools on the Dynatrace AppEngine platform.</p>
+    </div>
+    <div class="tech-grid">
+      <div class="tech-item">
+        <div class="tech-name">React 18</div>
+        <div class="tech-role">UI Framework</div>
+      </div>
+      <div class="tech-item">
+        <div class="tech-name">TypeScript 5</div>
+        <div class="tech-role">Type Safety</div>
+      </div>
+      <div class="tech-item">
+        <div class="tech-name">Strato Design</div>
+        <div class="tech-role">Dynatrace UI Kit</div>
+      </div>
+      <div class="tech-item">
+        <div class="tech-name">DQL / Grail</div>
+        <div class="tech-role">Data Queries</div>
+      </div>
+      <div class="tech-item">
+        <div class="tech-name">Chart.js</div>
+        <div class="tech-role">Evolution Charts</div>
+      </div>
+      <div class="tech-item">
+        <div class="tech-name">jsPDF</div>
+        <div class="tech-role">PDF Reports</div>
+      </div>
+      <div class="tech-item">
+        <div class="tech-name">dt-app CLI</div>
+        <div class="tech-role">Build &amp; Deploy</div>
+      </div>
+      <div class="tech-item">
+        <div class="tech-name">Document Store</div>
+        <div class="tech-role">Snapshot Persistence</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUICKSTART -->
+<section id="quickstart">
+  <div class="container">
+    <div class="section-header">
+      <h2>Quick Start</h2>
+      <p>Get up and running in 5 steps.</p>
+    </div>
+    <div class="quickstart">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>Clone the repository</h4>
+          <code>git clone https://github.com/mbdccoletta/Pulse-Assessment-App.git</code>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h4>Configure your tenant</h4>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Edit <code>app.config.json</code> — set <code>environmentUrl</code> to your Dynatrace tenant.
+          </p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h4>Install dependencies</h4>
+          <code>npm install</code>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h4>Run locally (dev server)</h4>
+          <code>npm run start</code>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <h4>Deploy to production</h4>
+          <code>npm run deploy</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- REQUIRED SCOPES -->
+<section style="background: var(--bg-secondary);">
+  <div class="container">
+    <div class="section-header">
+      <h2>Required Scopes</h2>
+      <p>11 API scopes configured in app.config.json for full assessment coverage.</p>
+    </div>
+    <div class="capabilities-grid">
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-cyan);"></div>
+        <div class="cap-info">
+          <div class="cap-name">storage:entities:read</div>
+          <div class="cap-meta">Entity queries (hosts, services, apps)</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-cyan);"></div>
+        <div class="cap-info">
+          <div class="cap-name">storage:logs:read</div>
+          <div class="cap-meta">Log Analytics criteria</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-cyan);"></div>
+        <div class="cap-info">
+          <div class="cap-name">storage:metrics:read</div>
+          <div class="cap-meta">Infrastructure metrics (timeseries)</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-cyan);"></div>
+        <div class="cap-info">
+          <div class="cap-name">storage:spans:read</div>
+          <div class="cap-meta">APM + AI Observability tracing</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-cyan);"></div>
+        <div class="cap-info">
+          <div class="cap-name">storage:events:read</div>
+          <div class="cap-meta">Security, Delivery, Problems</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-cyan);"></div>
+        <div class="cap-info">
+          <div class="cap-name">storage:bizevents:read</div>
+          <div class="cap-meta">Business Observability events</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-green);"></div>
+        <div class="cap-info">
+          <div class="cap-name">storage:buckets:read</div>
+          <div class="cap-meta">Grail bucket access for DQL</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-green);"></div>
+        <div class="cap-info">
+          <div class="cap-name">storage:system:read</div>
+          <div class="cap-meta">System table access</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-orange);"></div>
+        <div class="cap-info">
+          <div class="cap-name">document:documents:read</div>
+          <div class="cap-meta">Load assessment snapshots</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-orange);"></div>
+        <div class="cap-info">
+          <div class="cap-name">document:documents:write</div>
+          <div class="cap-meta">Save assessment snapshots</div>
+        </div>
+      </div>
+      <div class="cap-card">
+        <div class="cap-dot" style="background: var(--accent-orange);"></div>
+        <div class="cap-info">
+          <div class="cap-name">document:documents:delete</div>
+          <div class="cap-meta">Cleanup old snapshots</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <p>
+      <strong>Pulse Assessment</strong> &mdash; Built by
+      <a href="https://github.com/mbdccoletta" target="_blank">Marcelo Coletta</a>
+      &middot; Powered by <a href="https://www.dynatrace.com/platform/" target="_blank">Dynatrace Platform</a>
+    </p>
+    <p style="margin-top: 8px; opacity: 0.6;">
+      &copy; 2025 &mdash; Dynatrace App Platform
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
