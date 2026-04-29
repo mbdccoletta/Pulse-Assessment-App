@@ -82,7 +82,7 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   l10: "excellence",     // Log retention validation
   l11: "foundation",     // Dedicated buckets usage
   l12: "bestPractice",   // Structured logging
-  l13: "excellence",     // Log-to-metric extraction
+  l13: "excellence",     // Span-correlated logs
   l14: "bestPractice",   // Log volume balance
   l15: "excellence",     // Log-based events
   l16: "bestPractice",   // Custom attribute enrichment

@@ -27,13 +27,16 @@ import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
 import { CovMatRadar, renderRadarToDataURL, type CovMatRadarHandle } from "../components/CovMatRadar";
 import { CapabilityScatter, renderScatterToDataURL } from "../components/CapabilityScatter";
 
-const SCALE = [
-  { l: "N/A", c: Colors.Charts.Status.Critical.Default, r: "0-19%", tip: "Critical gaps — the capability is barely adopted or has no data flowing." },
-  { l: "Low", c: Colors.Charts.Categorical.Color14.Default, r: "20-39%", tip: "Early adoption — some data exists but significant gaps remain." },
-  { l: "Moderate", c: Colors.Charts.Status.Warning.Default, r: "40-59%", tip: "Partial coverage — key areas configured but important criteria still missing." },
-  { l: "Good", c: Colors.Charts.Categorical.Color07.Default, r: "60-79%", tip: "Strong adoption — most criteria met with room for further optimization." },
-  { l: "Excellent", c: Colors.Charts.Status.Ideal.Default, r: "80-100%", tip: "Full or near-full coverage — the capability is well-adopted and comprehensive." },
-];
+const SCALE = SCORE_BANDS.map(b => ({
+  l: b.label,
+  c: b.color,
+  r: `${b.min}-${b.max === 100 ? 100 : b.max - 1}%`,
+  tip: b.label === "N/A" ? "Critical gaps — the capability is barely adopted or has no data flowing."
+     : b.label === "Low" ? "Early adoption — some data exists but significant gaps remain."
+     : b.label === "Moderate" ? "Partial coverage — key areas configured but important criteria still missing."
+     : b.label === "Good" ? "Strong adoption — most criteria met with room for further optimization."
+     : "Full or near-full coverage — the capability is well-adopted and comprehensive.",
+}));
 
 const R_RATIO = 0.34;
 
@@ -41,7 +44,7 @@ function formatRecords(n: number): string {
   return n.toLocaleString();
 }
 
-import { scoreColor as maturityBandColor } from "../utils/colors";
+import { scoreColor as maturityBandColor, bandLabel as sharedBandLabel, SCORE_BANDS } from "../utils/colors";
 
 const TIER_META: { key: "foundation" | "bestPractice" | "excellence"; label: string; color: string }[] = [
   { key: "foundation", label: "Foundation", color: Colors.Charts.Categorical.Color01.Default },
@@ -547,7 +550,7 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
   dk: boolean; text: string; textSec: string; textTert: string;
   overallMaturityLevel: number; collapseKey: number;
 }) {
-  const matBand = overallMaturityLevel >= 80 ? "Excellent" : overallMaturityLevel >= 60 ? "Good" : overallMaturityLevel >= 40 ? "Moderate" : overallMaturityLevel >= 20 ? "Low" : "N/A";
+  const matBand = sharedBandLabel(overallMaturityLevel);
   const matColor = maturityBandColor(overallMaturityLevel);
 
   const totals = useMemo(() => capabilities.reduce((acc, c) => ({
@@ -674,7 +677,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   const covBandC = maturityBandColor(totalScore);
   const matBandC = maturityBandColor(overallMaturityLevel);
   const labelC = Colors.Text.Neutral.Subdued;
-  const bandLabel = (s: number) => s >= 80 ? "Excellent" : s >= 60 ? "Good" : s >= 40 ? "Moderate" : s >= 20 ? "Low" : "N/A";
+  const bandLabel = sharedBandLabel;
 
   // ── Criterion → Tier map ──
   const tierMap = useMemo(() => {

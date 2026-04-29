@@ -1,28 +1,17 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import type { CapabilityResult } from "../hooks/useCoverageData";
+import { scoreBand, SCORE_BANDS } from "../utils/colors";
 
 function hexToRgb(h: string) { return { r: parseInt(h.slice(1, 3), 16), g: parseInt(h.slice(3, 5), 16), b: parseInt(h.slice(5, 7), 16) }; }
 function rgba(c: { r: number; g: number; b: number }, a: number) { return `rgba(${c.r},${c.g},${c.b},${a})`; }
 function lighten(c: { r: number; g: number; b: number }, v: number) { return { r: Math.min(255, c.r + v), g: Math.min(255, c.g + v), b: Math.min(255, c.b + v) }; }
 
-export function maturity(s: number) {
-  if (s >= 80) return { label: "Excellent", color: "#36B37E" };
-  if (s >= 60) return { label: "Good", color: "#5EB1A9" };
-  if (s >= 40) return { label: "Moderate", color: "#EEA746" };
-  if (s >= 20) return { label: "Low", color: "#DC671E" };
-  return { label: "N/A", color: "#CD3C44" };
-}
+export function maturity(s: number) { return scoreBand(s); }
 
 const R_RATIO = 0.34;
 
-const BANDS = [
-  { min: 0, max: 20, label: "N/A", color: "#CD3C44" },
-  { min: 20, max: 40, label: "Low", color: "#DC671E" },
-  { min: 40, max: 60, label: "Moderate", color: "#EEA746" },
-  { min: 60, max: 80, label: "Good", color: "#5EB1A9" },
-  { min: 80, max: 100, label: "Excellent", color: "#36B37E" },
-];
+const BANDS = SCORE_BANDS;
 
 interface Props {
   capabilities: CapabilityResult[];
