@@ -150,7 +150,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture, data
 
 ## Grail Query Cost (DPS Consumption)
 
-> **Important:** Each assessment execution queries Grail tables (logs, spans, events, bizevents) which consume **Davis Data Units (DPS)** based on GiB scanned.
+> **Important:** Each assessment execution queries Grail tables (logs, spans, events, bizevents) which consume **DPS** based on GiB scanned.
 
 ### Estimated cost per assessment (based on real BWM tenant data)
 
