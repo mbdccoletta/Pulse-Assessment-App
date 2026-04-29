@@ -267,7 +267,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   );
 
   return (
-    <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, minHeight: "100vh", padding: "4px 10px", overflow: "auto" }}>
+    <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, height: "100vh", padding: "4px 10px", overflow: "hidden", display: "flex" }}>
       {/* Header + A/B Selectors — compact single row */}
       <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 4 }} onClick={(e) => e.stopPropagation()}>
         <Tooltip text="Return to the main assessment page." position="bottom">
@@ -312,10 +312,10 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           </Flex>
 
           {/* ══════ RADAR CHART + CAPABILITY BARS (side by side) ══════ */}
-          <Flex gap={8} style={{ marginBottom: 0, height: isMobile ? "auto" : "calc(100vh - 100px)" }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
+          <Flex gap={8} style={{ marginBottom: 0, flex: 1, minHeight: 0, height: isMobile ? "auto" : 0 }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
             {/* Left: CovMatRadar */}
             <Flex flexDirection="column" style={{
-              flex: isMobile ? "1 1 100%" : "1 1 50%", minWidth: 0, minHeight: 0,
+              flex: isMobile ? "1 1 100%" : "3 1 0%", minWidth: 0, minHeight: 0,
               borderRadius: 12, border: `1px solid ${border}`, background: card,
               padding: "6px 10px 8px", overflow: "visible",
             }}>
@@ -329,7 +329,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
                 </Flex>
                 <ExpandChartButton onClick={() => setExpandedRadar(true)} />
               </Flex>
-              <Flex flexDirection="column" style={{ flex: 1, minHeight: 340 }}>
+              <Flex flexDirection="column" style={{ flex: 1, minHeight: 0 }}>
                 <CovMatRadar
                   data={comparison.capDiffs.map(c => ({
                     name: c.name,
@@ -348,7 +348,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
 
             {/* Right: Score per Capability */}
             <Flex flexDirection="column" style={{
-              flex: isMobile ? "1 1 100%" : "1 1 50%", minWidth: 0, minHeight: 0,
+              flex: isMobile ? "1 1 100%" : "2 1 0%", minWidth: 0, minHeight: 0,
               background: card, border: `1px solid ${border}`, borderRadius: 12,
               padding: "8px 12px", overflowY: "auto",
             }}>
