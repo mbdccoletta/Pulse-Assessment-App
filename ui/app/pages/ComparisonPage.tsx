@@ -267,7 +267,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   );
 
   return (
-    <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, height: "100vh", padding: "4px 16px", overflow: "hidden", display: "flex" }}>
+    <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, height: "100vh", padding: "4px 16px", overflow: "hidden" }}>
       {/* Header + A/B Selectors — compact single row */}
       <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 4 }} onClick={(e) => e.stopPropagation()}>
         <Tooltip text="Return to the main assessment page." position="bottom">
@@ -290,7 +290,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
       )}
 
       {comparison && (
-        <>
+        <Flex flexDirection="column" style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
           {/* KPI Summary — compact inline */}
           <Flex alignItems="center" gap={6} flexWrap="wrap" style={{ marginBottom: 4 }}>
             <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
@@ -312,12 +312,12 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           </Flex>
 
           {/* ══════ RADAR CHART + CAPABILITY BARS (side by side) ══════ */}
-          <Flex gap={8} style={{ marginBottom: 0, flex: 1, minHeight: 0, height: isMobile ? "auto" : 0 }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
+          <Flex gap={8} style={{ marginBottom: 0, minHeight: isMobile ? "auto" : 320, height: isMobile ? "auto" : "clamp(320px, 42vh, 480px)", flexShrink: 0 }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
             {/* Left: CovMatRadar */}
             <Flex flexDirection="column" style={{
               flex: isMobile ? "1 1 100%" : "3 1 0%", minWidth: 0, minHeight: 0,
               borderRadius: 12, border: `1px solid ${border}`, background: card,
-              padding: "6px 12px 8px", overflow: "visible",
+              padding: "6px 12px 8px", overflow: "hidden",
             }}>
               <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
                 <Flex alignItems="center" gap={8} flexWrap="wrap">
@@ -409,7 +409,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
             </Flex>
           </Flex>
 
-        </>
+        </Flex>
       )}
     </Flex>
   );
