@@ -91,8 +91,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const legendSpace = 22;
     const cx = w / 2;
     const cy = (h - legendSpace) / 2;
-    const labelMarginW = Math.max(w * 0.50, 170); // horizontal margin based on width
-    const labelMarginH = Math.max(h * 0.42, 140); // vertical margin based on height
+    const labelMarginW = Math.max(w * 0.54, 180); // horizontal margin based on width
+    const labelMarginH = Math.max(h * 0.46, 150); // vertical margin based on height
     const R = Math.min((w - labelMarginW) / 2, (h - legendSpace - labelMarginH) / 2);
     geoRef.current = { cx, cy, R, N, SEG };
 
@@ -219,7 +219,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     }
 
     // ── Connector lines + capability labels ──
-    const labelR = R + Math.max(Math.min(w, h) * 0.14, 56);
+    const labelR = R + Math.max(Math.min(w, h) * 0.16, 60);
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const maxLabelW = Math.max(w * 0.26, 110);
@@ -233,12 +233,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const dim = activeIdx !== null && activeIdx !== undefined && !act;
       const isR = cos > 0.15, isL = cos < -0.15;
 
-      // Outermost blip radius (max of coverage and maturity)
-      const covBR = minBlipR + (data[i].coverage / 100) * (R - minBlipR);
-      const matBR = minBlipR + (data[i].maturity / 100) * (R - minBlipR);
-      const outerBlipR = Math.max(covBR, matBR);
-      const blipDotSize = (act ? dotBase * 1.35 : dotBase) + 4;
-      const startR = outerBlipR + blipDotSize;
+      // Connector starts just outside the outer chart ring (never crosses rings)
+      const startR = R + 8;
 
       // Label anchor position — clamped to canvas bounds
       let lx = cx + cos * labelR;
@@ -345,7 +341,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const h = rect.height;
 
     // Check label areas first (higher priority)
-    const labelR = R + Math.max(Math.min(w, h) * 0.14, 56);
+    const labelR = R + Math.max(Math.min(w, h) * 0.16, 60);
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const totalTextH = (fs1 + 2) + 2 + fs2; // single-line name + gap + score
@@ -701,7 +697,7 @@ export function renderRadarToDataURL(
   }
 
   // Connector lines + capability labels
-  const labelR = R + Math.max(Math.min(w, h) * 0.14, 56);
+  const labelR = R + Math.max(Math.min(w, h) * 0.16, 60);
   const fs1 = Math.max(Math.min(w, h) * 0.020, 10);
   const fs2 = Math.max(Math.min(w, h) * 0.016, 8);
   const labelH = fs1 + fs2 + 6;
@@ -710,11 +706,7 @@ export function renderRadarToDataURL(
     const cos = Math.cos(midA);
     const sin = Math.sin(midA);
     const isR = cos > 0.15, isL = cos < -0.15;
-    const covBR = minBlipR + (data[i].coverage / 100) * (R - minBlipR);
-    const matBR = minBlipR + (data[i].maturity / 100) * (R - minBlipR);
-    const outerBlipR = Math.max(covBR, matBR);
-    const blipDotSize = dotBase + 4;
-    const startR2 = outerBlipR + blipDotSize;
+    const startR2 = R + 8;
     const lx = cx + cos * labelR;
     const ly = cy + sin * labelR;
     const stopR = labelR - labelH / 2 - 6;
