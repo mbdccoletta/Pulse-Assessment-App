@@ -94,23 +94,47 @@ async function saveToDocStore(snap: AssessmentSnapshot, knownIds?: Set<string>):
   }
 }
 
-/* ── Retention policy: keep only the 12 most recent snapshots ── */
+/* ── Retention policy: one snapshot per day, keep 15 days ── */
 
-const MAX_SNAPSHOTS = 12;
+const RETENTION_DAYS = 15;
 
 function applyRetention(snapshots: AssessmentSnapshot[]): {
   keep: AssessmentSnapshot[];
   removeIds: string[];
 } {
-  if (snapshots.length <= MAX_SNAPSHOTS) return { keep: snapshots, removeIds: [] };
-
   const sorted = [...snapshots].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
 
-  const keep = sorted.slice(0, MAX_SNAPSHOTS);
-  const removeIds = sorted.slice(MAX_SNAPSHOTS).map((s) => s.id);
-  return { keep, removeIds };
+  // Keep only the latest snapshot per calendar day
+  const byDay = new Map<string, AssessmentSnapshot>();
+  const duplicateIds: string[] = [];
+  for (const s of sorted) {
+    const day = s.timestamp.slice(0, 10); // YYYY-MM-DD
+    if (!byDay.has(day)) {
+      byDay.set(day, s);
+    } else {
+      duplicateIds.push(s.id);
+    }
+  }
+
+  // Drop snapshots older than RETENTION_DAYS
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
+  cutoff.setHours(0, 0, 0, 0);
+
+  const keep: AssessmentSnapshot[] = [];
+  const expiredIds: string[] = [];
+  for (const s of byDay.values()) {
+    if (new Date(s.timestamp) >= cutoff) {
+      keep.push(s);
+    } else {
+      expiredIds.push(s.id);
+    }
+  }
+
+  keep.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return { keep, removeIds: [...duplicateIds, ...expiredIds] };
 }
 
 async function deleteSnapshotsFromDocStore(ids: string[], remoteIds?: Set<string>): Promise<void> {
