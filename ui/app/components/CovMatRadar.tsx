@@ -224,7 +224,6 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const maxLabelW = Math.max(w * 0.26, 110);
     const labelPad = 6; // padding from canvas edge
-    const labelH = fs1 + fs2 + 6;
 
     for (let i = 0; i < N; i++) {
       const midA = i * SEG + SEG / 2 - Math.PI / 2;
@@ -241,10 +240,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const blipDotSize = (act ? dotBase * 1.35 : dotBase) + 4;
       const startR = outerBlipR + blipDotSize;
 
-      // Label position — clamped to canvas bounds
+      // Label anchor position — clamped to canvas bounds
       let lx = cx + cos * labelR;
       const ly = cy + sin * labelR;
-      // Clamp: for right-aligned labels, ensure lx + maxLabelW < w; for left-aligned, lx - maxLabelW > 0
       if (isR) lx = Math.min(lx, w - maxLabelW - labelPad);
       else if (isL) lx = Math.max(lx, maxLabelW + labelPad);
 
@@ -253,8 +251,26 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const ml = bandForScore(avgScore);
       const alpha = dim ? 0.2 : act ? 0.95 : 0.6;
 
-      // Dashed connector line — radial from blip, stops before label area (same as Coverage page)
-      const stopR = labelR - labelH / 2 - 6;
+      // ── Phase 1: Compute full text block layout (before drawing anything) ──
+      ctx.font = `${act ? 800 : 700} ${fs1}px system-ui,sans-serif`;
+      const nameLines = wrapText(ctx, data[i].name, maxLabelW);
+      const lineH = fs1 + 2;
+      const nameBlockH = nameLines.length * lineH;
+      const scorePrefix1 = legendLabels ? "A" : "C";
+      const scorePrefix2 = legendLabels ? "B" : "M";
+      const scoreText = `${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].maturity)}%`;
+
+      // Total text block: name lines + gap + score line
+      const totalTextH = nameBlockH + 2 + fs2;
+      // Position the text block centered on ly
+      const textTopY = ly - totalTextH / 2;
+      const nameStartY = textTopY;
+      const scoreY = textTopY + nameBlockH + 2;
+      const textBottomY = scoreY + fs2 / 2;
+
+      // ── Phase 2: Dashed connector — radial, stops before text top ──
+      const textEdgeR = Math.sqrt((lx - cx) * (lx - cx) + (textTopY - cy) * (textTopY - cy));
+      const stopR = Math.min(labelR, textEdgeR) - 8;
       if (startR < stopR) {
         const sx = cx + cos * startR, sy = cy + sin * startR;
         const ex = cx + cos * stopR, ey = cy + sin * stopR;
@@ -264,38 +280,28 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
         ctx.globalAlpha = 1;
       }
 
-      // Label text — line 1 (possibly wrapped): name, line 2: coverage / maturity scores
+      // ── Phase 3: Draw text ──
       ctx.textAlign = isR ? "left" : isL ? "right" : "center";
       ctx.textBaseline = "middle";
       ctx.globalAlpha = dim ? 0.35 : 1;
       ctx.fillStyle = act ? data[i].color : dk ? "#e0e0f0" : "#1a1a2e";
       ctx.font = `${act ? 800 : 700} ${fs1}px system-ui,sans-serif`;
-      const nameLines = wrapText(ctx, data[i].name, maxLabelW);
-      const lineH = fs1 + 2;
-      const nameBlockH = nameLines.length * lineH;
-      const nameStartY = ly - fs2 / 2 - 1 - (nameBlockH - lineH) / 2;
       for (let li = 0; li < nameLines.length; li++) {
-        ctx.fillText(nameLines[li], lx, nameStartY + li * lineH);
+        ctx.fillText(nameLines[li], lx, nameStartY + li * lineH + lineH / 2);
       }
-      // Line 2: scores — centered below name
-      ctx.fillStyle = ml.color;
-      ctx.font = `700 ${fs2}px system-ui,sans-serif`;
-      const scorePrefix1 = legendLabels ? "A" : "C";
-      const scorePrefix2 = legendLabels ? "B" : "M";
-      const scoreY = nameStartY + nameBlockH + 2;
-      // Measure name width to center score beneath it
-      ctx.font = `${act ? 800 : 700} ${fs1}px system-ui,sans-serif`;
+      // Score line — centered below name
       const maxNameW = Math.max(...nameLines.map(l => ctx.measureText(l).width));
       const nameCenterX = isR ? lx + maxNameW / 2 : isL ? lx - maxNameW / 2 : lx;
+      ctx.fillStyle = ml.color;
       ctx.font = `700 ${fs2}px system-ui,sans-serif`;
       const savedAlign = ctx.textAlign;
       ctx.textAlign = "center";
-      ctx.fillText(`${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].maturity)}%`, nameCenterX, scoreY);
+      ctx.fillText(scoreText, nameCenterX, scoreY + fs2 / 2);
       ctx.textAlign = savedAlign;
       ctx.globalAlpha = 1;
 
-      // Solid accent bar below label text (same as Coverage page)
-      const barY = ly + labelH / 2 + 4;
+      // ── Phase 4: Solid accent bar below all text ──
+      const barY = textBottomY + 6;
       const barW = act ? 65 : 48;
       const barStartX = isR ? lx : isL ? lx - barW : lx - barW / 2;
       ctx.beginPath(); ctx.moveTo(barStartX, barY); ctx.lineTo(barStartX + barW, barY);
@@ -356,17 +362,17 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const labelR = R + Math.max(Math.min(w, h) * 0.075, 34);
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
-    const labelH = fs1 + fs2 + 6;
+    const totalTextH = (fs1 + 2) + 2 + fs2; // single-line name + gap + score
     for (let i = 0; i < N; i++) {
       const midA = i * SEG + SEG / 2 - Math.PI / 2;
       const cos = Math.cos(midA), sin = Math.sin(midA);
       const lx = cx + cos * labelR;
       const ly = cy + sin * labelR;
       const isR = cos > 0.15, isL = cos < -0.15;
-      const labelW = 120;
+      const labelW = 130;
       const left = isR ? lx - 4 : isL ? lx - labelW + 4 : lx - labelW / 2;
-      const top = ly - labelH / 2 - 4;
-      if (mx >= left && mx <= left + labelW && my >= top && my <= top + labelH + 12) {
+      const top = ly - totalTextH / 2 - 4;
+      if (mx >= left && mx <= left + labelW && my >= top && my <= top + totalTextH + 16) {
         return i;
       }
     }
