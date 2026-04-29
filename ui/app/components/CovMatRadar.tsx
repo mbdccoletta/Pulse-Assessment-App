@@ -253,17 +253,6 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const ml = bandForScore(avgScore);
       const alpha = dim ? 0.2 : act ? 0.95 : 0.55;
 
-      // Dashed connector line — radial from blip, stops before text
-      const stopR = labelR - labelH / 2 - 6;
-      if (startR < stopR) {
-        const sx = cx + cos * startR, sy = cy + sin * startR;
-        const ex = cx + cos * stopR, ey = cy + sin * stopR;
-        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
-        ctx.strokeStyle = ml.color; ctx.globalAlpha = alpha;
-        ctx.setLineDash([5, 4]); ctx.lineWidth = act ? 3 : 2; ctx.stroke(); ctx.setLineDash([]);
-        ctx.globalAlpha = 1;
-      }
-
       // Label text — line 1 (possibly wrapped): name, line 2: coverage / maturity scores
       ctx.textAlign = isR ? "left" : isL ? "right" : "center";
       ctx.textBaseline = "middle";
@@ -298,6 +287,18 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const barY = scoreY + fs2 / 2 + 4;
       const barW = act ? 60 : 44;
       const barStartX = isR ? lx : isL ? lx - barW : lx - barW / 2;
+      // The inner edge of the bar (closest to chart center)
+      const barInnerX = isR ? barStartX : isL ? barStartX + barW : nameCenterX;
+
+      // Dashed connector: radial from blip → elbow → accent bar start
+      if (startR < labelR) {
+        const sx = cx + cos * startR, sy = cy + sin * startR;
+        ctx.beginPath(); ctx.moveTo(sx, sy);
+        ctx.lineTo(barInnerX, barY);
+        ctx.strokeStyle = ml.color; ctx.globalAlpha = alpha;
+        ctx.setLineDash([5, 4]); ctx.lineWidth = act ? 3 : 2; ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
 
       ctx.beginPath(); ctx.moveTo(barStartX, barY); ctx.lineTo(barStartX + barW, barY);
       ctx.strokeStyle = ml.color; ctx.globalAlpha = act ? 0.85 : 0.4;
