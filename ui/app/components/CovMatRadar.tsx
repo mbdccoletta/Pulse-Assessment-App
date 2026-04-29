@@ -218,12 +218,12 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       drawGradientBlip(ctx, matX, matY, dotSize, MAT_C, data[i].maturity, dk, true, act, dim);
     }
 
-    // ── Connector lines + capability labels (matching coverage chart style) ──
-    const labelR = R + Math.max(Math.min(w, h) * 0.075, 34);
+    // ── Connector lines + capability labels ──
+    const labelR = R + Math.max(Math.min(w, h) * 0.10, 44);
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const maxLabelW = Math.max(w * 0.26, 110);
-    const labelPad = 6; // padding from canvas edge
+    const labelPad = 6;
 
     for (let i = 0; i < N; i++) {
       const midA = i * SEG + SEG / 2 - Math.PI / 2;
@@ -251,7 +251,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const ml = bandForScore(avgScore);
       const alpha = dim ? 0.2 : act ? 0.95 : 0.6;
 
-      // ── Phase 1: Compute full text block layout (before drawing anything) ──
+      // ── Compute text block layout ──
       ctx.font = `${act ? 800 : 700} ${fs1}px system-ui,sans-serif`;
       const nameLines = wrapText(ctx, data[i].name, maxLabelW);
       const lineH = fs1 + 2;
@@ -259,18 +259,13 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const scorePrefix1 = legendLabels ? "A" : "C";
       const scorePrefix2 = legendLabels ? "B" : "M";
       const scoreText = `${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].maturity)}%`;
-
-      // Total text block: name lines + gap + score line
       const totalTextH = nameBlockH + 2 + fs2;
-      // Position the text block centered on ly
       const textTopY = ly - totalTextH / 2;
       const nameStartY = textTopY;
       const scoreY = textTopY + nameBlockH + 2;
-      const textBottomY = scoreY + fs2 / 2;
 
-      // ── Phase 2: Dashed connector — radial, stops before text top ──
-      const textEdgeR = Math.sqrt((lx - cx) * (lx - cx) + (textTopY - cy) * (textTopY - cy));
-      const stopR = Math.min(labelR, textEdgeR) - 8;
+      // ── Dashed connector line — radial from blip, stops before text ──
+      const stopR = labelR - totalTextH / 2 - 8;
       if (startR < stopR) {
         const sx = cx + cos * startR, sy = cy + sin * startR;
         const ex = cx + cos * stopR, ey = cy + sin * stopR;
@@ -280,7 +275,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
         ctx.globalAlpha = 1;
       }
 
-      // ── Phase 3: Draw text ──
+      // ── Draw text ──
       ctx.textAlign = isR ? "left" : isL ? "right" : "center";
       ctx.textBaseline = "middle";
       ctx.globalAlpha = dim ? 0.35 : 1;
@@ -298,15 +293,6 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       ctx.textAlign = "center";
       ctx.fillText(scoreText, nameCenterX, scoreY + fs2 / 2);
       ctx.textAlign = savedAlign;
-      ctx.globalAlpha = 1;
-
-      // ── Phase 4: Solid accent bar below all text ──
-      const barY = textBottomY + 6;
-      const barW = act ? 65 : 48;
-      const barStartX = isR ? lx : isL ? lx - barW : lx - barW / 2;
-      ctx.beginPath(); ctx.moveTo(barStartX, barY); ctx.lineTo(barStartX + barW, barY);
-      ctx.strokeStyle = ml.color; ctx.globalAlpha = act ? 0.85 : 0.45;
-      ctx.lineWidth = act ? 3.5 : 2.5; ctx.lineCap = "round"; ctx.stroke(); ctx.lineCap = "butt";
       ctx.globalAlpha = 1;
     }
 
@@ -359,7 +345,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const h = rect.height;
 
     // Check label areas first (higher priority)
-    const labelR = R + Math.max(Math.min(w, h) * 0.075, 34);
+    const labelR = R + Math.max(Math.min(w, h) * 0.10, 44);
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const totalTextH = (fs1 + 2) + 2 + fs2; // single-line name + gap + score
