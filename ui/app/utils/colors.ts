@@ -1,24 +1,47 @@
-/** Shared scoring band definitions — single source of truth for the entire app. */
+import Colors from "@dynatrace/strato-design-tokens/colors";
+
+/**
+ * Strato design-token colors for each scoring band (for JSX / inline styles).
+ * These resolve to CSS custom properties and adapt to dark/light theme automatically.
+ */
+export const SCORE_BAND_TOKENS = {
+  "N/A":      Colors.Charts.Status.Critical.Default,
+  Low:        Colors.Charts.Categorical.Color14.Default,
+  Moderate:   Colors.Charts.Status.Warning.Default,
+  Good:       Colors.Charts.Categorical.Color07.Default,
+  Excellent:  Colors.Charts.Status.Ideal.Default,
+} as const;
+
+/**
+ * Shared scoring band definitions — single source of truth for the entire app.
+ * `color` values are plain hex strings for canvas-rendering compatibility.
+ * For JSX use the corresponding `token` (CSS custom property).
+ */
 export const SCORE_BANDS = [
-  { min: 0, max: 20, label: "N/A", color: "#CD3C44" },
-  { min: 20, max: 40, label: "Low", color: "#DC671E" },
-  { min: 40, max: 60, label: "Moderate", color: "#EEA746" },
-  { min: 60, max: 80, label: "Good", color: "#5EB1A9" },
-  { min: 80, max: 100, label: "Excellent", color: "#36B37E" },
+  { min: 0,  max: 20,  label: "N/A",       color: "#CD3C44", token: SCORE_BAND_TOKENS["N/A"] },
+  { min: 20, max: 40,  label: "Low",       color: "#DC671E", token: SCORE_BAND_TOKENS.Low },
+  { min: 40, max: 60,  label: "Moderate",  color: "#EEA746", token: SCORE_BAND_TOKENS.Moderate },
+  { min: 60, max: 80,  label: "Good",      color: "#5EB1A9", token: SCORE_BAND_TOKENS.Good },
+  { min: 80, max: 100, label: "Excellent", color: "#36B37E", token: SCORE_BAND_TOKENS.Excellent },
 ] as const;
 
-/** Maps a 0–100% score to a { label, color } band. */
-export function scoreBand(score: number): { label: string; color: string } {
-  if (score >= 80) return { label: "Excellent", color: "#36B37E" };
-  if (score >= 60) return { label: "Good", color: "#5EB1A9" };
-  if (score >= 40) return { label: "Moderate", color: "#EEA746" };
-  if (score >= 20) return { label: "Low", color: "#DC671E" };
-  return { label: "N/A", color: "#CD3C44" };
+/** Maps a 0–100% score to a { label, color, token } band. */
+export function scoreBand(score: number): { label: string; color: string; token: string } {
+  if (score >= 80) return { label: "Excellent", color: "#36B37E", token: SCORE_BAND_TOKENS.Excellent };
+  if (score >= 60) return { label: "Good",      color: "#5EB1A9", token: SCORE_BAND_TOKENS.Good };
+  if (score >= 40) return { label: "Moderate",  color: "#EEA746", token: SCORE_BAND_TOKENS.Moderate };
+  if (score >= 20) return { label: "Low",       color: "#DC671E", token: SCORE_BAND_TOKENS.Low };
+  return { label: "N/A", color: "#CD3C44", token: SCORE_BAND_TOKENS["N/A"] };
 }
 
-/** Maps a 0–100% score to a band color. */
+/** Maps a 0–100% score to a band hex color (canvas-safe). */
 export function scoreColor(score: number): string {
   return scoreBand(score).color;
+}
+
+/** Maps a 0–100% score to a Strato design-token color (JSX-safe). */
+export function scoreTokenColor(score: number): string {
+  return scoreBand(score).token;
 }
 
 /** Maps a 0–100% score to a band label. */

@@ -4,7 +4,7 @@ import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { ExternalLink, Text, Strong, Code } from "@dynatrace/strato-components/typography";
-import { Flex, Grid } from "@dynatrace/strato-components/layouts";
+import { Flex, Grid, Surface, Container } from "@dynatrace/strato-components/layouts";
 import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-components-preview/buttons";
 import { Menu } from "@dynatrace/strato-components-preview/navigation";
 import { ProgressBar } from "@dynatrace/strato-components/content";
@@ -29,7 +29,8 @@ import { CapabilityScatter, renderScatterToDataURL } from "../components/Capabil
 
 const SCALE = SCORE_BANDS.map(b => ({
   l: b.label,
-  c: b.color,
+  c: b.token,
+  hex: b.color,
   r: `${b.min}-${b.max === 100 ? 100 : b.max - 1}%`,
   tip: b.label === "N/A" ? "Critical gaps — the capability is barely adopted or has no data flowing."
      : b.label === "Low" ? "Early adoption — some data exists but significant gaps remain."
@@ -44,7 +45,7 @@ function formatRecords(n: number): string {
   return n.toLocaleString();
 }
 
-import { scoreColor as maturityBandColor, bandLabel as sharedBandLabel, SCORE_BANDS } from "../utils/colors";
+import { scoreColor as maturityBandColor, scoreTokenColor, bandLabel as sharedBandLabel, SCORE_BANDS, SCORE_BAND_TOKENS } from "../utils/colors";
 
 const TIER_META: { key: "foundation" | "bestPractice" | "excellence"; label: string; color: string }[] = [
   { key: "foundation", label: "Foundation", color: Colors.Charts.Categorical.Color01.Default },
@@ -141,7 +142,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
     const calc = () => {
       const vh = window.innerHeight;
       const vw = rootRef.current ? rootRef.current.offsetWidth : window.innerWidth;
-      const mobile = vw < 768;
+      const mobile = vw < 640;
       setIsMobile(mobile);
       if (mobile) {
         setChartSize(Math.max(Math.min(vh - 200, vw - 32, 720), 260));
@@ -190,7 +191,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
         if (dp && (Math.abs(e.clientX - dp.x) > 5 || Math.abs(e.clientY - dp.y) > 5)) return;
         setActiveIdx(null); setSelectedCap(null); setCollapseKey(k => k + 1);
       }} style={{ height: "100%",
-      overflow: "hidden", boxSizing: "border-box", padding: "8px 0",
+      overflow: "hidden", boxSizing: "border-box", padding: "0",
       fontFamily: "inherit",
       background: bg, color: text, transition: "background 0.4s, color 0.4s" }}>
       {/* Idle State — capability overview + start */}
@@ -219,12 +220,12 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               />
             ) : (
               <>
-              <Flex flexDirection="column" style={{ marginBottom: 18, padding: "12px 16px", borderRadius: 10, background: bgPrimary, borderLeft: `3px solid ${accent}` }}>
+              <Container color="primary" variant="default" style={{ marginBottom: 16 }}>
                 <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 700, color: text, marginBottom: 4 }}>{CAPABILITIES.length} Capabilities Evaluated</Flex>
                 <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>
                   Each card shows what a capability evaluates. Click to see the <Strong style={{ color: text }}>full list of criteria</Strong>, the DQL query behind each one, and what the app looks for in your environment.
                 </Text>
-              </Flex>
+              </Container>
               <Grid gridTemplateColumns="repeat(auto-fill, minmax(340px, 1fr))" gap={16}>
                 {CAPABILITIES.map((cap) => (
                   <IdleCapCard key={cap.name} cap={cap} dk={dk} text={text} textSec={textSec} textTert={textTert}
@@ -311,9 +312,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
           <Flex style={{ flex: 1, flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: isMobile ? "auto" : "hidden" }}>
           {viewMode === "coverage" ? (<>
             {/* Left: chart + scale */}
-            <Flex flexDirection="column" alignItems="center" style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden", paddingTop: 24, position: "relative" }}>
+            <Flex flexDirection="column" alignItems="center" justifyContent="center" style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden", position: "relative" }}>
               <ExpandChartButton onClick={() => setExpandedPolar(true)} style={{ position: "absolute", top: 4, right: 8, zIndex: 10 }} />
-              <Flex flexDirection="column" style={{ position: "relative", width: chartSize, height: chartSize }}
+              <Flex flexDirection="column" style={{ position: "relative", width: chartSize, height: chartSize, flexShrink: 0 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   const idx = hitTest(e);
@@ -331,19 +332,6 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
                     }, 100);
                   }
                 }} />
-              </Flex>
-              {/* Scale */}
-              <Flex alignItems="center" justifyContent="center" gap={4} flexWrap="wrap" style={{ padding: "6px 0", flexShrink: 0 }}>
-                {SCALE.map((x) => (
-                  <Tooltip key={x.l} text={x.tip}>
-                  <Flex alignItems="center" gap={2} style={{ padding: "2px 8px", borderRadius: 6,
-                    background: x.c + (dk ? "20" : "12") }}>
-                    <Flex style={{ width: 5, height: 5, borderRadius: "50%", background: x.c }} />
-                    <Text style={{ fontSize: 12, color: text, fontWeight: 600 }}>{x.l}</Text>
-                    <Text style={{ fontSize: 12, color: text, fontWeight: 500 }}>{x.r}</Text>
-                  </Flex>
-                  </Tooltip>
-                ))}
               </Flex>
             </Flex>
 
@@ -365,7 +353,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
                 <Flex alignItems="center" justifyContent="center" gap={4} flexWrap="wrap" style={{ padding: "8px 0 4px", flexShrink: 0 }}>
                   {SCALE.map((x) => (
                     <Flex key={x.l} alignItems="center" gap={2} style={{ padding: "2px 8px", borderRadius: 6,
-                      background: x.c + (dk ? "20" : "12") }}>
+                      background: x.hex + (dk ? "20" : "12") }}>
                       <Flex style={{ width: 5, height: 5, borderRadius: "50%", background: x.c }} />
                       <Text style={{ fontSize: 12, color: text, fontWeight: 600 }}>{x.l}</Text>
                       <Text style={{ fontSize: 12, color: text, fontWeight: 500 }}>{x.r}</Text>
@@ -381,7 +369,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               minWidth: isMobile ? undefined : 320,
               flexShrink: 0,
               overflowY: "auto",
-              padding: "6px 10px",
+              padding: "6px 12px",
               borderLeft: isMobile ? "none" : `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? 300 : "calc(100vh - 160px)",
@@ -398,7 +386,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
           {/* How to Analyze — footer */}
           {viewMode === "coverage" ? (<Flex flexDirection="column" style={{
             flexShrink: 0,
-            padding: "12px 20px 14px",
+            padding: "12px 20px 16px",
             borderTop: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"}`,
             background: dk ? "rgba(65,105,225,0.04)" : "rgba(65,105,225,0.02)",
           }}>
@@ -406,7 +394,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             <Grid gridTemplateColumns={isMobile ? "1fr" : "1fr 1fr 1fr 1fr"} gap={12}>
 
               <Flex flexDirection="column" style={{
-                padding: "8px 10px", borderRadius: 6,
+                padding: "8px 12px", borderRadius: 6,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
@@ -417,7 +405,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               </Flex>
 
               <Flex flexDirection="column" style={{
-                padding: "8px 10px", borderRadius: 6,
+                padding: "8px 12px", borderRadius: 6,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
@@ -428,7 +416,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               </Flex>
 
               <Flex flexDirection="column" style={{
-                padding: "8px 10px", borderRadius: 6,
+                padding: "8px 12px", borderRadius: 6,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
@@ -439,7 +427,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               </Flex>
 
               <Flex flexDirection="column" style={{
-                padding: "8px 10px", borderRadius: 6,
+                padding: "8px 12px", borderRadius: 6,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
@@ -464,15 +452,15 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             </Grid>
           </Flex>) : viewMode === "maturity" ? (<Flex flexDirection="column" style={{
             flexShrink: 0,
-            padding: "12px 20px 14px",
+            padding: "12px 20px 16px",
             borderTop: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"}`,
             background: dk ? "rgba(65,105,225,0.04)" : "rgba(65,105,225,0.02)",
           }}>
-            <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 14, letterSpacing: 0.2 }}>How to Analyze — Maturity View</Flex>
+            <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 16, letterSpacing: 0.2 }}>How to Analyze — Maturity View</Flex>
             <Grid gridTemplateColumns={isMobile ? "1fr" : "1fr 1fr 1fr 1fr"} gap={16}>
 
               <Flex flexDirection="column" style={{
-                padding: "12px 14px", borderRadius: 8,
+                padding: "12px 16px", borderRadius: 8,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
@@ -483,7 +471,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               </Flex>
 
               <Flex flexDirection="column" style={{
-                padding: "12px 14px", borderRadius: 8,
+                padding: "12px 16px", borderRadius: 8,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
@@ -496,7 +484,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               </Flex>
 
               <Flex flexDirection="column" style={{
-                padding: "12px 14px", borderRadius: 8,
+                padding: "12px 16px", borderRadius: 8,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
@@ -511,7 +499,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               </Flex>
 
               <Flex flexDirection="column" style={{
-                padding: "12px 14px", borderRadius: 8,
+                padding: "12px 16px", borderRadius: 8,
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
@@ -569,7 +557,7 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
       <style>{maturityAnimStyle}</style>
 
       {/* ── Overall maturity hero ── */}
-      <Flex alignItems="center" gap={20} style={{ marginBottom: 20, padding: "16px 22px",
+      <Flex alignItems="center" gap={20} style={{ marginBottom: 20, padding: "16px 24px",
         background: dk ? "rgba(255,255,255,0.025)" : "rgba(0,0,0,0.015)",
         border: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
         borderRadius: 12,
@@ -628,7 +616,7 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
 
       {/* Quick-start guide */}
       <Flex flexDirection="column" style={{
-        marginTop: 22, padding: "14px 18px", borderRadius: 10,
+        marginTop: 24, padding: "16px 20px", borderRadius: 12,
         background: dk ? "rgba(0,200,83,0.05)" : "rgba(0,200,83,0.03)",
         border: `1px solid ${dk ? "rgba(0,200,83,0.12)" : "rgba(0,200,83,0.08)"}`,
         animation: `matFadeUp 0.4s ease both ${0.15 + sorted.length * 0.06 + 0.1}s`,
@@ -764,25 +752,25 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   );
 
   return (
-    <Flex data-rec-root flexDirection="column" style={{ flex: 1, overflow: "hidden", padding: "12px 20px" }}>
+    <Flex data-rec-root flexDirection="column" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "8px 20px" }}>
       <style>{recAnimStyle}</style>
 
       <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 2, letterSpacing: 0.2, animation: "recFadeUp 0.3s ease both" }}>
         Executive Summary
       </Flex>
-      <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, marginBottom: 12, lineHeight: 1.4, animation: "recFadeUp 0.3s ease both 0.05s" }}>
+      <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, marginBottom: 8, lineHeight: 1.4, animation: "recFadeUp 0.3s ease both 0.05s" }}>
         Overall assessment of observability coverage and maturity across {capabilities.length} capabilities · {totalCriteria} criteria evaluated
       </Flex>
 
       {/* ═══ SECTION 1: Highlights ═══ */}
       <Flex flexDirection="column" style={{
         borderRadius: 10, border: `1px solid ${borderSub}`, background: card,
-        padding: "14px 18px", boxShadow: cardGlow, marginBottom: 14,
+        padding: "12px 20px", boxShadow: cardGlow, marginBottom: 12,
         animation: "recFadeUp 0.5s ease both",
       }}>
 
         {/* ── Row 1: Scores ── */}
-        <Flex alignItems="center" gap={0} flexWrap="wrap" style={{ marginBottom: 12 }}>
+        <Flex alignItems="center" gap={0} flexWrap="wrap" style={{ marginBottom: 8 }}>
 
           {/* Coverage score */}
           <Flex alignItems="center" gap={12} style={{ flex: "1 1 200px", padding: "6px 0" }}>
@@ -838,16 +826,16 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
         </Flex>
 
         {/* ── Row 2: Achievements vs Gaps (side by side) ── */}
-        <Grid gridTemplateColumns="1fr 1fr" gap={12}>
+        <Grid gridTemplateColumns="1fr 1fr" gap={8}>
 
           {/* Achievements column */}
           <Flex flexDirection="column" style={{
-            borderRadius: 8, padding: "10px 14px",
+            borderRadius: 8, padding: "8px 16px",
             background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
             borderLeft: "3px solid " + Colors.Text.Success.Default,
             animation: "recScaleIn 0.35s ease both 0.55s",
           }}>
-            <Flex alignItems="center" gap={6} style={{ marginBottom: 8 }}>
+            <Flex alignItems="center" gap={6} style={{ marginBottom: 6 }}>
               <Text style={{ fontSize: 14 }}>✓</Text>
               <Text style={{ fontSize: 12, fontWeight: 800, color: Colors.Text.Success.Default, letterSpacing: 0.5, textTransform: "uppercase" as const }}>Achievements</Text>
               <Text style={{ fontSize: 14, fontWeight: 900, color: text, marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{passedCriteria}</Text>
@@ -885,7 +873,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
               {/* Best capability */}
               {bestCap && (
-                <Flex flexDirection="column" style={{ marginTop: 4, padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                <Flex flexDirection="column" style={{ marginTop: 4, padding: "6px 12px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
                   <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>TOP CAPABILITY</Flex>
                   <Flex alignItems="center" justifyContent="space-between">
                     <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestCap.name}</Text>
@@ -896,7 +884,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
               {/* Best maturity */}
               {bestMatCap && bestMatCap.name !== bestCap?.name && (
-                <Flex flexDirection="column" style={{ padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                <Flex flexDirection="column" style={{ padding: "6px 12px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
                   <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>TOP MATURITY</Flex>
                   <Flex alignItems="center" justifyContent="space-between">
                     <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestMatCap.name}</Text>
@@ -909,12 +897,12 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
           {/* Gaps column */}
           <Flex flexDirection="column" style={{
-            borderRadius: 8, padding: "10px 14px",
+            borderRadius: 8, padding: "8px 16px",
             background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
             borderLeft: "3px solid " + Colors.Text.Critical.Default,
             animation: "recScaleIn 0.35s ease both 0.65s",
           }}>
-            <Flex alignItems="center" gap={6} style={{ marginBottom: 8 }}>
+            <Flex alignItems="center" gap={6} style={{ marginBottom: 6 }}>
               <Text style={{ fontSize: 14 }}>✗</Text>
               <Text style={{ fontSize: 12, fontWeight: 800, color: Colors.Text.Critical.Default, letterSpacing: 0.5, textTransform: "uppercase" as const }}>Gaps</Text>
               <Text style={{ fontSize: 14, fontWeight: 900, color: totalGaps > 0 ? Colors.Text.Critical.Default : Colors.Text.Success.Default, marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{totalGaps}</Text>
@@ -943,7 +931,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
               {/* Worst capability */}
               {worstCap && (
-                <Flex flexDirection="column" style={{ marginTop: 4, padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                <Flex flexDirection="column" style={{ marginTop: 4, padding: "6px 12px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
                   <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>NEEDS MOST ATTENTION</Flex>
                   <Flex alignItems="center" justifyContent="space-between">
                     <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{worstCap.name}</Text>
@@ -954,7 +942,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
               {/* Most gaps capability */}
               {topGapCap && topGapCap.name !== worstCap?.name && (
-                <Flex flexDirection="column" style={{ padding: "6px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                <Flex flexDirection="column" style={{ padding: "6px 12px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
                   <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>MOST GAPS</Flex>
                   <Flex alignItems="center" justifyContent="space-between">
                     <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{topGapCap.name}</Text>
@@ -973,16 +961,16 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
         {/* ── Combo Bar-Line Chart — Coverage vs Maturity ── */}
         <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 0", minWidth: 340,
           borderRadius: 12, border: `1px solid ${borderSub}`, background: card,
-          padding: "12px 14px 8px",
-          boxShadow: cardGlow,
+          padding: "8px 16px 8px",
+          boxShadow: cardGlow, overflow: "visible",
           animation: "recFadeUp 0.4s ease both 0.75s" }}>
-          <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 6 }}>
+          <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
             <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.5 }}>
               Coverage vs Maturity by Capability
             </Flex>
             <ExpandChartButton onClick={() => setExpandedChart("radar")} />
           </Flex>
-          <Flex flexDirection="column" style={{ height: "calc(100vh - 420px)", minHeight: 280 }}>
+          <Flex flexDirection="column" style={{ height: "calc(100vh - 540px)", minHeight: 180 }}>
             <CovMatRadar ref={(h: CovMatRadarHandle | null) => { onRadarMount(h); }} data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.maturity.maturityScore, color: c.color }))} />
           </Flex>
         </Flex>
@@ -997,16 +985,16 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
         {/* ── Scatter Chart — Capability Map ── */}
         <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 0", minWidth: 340,
           borderRadius: 12, border: `1px solid ${borderSub}`, background: card,
-          padding: "12px 14px 8px",
-          boxShadow: cardGlow,
+          padding: "8px 16px 8px",
+          boxShadow: cardGlow, overflow: "visible",
           animation: "recFadeUp 0.4s ease both 0.85s" }}>
-        <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 6 }}>
+        <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
           <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.5 }}>
             Capability Map — Coverage × Maturity
           </Flex>
           <ExpandChartButton onClick={() => setExpandedChart("bubble")} />
         </Flex>
-        <Flex flexDirection="column" style={{ height: "calc(100vh - 320px)", minHeight: 380 }}>
+        <Flex flexDirection="column" style={{ height: "calc(100vh - 540px)", minHeight: 180 }}>
           <CapabilityScatter data={scatterPoints} dotRadius={10} showLegend={false} />
         </Flex>
       </Flex>
@@ -1020,7 +1008,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
       </ExpandableChartModal>
 
       {/* ═══ Unified Legend ═══ */}
-      <Flex alignItems="center" justifyContent="center" flexWrap="wrap" style={{ gap: "6px 16px", marginBottom: 0, marginTop: 10, padding: "8px 14px",
+      <Flex alignItems="center" justifyContent="center" flexWrap="wrap" style={{ gap: "6px 16px", marginBottom: 0, marginTop: 8, padding: "6px 16px",
         borderRadius: 10, border: `1px solid ${borderSub}`, background: card, boxShadow: cardGlow }}>
         {/* Capability dots */}
         {capabilities.map(c => (
@@ -1051,7 +1039,7 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
       style={{
         background: Colors.Background.Container.Neutral.Default,
         border: `1px solid ${Colors.Border.Neutral.Default}`,
-        borderRadius: 12, padding: "16px 18px",
+        borderRadius: 12, padding: "16px 20px",
         borderLeft: `4px solid ${cap.color}`,
         cursor: "pointer",
         transition: "box-shadow 0.2s, transform 0.2s",
@@ -1060,10 +1048,10 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
       onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "translateY(0)"; }}
     >
       {/* Header */}
-      <Flex alignItems="center" gap={8} style={{ marginBottom: 10 }}>
+      <Flex alignItems="center" gap={8} style={{ marginBottom: 12 }}>
         <Text style={{ fontSize: 14, fontWeight: 700, color: text, flex: 1 }}>{cap.name}</Text>
         <Text style={{
-          fontSize: 12, fontWeight: 800, padding: "2px 10px", borderRadius: 6,
+          fontSize: 12, fontWeight: 800, padding: "2px 12px", borderRadius: 6,
           background: scoreColor + (dk ? "25" : "15"),
           color: scoreColor, fontFamily: "system-ui, sans-serif",
         }}>{m.maturityScore}%</Text>
@@ -1075,7 +1063,7 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
       </Flex>
 
       {/* Overall maturity bar */}
-      <Flex flexDirection="column" style={{ marginBottom: 10 }}>
+      <Flex flexDirection="column" style={{ marginBottom: 12 }}>
         <Flex flexDirection="column" style={{
           height: 8, borderRadius: 4, overflow: "hidden",
           background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
@@ -1119,12 +1107,12 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
 
       {/* Expanded: show criteria by tier with drilldown */}
       {expanded && (
-        <Flex flexDirection="column" style={{ marginTop: 10, borderTop: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingTop: 10 }}>
+        <Flex flexDirection="column" style={{ marginTop: 12, borderTop: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingTop: 12 }}>
           {TIER_META.map(t => {
             const criteria = cap.criteriaResults.filter(cr => cr.tier === t.key);
             if (criteria.length === 0) return null;
             return (
-              <Flex flexDirection="column" key={t.key} style={{ marginBottom: 10 }}>
+              <Flex flexDirection="column" key={t.key} style={{ marginBottom: 12 }}>
                 <Flex flexDirection="column" style={{
                   fontSize: 12, fontWeight: 700, color: t.color,
                   textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4,
@@ -1181,7 +1169,7 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
         <Flex flexDirection="column"
           onClick={(e) => e.stopPropagation()}
           style={{
-            margin: "4px 0 8px 16px", padding: "10px 14px", borderRadius: 8,
+            margin: "4px 0 8px 16px", padding: "12px 16px", borderRadius: 8,
             background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.015)",
             border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
             borderLeft: `3px solid ${passed ? Colors.Text.Success.Default : Colors.Text.Critical.Default}`,
@@ -1189,14 +1177,14 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
           }}
         >
           {/* Description */}
-          <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.6, marginBottom: 10 }}>
+          <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.6, marginBottom: 12 }}>
             {cr.description}
           </Flex>
 
           {/* Measured value badge — shows current vs target for failed criteria */}
           {!passed && !cr.error && (
             <Flex style={{
-              display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 10,
+              display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 12,
               padding: "6px 12px", borderRadius: 6,
               background: dk ? "rgba(229,57,53,0.08)" : "rgba(229,57,53,0.05)",
               border: `1px solid ${dk ? "rgba(229,57,53,0.18)" : "rgba(229,57,53,0.12)"}`,
@@ -1223,7 +1211,7 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
           {/* Error badge */}
           {cr.error && (
             <Flex style={{
-              display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 10,
+              display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 12,
               padding: "6px 12px", borderRadius: 6,
               background: dk ? "rgba(229,57,53,0.08)" : "rgba(229,57,53,0.05)",
               border: `1px solid ${dk ? "rgba(229,57,53,0.18)" : "rgba(229,57,53,0.12)"}`,
@@ -1235,7 +1223,7 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
 
           {/* Why it matters */}
           {importance && (
-            <Flex flexDirection="column" style={{ marginBottom: 10 }}>
+            <Flex flexDirection="column" style={{ marginBottom: 12 }}>
               <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textTert, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>Why it matters</Flex>
               <Flex flexDirection="column" style={{ fontSize: 12, color: text, lineHeight: 1.6 }}>{importance}</Flex>
             </Flex>
@@ -1268,7 +1256,7 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
 
           {/* Passed — confirmation */}
           {passed && (
-            <Flex alignItems="center" gap={6} style={{ padding: "6px 10px", borderRadius: 6,
+            <Flex alignItems="center" gap={6} style={{ padding: "6px 12px", borderRadius: 6,
               background: dk ? "rgba(0,200,83,0.06)" : "rgba(0,200,83,0.03)" }}>
               <Text style={{ fontSize: 14 }}>✓</Text>
               <Text style={{ fontSize: 12, color: Colors.Text.Success.Default, fontWeight: 600 }}>
@@ -1341,12 +1329,12 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
             border: `1px solid ${preflight.hasFails ? Colors.Border.Critical.Default : border}`,
             overflow: "hidden",
           }}>
-            <Flex alignItems="center" gap={8} style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700,
+            <Flex alignItems="center" gap={8} style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700,
               color: preflight.hasFails ? Colors.Text.Critical.Default : accent,
               borderBottom: `1px solid ${border}` }}>
               {preflight.running ? "⏳" : preflight.hasFails ? "⚠" : "✓"} Pre-flight Validation
             </Flex>
-            <Flex flexDirection="column" style={{ padding: "8px 14px" }}>
+            <Flex flexDirection="column" style={{ padding: "8px 16px" }}>
               {preflight.checks.map(c => (
                 <Flex key={c.id} alignItems="flex-start" gap={8} style={{ padding: "6px 0", borderBottom: `1px solid ${border}20` }}>
                   <Text style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0, marginTop: 1 }}>
@@ -1375,7 +1363,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
             </Flex>
             {preflight.hasFails && (
               <Flex flexDirection="column" style={{
-                padding: "10px 14px", borderTop: `1px solid ${border}`,
+                padding: "12px 16px", borderTop: `1px solid ${border}`,
                 fontSize: 11, color: textSec, lineHeight: 1.6,
                 background: dk ? "rgba(205,60,68,0.06)" : "rgba(205,60,68,0.03)",
               }}>
@@ -1400,7 +1388,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
           {preflight.running ? "Validating…" : "Run Assessment"}
         </Button>
         {hasResults && (
-          <Flex flexDirection="column" alignItems="center" gap={6} style={{ marginTop: 10 }}>
+          <Flex flexDirection="column" alignItems="center" gap={6} style={{ marginTop: 12 }}>
             <Button onClick={resume} color="primary">
               ← View Last Results ({totalScore}%)
             </Button>
@@ -1417,7 +1405,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
             </Menu>
           </Flex>
         )}
-        <Flex flexDirection="column" style={{ fontSize: 12, color: textTert, marginTop: 10 }}>
+        <Flex flexDirection="column" style={{ fontSize: 12, color: textTert, marginTop: 12 }}>
           Tenant: <Text style={{ fontWeight: 600, color: textSec }}>{tenant}</Text>
         </Flex>
       </Flex>
@@ -1428,7 +1416,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
           { value: String(CAPABILITIES.reduce((s, c) => s + c.criteria.length, 0)), label: "Criteria", color: Colors.Text.Success.Default, tip: "Total criteria evaluated via live DQL queries. Some criteria use cross-entity coverage (two queries) to measure real adoption depth." },
         ].map((kpi) => (
           <Tooltip key={kpi.label} text={kpi.tip}>
-          <Flex flexDirection="column" style={{ textAlign: "center", padding: "10px 20px", borderRadius: 10, background: kpi.color + (dk ? "15" : "10"), border: `1px solid ${kpi.color}30` }}>
+          <Flex flexDirection="column" style={{ textAlign: "center", padding: "12px 20px", borderRadius: 10, background: kpi.color + (dk ? "15" : "10"), border: `1px solid ${kpi.color}30` }}>
             <Flex flexDirection="column" style={{ fontSize: 32, fontWeight: 900, color: kpi.color, lineHeight: 1 }}>{kpi.value}</Flex>
             <Flex flexDirection="column" style={{ fontSize: 12, color: text, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginTop: 4 }}>{kpi.label}</Flex>
           </Flex>
@@ -1473,7 +1461,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
         <Text style={{ fontSize: 12, color: textTert, marginTop: 4, lineHeight: 1.5 }}>
           Each failed criterion includes <Strong style={{ color: textSec }}>remediation guidance</Strong> with links to Dynatrace docs.
         </Text>
-        <Text style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}`, color: textSec }}>
+        <Text style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}`, color: textSec }}>
           <Strong style={{ color: Colors.Text.Success.Default }}>Tip:</Strong> Before running, explore the cards on the right to understand what each capability evaluates and how scores are calculated.
         </Text>
       </Flex>
@@ -1492,16 +1480,16 @@ function IdleCapCard({ cap, dk, text, textSec, bgSurface, bgSubtle, border, onCl
   return (
     <Flex flexDirection="column" style={{ background: bgSurface,
       border: `1px solid ${border}`,
-      borderRadius: 12, padding: "20px 22px", borderLeft: `4px solid ${cap.color}`,
+      borderRadius: 12, padding: "20px 24px", borderLeft: `4px solid ${cap.color}`,
       cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s" } as const}
     onClick={(e) => { e.stopPropagation(); if (isTextSelection()) return; onClick(); }}
     onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 4px 16px ${cap.color}25`; }}
     onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
     >
-      <Flex alignItems="center" gap={8} style={{ marginBottom: 10 }}>
+      <Flex alignItems="center" gap={8} style={{ marginBottom: 12 }}>
         <Text style={{ width: 14, height: 14, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
         <Text style={{ fontSize: 14, fontWeight: 700, color: text, flex: 1 }}>{cap.name}</Text>
-        <Text style={{ fontSize: 12, color: textSec, fontWeight: 700, background: bgSubtle, padding: "3px 10px", borderRadius: 10 }}>{cap.criteria.length}</Text>
+        <Text style={{ fontSize: 12, color: textSec, fontWeight: 700, background: bgSubtle, padding: "3px 12px", borderRadius: 10 }}>{cap.criteria.length}</Text>
       </Flex>
       <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.7, marginLeft: 24, flex: 1 }}>
         {summary}
@@ -1662,7 +1650,7 @@ function CriterionRow({ cr, idx, capColor, dk, text, textSec, collapseKey }: {
         <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>{cr.description}</Flex>
         {/* Inline expansion with details */}
         {expanded && (
-          <Flex flexDirection="column" gap={12} style={{ marginTop: 10, padding: "10px 14px", borderRadius: 8,
+          <Flex flexDirection="column" gap={12} style={{ marginTop: 12, padding: "12px 16px", borderRadius: 8,
             background: "transparent",
             borderLeft: `3px solid ${Colors.Border.Neutral.Default}`,
             animation: "fadeIn 0.2s ease" }}>
@@ -1677,7 +1665,7 @@ function CriterionRow({ cr, idx, capColor, dk, text, textSec, collapseKey }: {
             {cr.query && (
               <Flex flexDirection="column">
                 <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textSec, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>How the score is calculated</Flex>
-                <Flex flexDirection="column" gap={12} style={{ padding: "12px 14px", borderRadius: 8,
+                <Flex flexDirection="column" gap={12} style={{ padding: "12px 16px", borderRadius: 8,
                   background: dk ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.02)",
                   border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}` }}>
                   {cr.queryB ? (
@@ -1738,7 +1726,7 @@ function CriterionRow({ cr, idx, capColor, dk, text, textSec, collapseKey }: {
                 <Flex gap={6} flexWrap="wrap">
                   {[...cr.thresholds].sort((a, b) => b.min - a.min).map((t, ti) => (
                     <Text key={ti} style={{
-                      fontSize: 12, padding: "3px 10px", borderRadius: 6,
+                      fontSize: 12, padding: "3px 12px", borderRadius: 6,
                       background: Colors.Background.Container.Neutral.Subdued,
                       color: textSec, fontWeight: 600,
                     }}>≥ {t.min}</Text>

@@ -54,8 +54,10 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
   const [internalIdx, setInternalIdx] = useState<number | null>(null);
   const activeIdx = controlledIdx !== undefined ? controlledIdx : internalIdx;
   const geoRef = useRef<{ cx: number; cy: number; R: number; N: number; SEG: number }>({ cx: 0, cy: 0, R: 0, N: 0, SEG: 0 });
+  const legendGeoRef = useRef<{ covBox: { x: number; y: number; w: number; h: number }; matBox: { x: number; y: number; w: number; h: number } } | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [visibleLayer, setVisibleLayer] = useState<"both" | "coverage" | "maturity">("both");
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -125,10 +127,12 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const hR = Math.max(Math.min(w, h) * 0.065, 28);
     const dotSizeBase = Math.max(Math.min(w, h) * 0.018, 10);
     const minBlipR = hR + 6 + dotSizeBase + 4; // hub visual edge + dot radius + gap
-    drawPoly(ctx, data.map(d => d.coverage), cx, cy, R, N, SEG, COV_C, dk, false, minBlipR);
+    const showCov = visibleLayer === "both" || visibleLayer === "coverage";
+    const showMat = visibleLayer === "both" || visibleLayer === "maturity";
+    if (showCov) drawPoly(ctx, data.map(d => d.coverage), cx, cy, R, N, SEG, COV_C, dk, false, minBlipR);
 
     // ── Maturity polygon ──
-    drawPoly(ctx, data.map(d => d.maturity), cx, cy, R, N, SEG, MAT_C, dk, true, minBlipR);
+    if (showMat) drawPoly(ctx, data.map(d => d.maturity), cx, cy, R, N, SEG, MAT_C, dk, true, minBlipR);
 
     // ── Center hub (drawn before blips so blips appear on top) ──
     const avgCov = Math.round(data.reduce((a, d) => a + d.coverage, 0) / N);
@@ -203,8 +207,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
         matY -= perpY * offset;
       }
 
-      drawGradientBlip(ctx, covX, covY, dotSize, COV_C, data[i].coverage, dk, false, act, dim);
-      drawGradientBlip(ctx, matX, matY, dotSize, MAT_C, data[i].maturity, dk, true, act, dim);
+      drawGradientBlip(ctx, covX, covY, dotSize, COV_C, data[i].coverage, dk, false, act, dim || !showCov);
+      drawGradientBlip(ctx, matX, matY, dotSize, MAT_C, data[i].maturity, dk, true, act, dim || !showMat);
     }
 
     // ── Connector lines + capability labels ──
@@ -243,7 +247,10 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const nameBlockH = nameLines.length * lineH;
       const scorePrefix1 = legendLabels ? "A" : "C";
       const scorePrefix2 = legendLabels ? "B" : "M";
-      const scoreText = `${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].maturity)}%`;
+      let scoreText: string;
+      if (visibleLayer === "coverage") scoreText = `${scorePrefix1} ${Math.round(data[i].coverage)}%`;
+      else if (visibleLayer === "maturity") scoreText = `${scorePrefix2} ${Math.round(data[i].maturity)}%`;
+      else scoreText = `${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].maturity)}%`;
       const totalTextH = nameBlockH + 2 + fs2;
       const textTopY = ly - totalTextH / 2;
       const nameStartY = textTopY;
@@ -299,7 +306,10 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const itemGap = 20;
     const totalW = iconR * 2 + iconGap + covW + itemGap + iconR * 2 + iconGap + matW;
     const startX = cx - totalW / 2;
-    // Coverage
+    const legHitPad = 6;
+    // Coverage legend item
+    const covItemAlpha = visibleLayer === "maturity" ? 0.3 : 1;
+    ctx.globalAlpha = covItemAlpha;
     ctx.fillStyle = COV_C;
     ctx.beginPath();
     ctx.arc(startX + iconR, legY, iconR, 0, Math.PI * 2);
@@ -307,7 +317,23 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     ctx.textAlign = "left"; ctx.textBaseline = "middle";
     ctx.fillStyle = dk ? "#e0e0f8" : "#2a2a3e";
     ctx.fillText(covLabel, startX + iconR * 2 + iconGap, legY);
-    // Maturity
+    if (visibleLayer === "coverage") {
+      ctx.beginPath();
+      ctx.roundRect(startX - legHitPad, legY - legFont - legHitPad / 2, iconR * 2 + iconGap + covW + legHitPad * 2, legFont * 2 + legHitPad, 4);
+      ctx.strokeStyle = COV_C;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // Store coverage legend hit box
+    const covBoxX = startX - legHitPad;
+    const covBoxY = legY - legFont - legHitPad;
+    const covBoxW = iconR * 2 + iconGap + covW + legHitPad * 2;
+    const covBoxH = legFont * 2 + legHitPad * 2;
+    // Maturity legend item
+    const matItemAlpha = visibleLayer === "coverage" ? 0.3 : 1;
+    ctx.globalAlpha = matItemAlpha;
     const matIconX = startX + iconR * 2 + iconGap + covW + itemGap + iconR;
     ctx.fillStyle = MAT_C;
     ctx.beginPath();
@@ -319,7 +345,25 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     ctx.fill();
     ctx.fillStyle = dk ? "#e0e0f8" : "#2a2a3e";
     ctx.fillText(matLabel, matIconX + iconR + iconGap, legY);
-  }, [data, dk, COV_C, MAT_C, activeIdx, legendLabels]);
+    if (visibleLayer === "maturity") {
+      ctx.beginPath();
+      ctx.roundRect(matIconX - iconR - legHitPad, legY - legFont - legHitPad / 2, iconR * 2 + iconGap + matW + legHitPad * 2, legFont * 2 + legHitPad, 4);
+      ctx.strokeStyle = MAT_C;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // Store maturity legend hit box
+    const matBoxX = matIconX - iconR - legHitPad;
+    const matBoxY = legY - legFont - legHitPad;
+    const matBoxW = iconR * 2 + iconGap + matW + legHitPad * 2;
+    const matBoxH = legFont * 2 + legHitPad * 2;
+    legendGeoRef.current = {
+      covBox: { x: covBoxX, y: covBoxY, w: covBoxW, h: covBoxH },
+      matBox: { x: matBoxX, y: matBoxY, w: matBoxW, h: matBoxH },
+    };
+  }, [data, dk, COV_C, MAT_C, activeIdx, legendLabels, visibleLayer]);
 
   const hitTest = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -386,13 +430,47 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
   }, [data]);
 
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Check legend click first
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const lg = legendGeoRef.current;
+      if (lg) {
+        const { covBox, matBox } = lg;
+        if (mx >= covBox.x && mx <= covBox.x + covBox.w && my >= covBox.y && my <= covBox.y + covBox.h) {
+          setVisibleLayer(prev => prev === "coverage" ? "both" : "coverage");
+          return;
+        }
+        if (mx >= matBox.x && mx <= matBox.x + matBox.w && my >= matBox.y && my <= matBox.y + matBox.h) {
+          setVisibleLayer(prev => prev === "maturity" ? "both" : "maturity");
+          return;
+        }
+      }
+    }
     const idx = hitTest(e);
     const next = idx >= 0 ? (activeIdx === idx ? null : idx) : null;
     if (onSelect) onSelect(next);
     else setInternalIdx(next);
   }, [hitTest, activeIdx, onSelect]);
 
+  const [hoveredLegend, setHoveredLegend] = useState(false);
+
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const lg = legendGeoRef.current;
+      if (lg) {
+        const { covBox, matBox } = lg;
+        const onLeg = (mx >= covBox.x && mx <= covBox.x + covBox.w && my >= covBox.y && my <= covBox.y + covBox.h)
+          || (mx >= matBox.x && mx <= matBox.x + matBox.w && my >= matBox.y && my <= matBox.y + matBox.h);
+        setHoveredLegend(onLeg);
+      }
+    }
     const idx = hitTest(e);
     setHoveredIdx(idx >= 0 ? idx : null);
     if (idx >= 0) {
@@ -403,6 +481,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
 
   const handleMouseLeave = useCallback(() => {
     setHoveredIdx(null);
+    setHoveredLegend(false);
   }, []);
 
   useImperativeHandle(ref, () => ({
@@ -422,7 +501,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     <Flex ref={containerRef} style={{ width: "100%", height: "100%", position: "relative" }}>
       <canvas
         ref={canvasRef}
-        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: hoveredIdx !== null && hoveredIdx >= 0 ? "pointer" : "default", touchAction: "none" }}
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: (hoveredIdx !== null && hoveredIdx >= 0) || hoveredLegend ? "pointer" : "default", touchAction: "none" }}
         onClick={handleClick}
         onDoubleClick={(e) => e.preventDefault()}
         onMouseMove={handleMouseMove}
