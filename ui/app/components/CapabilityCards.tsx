@@ -62,7 +62,7 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
       </Flex>
       {open && (
         <Flex flexDirection="column" style={{
-          padding: "6px 10px 8px", fontSize: 12, lineHeight: 1.6,
+          padding: "6px 12px 8px", fontSize: 12, lineHeight: 1.6,
           borderLeft: `2px solid ${Colors.Border.Neutral.Default}`,
           marginLeft: 6, marginBottom: 6,
           color: Colors.Text.Neutral.Subdued,
@@ -139,7 +139,7 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
             onClick={(e) => { e.stopPropagation(); if (isTextSelection()) return; onSelect(act ? null : i); }}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(act ? null : i); } }}
             style={{
-              padding: "10px 14px", borderRadius: 10, cursor: "pointer",
+              padding: "10px 16px", borderRadius: 10, cursor: "pointer",
               transition: "all 0.3s ease",
               border: act ? `2px solid ${cap.color}` : `1px solid ${Colors.Border.Neutral.Default}`,
               background: Colors.Background.Surface.Default,

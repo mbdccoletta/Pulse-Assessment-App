@@ -4,7 +4,7 @@ import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { ExternalLink, Text } from "@dynatrace/strato-components/typography";
-import { Flex, Grid } from "@dynatrace/strato-components/layouts";
+import { Flex, Grid, Surface, Container } from "@dynatrace/strato-components/layouts";
 import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-components-preview/buttons";
 import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
@@ -115,10 +115,10 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   const [showListB, setShowListB] = useState(false);
   const [dimension, setDimension] = useState<"coverage" | "maturity">("coverage");
   const [expandedRadar, setExpandedRadar] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
+    const onResize = () => setIsMobile(window.innerWidth < 640);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -217,7 +217,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
     return (
     <Button onClick={(e: React.MouseEvent<Element>) => { e.stopPropagation(); toggle(); }} style={{
       display: "flex", alignItems: "center", gap: 8,
-      padding: "5px 10px",
+      padding: "5px 12px",
       border: `1px solid ${color}55`,
       background: dk ? `${color}15` : `${color}08`,
       minWidth: 180,
@@ -252,7 +252,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
         const mat = Math.round(snap.capabilities.reduce((s, c) => s + computeMaturity(c.criteriaResults), 0) / (snap.capabilities.length || 1));
         return (
           <Flex key={snap.id}
-            onClick={(e) => { e.stopPropagation(); if (!isDisabled) onSelect(i); }} alignItems="center" gap={8} style={{ padding: "8px 14px", cursor: isDisabled ? "not-allowed" : "pointer", fontSize: 12, opacity: isDisabled ? 0.35 : 1,
+            onClick={(e) => { e.stopPropagation(); if (!isDisabled) onSelect(i); }} alignItems="center" gap={8} style={{ padding: "8px 16px", cursor: isDisabled ? "not-allowed" : "pointer", fontSize: 12, opacity: isDisabled ? 0.35 : 1,
               background: isSelected ? (dk ? `${color}18` : `${color}0A`) : "transparent",
               borderLeft: isSelected ? `3px solid ${color}` : "3px solid transparent" }}>
             <Text style={{ flex: 1 }}>{fmtShort(snap.timestamp)}</Text>
@@ -267,7 +267,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   );
 
   return (
-    <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, height: "100vh", padding: "4px 10px", overflow: "hidden", display: "flex" }}>
+    <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, height: "100vh", padding: "4px 16px", overflow: "hidden", display: "flex" }}>
       {/* Header + A/B Selectors — compact single row */}
       <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 4 }} onClick={(e) => e.stopPropagation()}>
         <Tooltip text="Return to the main assessment page." position="bottom">
@@ -317,7 +317,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
             <Flex flexDirection="column" style={{
               flex: isMobile ? "1 1 100%" : "3 1 0%", minWidth: 0, minHeight: 0,
               borderRadius: 12, border: `1px solid ${border}`, background: card,
-              padding: "6px 10px 8px", overflow: "visible",
+              padding: "6px 12px 8px", overflow: "visible",
             }}>
               <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
                 <Flex alignItems="center" gap={8} flexWrap="wrap">
@@ -352,7 +352,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
               background: card, border: `1px solid ${border}`, borderRadius: 12,
               padding: "8px 12px", overflowY: "auto",
             }}>
-              <Flex alignItems="center" gap={8} style={{ marginBottom: 10 }}>
+              <Flex alignItems="center" gap={8} style={{ marginBottom: 12 }}>
                 <Text style={{ fontSize: 14, fontWeight: 800, color: text, flex: 1 }}>Score per Capability</Text>
                 <ToggleButtonGroup value={dimension} onChange={(val: string) => setDimension(val as "coverage" | "maturity")}>
                   <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
@@ -384,22 +384,20 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
 
           {/* ══════ DETAILED CHANGES ══════ */}
           <Flex flexDirection="column" style={{ marginBottom: 16 }}>
-            <Flex flexDirection="column" style={{ background: card, border: `1px solid ${border}`, borderRadius: 10, padding: "16px 18px" }}>
+            <Flex flexDirection="column" style={{ background: card, border: `1px solid ${border}`, borderRadius: 10, padding: "16px 20px" }}>
               <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>Detailed Criteria Changes</Flex>
               {comparison.improved.length > 0 && (
                 <DetailSection title="Improvements" icon="↑" color={Colors.Text.Success.Default} caps={comparison.improved} dk={dk} card={card} border={border} textSec={textSec} textTert={textTert} embedded />
               )}
               {comparison.degraded.length > 0 && (
-                <Flex flexDirection="column" style={{ marginTop: comparison.improved.length > 0 ? 0 : 0 }}>
-                  <DetailSection title="Regressions" icon="↓" color={Colors.Text.Critical.Default} caps={comparison.degraded} dk={dk} card={card} border={border} textSec={textSec} textTert={textTert} embedded />
-                </Flex>
+                <DetailSection title="Regressions" icon="↓" color={Colors.Text.Critical.Default} caps={comparison.degraded} dk={dk} card={card} border={border} textSec={textSec} textTert={textTert} embedded />
               )}
               {comparison.unchanged.length > 0 && (
-                <Flex flexDirection="column" style={{ marginTop: 12, padding: "10px 0 0 0", borderTop: `1px solid ${border}` }}>
+                <Flex flexDirection="column" style={{ marginTop: 12, padding: "12px 0 0 0", borderTop: `1px solid ${border}` }}>
                   <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textTert, marginBottom: 8 }}>Unchanged ({comparison.unchanged.length})</Flex>
-                  <Flex gap={6} flexWrap="wrap">
+                  <Flex gap={8} flexWrap="wrap">
                     {comparison.unchanged.map((cap) => (
-                      <Flex key={cap.name} alignItems="center" gap={4} style={{ padding: "3px 8px", borderRadius: 6, border: `1px solid ${border}`, fontSize: 12 }}>
+                      <Flex key={cap.name} alignItems="center" gap={6} style={{ padding: "4px 12px", borderRadius: 6, border: `1px solid ${border}`, fontSize: 12 }}>
                         <Text style={{ width: 6, height: 6, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
                         <Text style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{cap.name}</Text>
                         <Text style={{ color: textTert, whiteSpace: "nowrap" }}>{cap.currScore}%</Text>
@@ -421,7 +419,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
 
 function KpiCard({ dk, card, border, label, value, sub, accent }: { dk: boolean; card: string; border: string; label: string; value: string; sub: React.ReactNode; accent?: string }) {
   return (
-    <Flex flexDirection="column" style={{ background: card, border: `1px solid ${accent ? accent + "33" : border}`, borderRadius: 8, padding: 14, textAlign: "center" }}>
+    <Flex flexDirection="column" style={{ background: card, border: `1px solid ${accent ? accent + "33" : border}`, borderRadius: 8, padding: 16, textAlign: "center" }}>
       <Text style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.5, color: accent || Colors.Text.Neutral.Disabled, marginBottom: 6 }}>{label}</Text>
       <Text style={{ fontSize: 22, fontWeight: 800, color: accent || Colors.Text.Neutral.Default }}>{value}</Text>
       <Flex flexDirection="column" style={{ marginTop: 4 }}>{sub}</Flex>
@@ -506,7 +504,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                     </Text>
                   </Flex>
                   {rem && (
-                    <Flex alignItems="center" gap={4} flexWrap="wrap" style={{ marginTop: 3, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
+                    <Flex alignItems="center" gap={4} flexWrap="wrap" style={{ marginTop: 3, paddingLeft: 16, fontSize: 12, lineHeight: "18px" }}>
                       <Text style={{
                         fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 3,
                         background: cr.currPoints > 0
@@ -537,9 +535,9 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                 return (
                   <React.Fragment key={tier}>
                     <Flex flexDirection="column" style={{
-                      fontSize: 12, fontWeight: 800, color: tc, marginTop: 10, marginBottom: 6,
+                      fontSize: 12, fontWeight: 800, color: tc, marginTop: 12, marginBottom: 6,
                       textTransform: "uppercase", letterSpacing: 0.8,
-                      padding: "5px 10px", borderRadius: 5,
+                      padding: "5px 12px", borderRadius: 5,
                       background: dk ? `${tc}18` : `${tc}0C`,
                       border: `1px solid ${dk ? `${tc}40` : `${tc}30`}`,
                       display: "inline-flex", alignItems: "center", gap: 6,
@@ -564,7 +562,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                             }}>{applied ? "✓ Applied" : "✗ Not applied"}</Text>
                           </Flex>
                           {rem && (
-                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
+                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 16, fontSize: 12, lineHeight: "18px" }}>
                               <Text style={{ color: textSec }}>{rem.action}</Text>
                               <ExternalLink href={rem.docUrl} style={{ marginLeft: 6 }}>
                                 {rem.docLabel} ↗
@@ -583,9 +581,9 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                 {improvable.length > 0 && (
                   <>
                     <Flex flexDirection="column" style={{
-                      fontSize: 12, fontWeight: 800, color: Colors.Text.Warning.Default, marginTop: 10, marginBottom: 6,
+                      fontSize: 12, fontWeight: 800, color: Colors.Text.Warning.Default, marginTop: 12, marginBottom: 6,
                       textTransform: "uppercase", letterSpacing: 0.8,
-                      padding: "5px 10px", borderRadius: 5,
+                      padding: "5px 12px", borderRadius: 5,
                       background: dk ? "rgba(245,166,35,0.10)" : "rgba(245,166,35,0.08)",
                       border: `1px solid ${dk ? "rgba(245,166,35,0.25)" : "rgba(245,166,35,0.2)"}`,
                       display: "inline-flex", alignItems: "center", gap: 6,
@@ -607,7 +605,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                             }}>✗ Not applied</Text>
                           </Flex>
                           {rem && (
-                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
+                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 16, fontSize: 12, lineHeight: "18px" }}>
                               <Text style={{ color: textSec }}>{rem.action}</Text>
                               <ExternalLink href={rem.docUrl} style={{ marginLeft: 6 }}>
                                 {rem.docLabel} ↗
@@ -622,9 +620,9 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                 {healthy.length > 0 && (
                   <>
                     <Flex flexDirection="column" style={{
-                      fontSize: 12, fontWeight: 800, color: Colors.Text.Success.Default, marginTop: 10, marginBottom: 6,
+                      fontSize: 12, fontWeight: 800, color: Colors.Text.Success.Default, marginTop: 12, marginBottom: 6,
                       textTransform: "uppercase", letterSpacing: 0.8,
-                      padding: "5px 10px", borderRadius: 5,
+                      padding: "5px 12px", borderRadius: 5,
                       background: dk ? "rgba(0,200,83,0.08)" : "rgba(0,200,83,0.06)",
                       border: `1px solid ${dk ? "rgba(0,200,83,0.20)" : "rgba(0,200,83,0.15)"}`,
                       display: "inline-flex", alignItems: "center", gap: 6,
@@ -646,7 +644,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                             }}>✓ Applied</Text>
                           </Flex>
                           {rem && (
-                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
+                            <Flex flexDirection="column" style={{ marginTop: 3, paddingLeft: 16, fontSize: 12, lineHeight: "18px" }}>
                               <Text style={{ color: textSec }}>{rem.action}</Text>
                               <ExternalLink href={rem.docUrl} style={{ marginLeft: 6 }}>
                                 {rem.docLabel} ↗
@@ -675,29 +673,30 @@ function DetailSection({ title, icon, color, caps, dk, card, border, textSec, te
   const toggleCap = (name: string) => setExpandedCaps((p) => ({ ...p, [name]: !p[name] }));
 
   const outerStyle: React.CSSProperties = embedded
-    ? { padding: "10px 0 0 0", borderTop: `1px solid ${border}`, marginBottom: 8 }
+    ? { padding: "12px 0 0 0", borderTop: `1px solid ${border}`, marginBottom: 8 }
     : { background: card, border: `1px solid ${color}22`, borderRadius: 8, padding: 16, marginBottom: 16 };
 
   return (
     <Flex flexDirection="column" style={outerStyle}>
-      <Flex flexDirection="column"
+      <Flex
         onClick={() => setOpen(!open)}
         role="button" tabIndex={0} aria-expanded={open}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(!open); } }} alignItems="center" gap={6} style={{ fontSize: 14, fontWeight: 800, color, cursor: "pointer", userSelect: "none" }}
       >
         <Text style={{ fontSize: 12, transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "rotate(0)" }}>▶</Text>
-        <Text>{icon}</Text> {title} — {caps.length} {caps.length === 1 ? "capability" : "capabilities"}
+        <Text>{icon}</Text> <Text>{title} — {caps.length} {caps.length === 1 ? "capability" : "capabilities"}</Text>
       </Flex>
       {open && (
-        <Flex flexDirection="column" style={{ marginTop: 10 }}>
+        <Flex flexDirection="column" style={{ marginTop: 12 }}>
           {caps.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).map((cap) => {
             const changed = cap.critDiffs.filter((c) => c.pointsDelta !== 0);
             const isExpanded = !!expandedCaps[cap.name];
             return (
-              <Flex key={cap.name} style={{ padding: "8px 12px", borderRadius: 6, border: `1px solid ${color}18`, marginBottom: 6, background: `${color}06` }}>
+              <Flex key={cap.name} flexDirection="column" style={{ padding: "8px 12px", borderRadius: 6, border: `1px solid ${color}18`, marginBottom: 6, background: `${color}06` }}>
                 <Flex
                   onClick={() => toggleCap(cap.name)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}
+                  alignItems="center" gap={8}
+                  style={{ cursor: "pointer", userSelect: "none" }}
                 >
                   <Text style={{ fontSize: 12, color: textSec, transition: "transform 0.2s", transform: isExpanded ? "rotate(90deg)" : "rotate(0)" }}>▶</Text>
                   <Text style={{ width: 8, height: 8, borderRadius: "50%", background: cap.color }} />
@@ -718,7 +717,7 @@ function DetailSection({ title, icon, color, caps, dk, card, border, textSec, te
                             <Text style={{ fontWeight: 700, color: deltaColor(cr.pointsDelta) }}>{cr.pointsDelta > 0 ? "✓ Gained" : "✗ Lost"}</Text>
                           </Flex>
                           {rem && (
-                            <Flex flexDirection="column" style={{ marginTop: 4, paddingLeft: 14, fontSize: 12, lineHeight: "18px" }}>
+                            <Flex flexDirection="column" style={{ marginTop: 4, paddingLeft: 16, fontSize: 12, lineHeight: "18px" }}>
                               <Text style={{ color: textSec }}>{rem.action}</Text>
                               <ExternalLink href={rem.docUrl} style={{ marginLeft: 6 }}>
                                 📖 {rem.docLabel}
@@ -742,7 +741,7 @@ function DetailSection({ title, icon, color, caps, dk, card, border, textSec, te
 /* ── Styles ── */
 function btnStyle(dk: boolean): React.CSSProperties {
   return {
-    padding: "8px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer", borderRadius: 6,
+    padding: "8px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer", borderRadius: 6,
     border: `1px solid ${dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
     background: dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
     color: Colors.Text.Neutral.Default,
