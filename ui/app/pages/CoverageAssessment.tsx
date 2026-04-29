@@ -293,6 +293,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               <Menu.Content>
                 <Menu.Item onSelect={() => generateClientReport("en")}>Download English (EN)</Menu.Item>
                 <Menu.Item onSelect={() => generateClientReport("pt")}>Download Portugues (PT)</Menu.Item>
+                <Menu.Item onSelect={() => generateClientReport("es")}>Download Espanol (ES)</Menu.Item>
               </Menu.Content>
             </Menu>
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
@@ -1404,6 +1405,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
               <Menu.Content>
                 <Menu.Item onSelect={() => onGenerateReport("en")}>Download English (EN)</Menu.Item>
                 <Menu.Item onSelect={() => onGenerateReport("pt")}>Download Portugues (PT)</Menu.Item>
+                <Menu.Item onSelect={() => onGenerateReport("es")}>Download Espanol (ES)</Menu.Item>
               </Menu.Content>
             </Menu>
           </Flex>

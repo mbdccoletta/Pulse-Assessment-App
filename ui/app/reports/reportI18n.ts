@@ -1,6 +1,6 @@
 /** Internationalisation strings for the First Day Results PDF report. */
 
-export type ReportLang = "en" | "pt";
+export type ReportLang = "en" | "pt" | "es";
 
 export interface ReportStrings {
   // Cover
@@ -341,4 +341,110 @@ export const REPORT_PT: ReportStrings = {
   btnPt: "Portugues",
 };
 
-export const REPORT_STRINGS: Record<ReportLang, ReportStrings> = { en: REPORT_EN, pt: REPORT_PT };
+export const REPORT_ES: ReportStrings = {
+  platformLabel: "PLATAFORMA DYNATRACE",
+  coverTitle: "Dia 1 — Lo Que Descubrimos",
+  coverSubtitle: (tenant, date) => `${tenant}  |  ${date}  |  Informe de Evaluacion de la Plataforma`,
+  coverageScore: "PUNTUACION DE COBERTURA",
+  entitiesDiscovered: "ENTIDADES DESCUBIERTAS",
+  autoMapped: "Mapeadas automaticamente en tiempo real",
+  criteriaPassing: "CRITERIOS APROBADOS",
+  passRate: (pct) => `${pct}% tasa de aprobacion`,
+  coverFooter: "Descubierto automaticamente via topologia Smartscape y OneAgent  --  cero configuracion manual.",
+  coverStats: (caps, passed, total, records) => `${caps} Capacidades  |  ${passed}/${total} Criterios  |  ${records} Registros Analizados`,
+
+  catInfra: "INFRAESTRUCTURA", catK8s: "KUBERNETES", catApps: "APLICACIONES",
+  catData: "DATOS Y TELEMETRIA", catSecurity: "SEGURIDAD Y MONITOREO",
+  hosts: "Hosts / Servidores", processes: "Procesos", networkInterfaces: "Interfaces de Red",
+  disks: "Discos", clusters: "Clusters", namespaces: "Namespaces", nodes: "Nodos",
+  services: "Servicios", serviceMethods: "Metodos de Servicio", webApps: "Apps Web",
+  mobileApps: "Apps Moviles", logRecords: "Registros de Log", tracesSpans: "Traces / Spans",
+  events: "Eventos", bizEvents: "Eventos de Negocio", cloudLogs: "Logs Cloud",
+  aiSpans: "Spans AI/GenAI", vulnerabilities: "Vulnerabilidades",
+  dtIntelligence: "DT Intelligence", syntheticTests: "Tests Sinteticos", httpMonitors: "Monitores HTTP",
+
+  coverageOverview: "Vision General de Cobertura",
+  radarSubtitle: (active, total, passed, totalCrit, records) =>
+    `${active} de ${total} capacidades activas  |  ${passed}/${totalCrit} criterios aprobados  |  ${records} registros analizados`,
+
+  beforeAfterTitle: "Antes vs. Despues de Dynatrace",
+  beforeAfterIntro: (entities, activeCaps) =>
+    `Esta seccion compara su realidad operativa antes de Dynatrace con las capacidades ahora disponibles tras la implementacion del Dia 1. Cada metrica se deriva de datos reales descubiertos en su entorno  --  ${entities} entidades en ${activeCaps} soluciones activas, unificadas en Grail y analizadas por Dynatrace Intelligence.`,
+  colArea: "AREA OPERATIVA", colBefore: "ANTES", colAfter: "CON DYNATRACE", colImpact: "IMPACTO",
+  roiMttr: "Resolucion de Incidentes (MTTR)", roiMttrBefore: "4-8 horas en promedio", roiMttrAfter: "< 15 minutos con causa raiz", roiMttrImpact: "95% mas rapido",
+  roiRca: "Analisis de Causa Raiz", roiRcaBefore: "War rooms manuales, suposiciones", roiRcaAfter: (svc) => `Automatico en ${svc} servicios`, roiRcaImpact: "Cero esfuerzo manual",
+  roiInfra: "Visibilidad de Infra", roiInfraBefore: "Cobertura parcial, puntos ciegos", roiInfraAfter: (hosts) => `${hosts} hosts completamente monitoreados`, roiInfraImpact: (cov) => `${cov}% cobertura`,
+  roiUx: "Experiencia del Usuario", roiUxBefore: "Sin datos de usuario real", roiUxAfter: (apps) => `${apps} apps con RUM`, roiUxImpact: "Visibilidad total UX",
+  roiTracing: "Rastreo Distribuido", roiTracingBefore: "Sin correlacion de traces", roiTracingAfter: (spans) => `${spans} traces capturados E2E`, roiTracingImpact: "Flujo completo",
+  roiLogs: "Gestion de Logs", roiLogsBefore: "Grep / busqueda manual", roiLogsAfter: (logs) => `${logs} logs indexados + correlacionados`, roiLogsImpact: "Busqueda instantanea",
+  roiSecurity: "Postura de Seguridad", roiSecurityBefore: "Escaneos de vulnerabilidad solo CI", roiSecurityAfter: (evts) => `${evts} eventos de seguridad en runtime`, roiSecurityImpact: "Consciente de produccion",
+  roiK8s: "Operaciones Kubernetes", roiK8sBefore: "kubectl + dashboards manuales", roiK8sAfter: (clusters, nodes) => `${clusters} clusters, ${nodes} nodos monitoreados`, roiK8sImpact: "Vista unificada K8s",
+  roiAi: "Gobernanza AI/LLM", roiAiBefore: "Sin visibilidad de llamadas AI", roiAiAfter: (spans) => `${spans} spans AI rastreados`, roiAiImpact: "Costo + calidad",
+
+  keyInsight: "HALLAZGO CLAVE",
+  insightStrong: (strong, names, gaps, zeros) => {
+    let t = `${strong} capacidades ya por encima del 60% de cobertura (${names}).`;
+    t += gaps > 0 ? ` ${gaps} capacidades necesitan atencion para alcanzar su maximo potencial.` : " Todas las capacidades activas muestran fuerte adopcion.";
+    if (zeros > 0) t += ` ${zeros} capacidades aun no activadas — cada una representa valor sin explotar.`;
+    return t;
+  },
+  insightNoStrong: (active, top3) =>
+    `${active} capacidades estan activas desde el Dia 1. Enfoque en aumentar la cobertura en ${top3} para la mayor mejora operativa.`,
+
+  whyDynatraceTitle: "Por Que Dynatrace -- Diferente por Diseno",
+  diffDavisTitle: "Dynatrace Intelligence", diffDavisBrief: (entities) => `IA Agentica  --  causa raiz causal en ${entities} entidades, cero reglas manuales`,
+  diffSmartscapeTitle: "Smartscape", diffSmartscapeBrief: (hosts, svc) => `Topologia en tiempo real  --  ${hosts} hosts, ${svc} servicios mapeados automaticamente`,
+  diffGrailTitle: "Grail", diffGrailBrief: (records) => `Data lakehouse causal con MPP  --  ${records} registros unificados`,
+  diffOneAgentTitle: "OneAgent", diffOneAgentBrief: "Despliegue unico  --  infra, APM, RUM, logs, seguridad en un agente",
+  diffOpenPipelineTitle: "OpenPipeline", diffOpenPipelineBrief: "Procesamiento de stream  --  ingesta, enriquecimiento, contextualizacion de cualquier fuente",
+  diffSecurityTitle: "Application Security", diffSecurityBrief: (evts) => `Proteccion en runtime  --  ${evts} eventos`,
+  diffSecurityBriefDefault: "CVEs priorizados por exposicion en produccion",
+
+  discoveryTitle: "Lo Que Dynatrace Descubrio — Dia 1",
+  discoveryIntro: "Dynatrace descubrio y mapeo automaticamente su entorno usando topologia Smartscape y OneAgent -- cero configuracion manual. Todos los datos unificados en Grail y analizados por Dynatrace Intelligence.",
+  criteria: "criterios",
+  activeSummary: (active, total, passed, totalCrit) => `${active} de ${total} capacidades activas  |  ${passed}/${totalCrit} criterios aprobados`,
+
+  discInfraHosts: (h, p) => `${h} hosts monitoreados con ${p} procesos en ejecucion`,
+  discInfraNet: (n) => `${n} interfaces de red con analisis de trafico`,
+  discInfraDisks: (d) => `${d} volumenes de disco rastreados para capacidad e I/O`,
+  discInfraK8s: (c, n, ns) => `${c} clusters K8s, ${n} nodos, ${ns} namespaces`,
+  discInfraProblems: (p) => `${p} problemas de Dynatrace Intelligence detectados automaticamente`,
+  discAppServices: (s) => `${s} servicios rastreados de extremo a extremo`,
+  discAppMethods: (m) => `${m} metodos de servicio instrumentados a nivel de codigo`,
+  discAppSpans: (s) => `${s} traces distribuidos capturados`,
+  discDxWeb: (a) => `${a} apps web monitoreadas con Real User Monitoring`,
+  discDxMobile: (m) => `${m} apps moviles instrumentadas`,
+  discDxSynthetic: (s) => `${s} monitores sinteticos validando disponibilidad 24/7`,
+  discDxHttp: (h) => `${h} monitores HTTP verificando salud de endpoints`,
+  discLogs: (l) => `${l} registros de log ingestados y buscables`,
+  discCloudLogs: (c) => `${c} logs cloud enriquecidos con metadatos del proveedor`,
+  discSecEvents: (s) => `${s} eventos de seguridad para analisis de vulnerabilidades`,
+  discThreatEvents: (s) => `${s} eventos de seguridad para deteccion de amenazas`,
+  discAiSpans: (a) => `${a} spans AI/GenAI rastreados (llamadas LLM, uso de tokens)`,
+  discBizEvents: (b) => `${b} eventos de negocio capturados para seguimiento de KPIs`,
+  discEvents: (e) => `${e} eventos correlacionados para impacto en el negocio`,
+
+  impactByTeam: "Impacto por Equipo",
+  teamSre: "SRE e Ingenieria de Plataforma",
+  teamSreBaseline: "IA Agentica reduce MTTR de horas a minutos -- respuestas confiables, no suposiciones.",
+  teamDevOps: "DevOps e Ingenieria",
+  teamDevOpsBaseline: "Rastreo PurePath, quality gates CI/CD, nativo OpenTelemetry.",
+  teamSecurity: "Seguridad y Cumplimiento",
+  teamSecurityBaseline: "Deteccion de vulnerabilidades en runtime con contexto completo de observabilidad.",
+  teamBusiness: "Negocios y Producto",
+  teamBusinessBaseline: "Sesiones reales de usuario + KPIs de negocio via BizEvents.",
+  teamAi: "Ingenieria AI / ML",
+  teamAiBaseline: "Monitoreo LLM, uso de tokens, seguimiento de calidad de respuesta.",
+
+  opportunities: "Oportunidades de Crecimiento",
+
+  footer: (tenant, date) => `Plataforma Dynatrace — Resultados del Primer Dia  |  ${tenant}  |  ${date}`,
+  page: (i, total) => `Pagina ${i} / ${total}`,
+
+  btnLabel: "Resultados Dia 1",
+  btnEn: "English",
+  btnPt: "Portugues",
+};
+
+export const REPORT_STRINGS: Record<ReportLang, ReportStrings> = { en: REPORT_EN, pt: REPORT_PT, es: REPORT_ES };
