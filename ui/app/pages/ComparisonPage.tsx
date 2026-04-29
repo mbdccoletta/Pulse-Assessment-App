@@ -216,13 +216,14 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
     const mat = snap ? Math.round(snap.capabilities.reduce((s, c) => s + computeMaturity(c.criteriaResults), 0) / (snap.capabilities.length || 1)) : 0;
     return (
     <Button onClick={(e: React.MouseEvent<Element>) => { e.stopPropagation(); toggle(); }} style={{
-      display: "flex", alignItems: "center", gap: 8,
-      padding: "5px 12px",
-      border: `1px solid ${color}55`,
-      background: dk ? `${color}15` : `${color}08`,
+      display: "flex", alignItems: "center", gap: 10,
+      padding: "6px 14px",
+      border: `2px solid ${color}88`,
+      background: dk ? `${color}22` : `${color}10`,
       minWidth: 180,
+      borderRadius: 8,
     }}>
-      <Text style={{ fontWeight: 800, color, fontSize: 13, minWidth: 12 }}>{label}</Text>
+      <Text style={{ fontWeight: 900, color: dk ? "#fff" : "#fff", fontSize: 13, minWidth: 22, textAlign: "center", background: color, borderRadius: 4, padding: "1px 6px", lineHeight: "20px" }}>{label}</Text>
       {snap ? (
         <Flex alignItems="center" gap={12} style={{ flex: 1 }}>
           <Text style={{ whiteSpace: "nowrap", fontSize: 12 }}>{fmtShort(snap.timestamp)}</Text>
@@ -290,7 +291,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
       )}
 
       {comparison && (
-        <Flex flexDirection="column" style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
+        <Flex flexDirection="column" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {/* KPI Summary — compact inline */}
           <Flex alignItems="center" gap={6} flexWrap="wrap" style={{ marginBottom: 4 }}>
             <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
@@ -312,7 +313,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           </Flex>
 
           {/* ══════ RADAR CHART + CAPABILITY BARS (side by side) ══════ */}
-          <Flex gap={8} style={{ marginBottom: 0, minHeight: isMobile ? "auto" : 320, height: isMobile ? "auto" : "clamp(320px, 42vh, 480px)", flexShrink: 0 }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
+          <Flex gap={8} style={{ marginBottom: 0, flex: 1, minHeight: 0, maxHeight: "calc(100vh - 260px)" }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
             {/* Left: CovMatRadar */}
             <Flex flexDirection="column" style={{
               flex: isMobile ? "1 1 100%" : "3 1 0%", minWidth: 0, minHeight: 0,
@@ -383,9 +384,9 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           </ExpandableChartModal>
 
           {/* ══════ DETAILED CHANGES ══════ */}
-          <Flex flexDirection="column" style={{ marginBottom: 16 }}>
-            <Flex flexDirection="column" style={{ background: card, border: `1px solid ${border}`, borderRadius: 10, padding: "16px 20px" }}>
-              <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>Detailed Criteria Changes</Flex>
+          <Flex flexDirection="column" style={{ marginTop: 4, flexShrink: 0 }}>
+            <Flex flexDirection="column" style={{ background: card, border: `1px solid ${border}`, borderRadius: 10, padding: "10px 16px" }}>
+              <Flex flexDirection="column" style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>Detailed Criteria Changes</Flex>
               {comparison.improved.length > 0 && (
                 <DetailSection title="Improvements" icon="↑" color={Colors.Text.Success.Default} caps={comparison.improved} dk={dk} card={card} border={border} textSec={textSec} textTert={textTert} embedded />
               )}
@@ -393,9 +394,9 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
                 <DetailSection title="Regressions" icon="↓" color={Colors.Text.Critical.Default} caps={comparison.degraded} dk={dk} card={card} border={border} textSec={textSec} textTert={textTert} embedded />
               )}
               {comparison.unchanged.length > 0 && (
-                <Flex flexDirection="column" style={{ marginTop: 12, padding: "12px 0 0 0", borderTop: `1px solid ${border}` }}>
-                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textTert, marginBottom: 8 }}>Unchanged ({comparison.unchanged.length})</Flex>
-                  <Flex gap={8} flexWrap="wrap">
+                <Flex flexDirection="column" style={{ marginTop: 8, padding: "8px 0 0 0", borderTop: `1px solid ${border}` }}>
+                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textTert, marginBottom: 6 }}>Unchanged ({comparison.unchanged.length})</Flex>
+                  <Flex gap={6} flexWrap="wrap">
                     {comparison.unchanged.map((cap) => (
                       <Flex key={cap.name} alignItems="center" gap={6} style={{ padding: "4px 12px", borderRadius: 6, border: `1px solid ${border}`, fontSize: 12 }}>
                         <Text style={{ width: 6, height: 6, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
