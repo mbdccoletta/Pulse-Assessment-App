@@ -94,10 +94,16 @@ async function saveToDocStore(snap: AssessmentSnapshot, knownIds?: Set<string>):
   }
 }
 
-/* ── Retention policy: one snapshot per day, keep 15 days ── */
+/* ── Retention policy: one snapshot per day in Grail, keep 15 days ── */
 
 const RETENTION_DAYS = 15;
 
+/**
+ * Determines which snapshot IDs should be removed from Grail.
+ * Rule: keep only the latest snapshot per calendar day, drop anything older than RETENTION_DAYS.
+ * Returns ALL snapshots (not pruned) so the UI can still compare same-day runs,
+ * but reports which IDs should be deleted from remote storage.
+ */
 function applyRetention(snapshots: AssessmentSnapshot[]): {
   keep: AssessmentSnapshot[];
   removeIds: string[];
@@ -106,34 +112,33 @@ function applyRetention(snapshots: AssessmentSnapshot[]): {
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
 
-  // Keep only the latest snapshot per calendar day
-  const byDay = new Map<string, AssessmentSnapshot>();
+  // Identify duplicates per calendar day (only the LATEST per day survives in Grail)
+  const bestPerDay = new Map<string, string>(); // day → snapshot id (latest)
   const duplicateIds: string[] = [];
   for (const s of sorted) {
     const day = s.timestamp.slice(0, 10); // YYYY-MM-DD
-    if (!byDay.has(day)) {
-      byDay.set(day, s);
+    if (!bestPerDay.has(day)) {
+      bestPerDay.set(day, s.id);
     } else {
-      duplicateIds.push(s.id);
+      duplicateIds.push(s.id); // older same-day snapshot — remove from Grail
     }
   }
 
-  // Drop snapshots older than RETENTION_DAYS
+  // Identify expired snapshots (older than RETENTION_DAYS)
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
   cutoff.setHours(0, 0, 0, 0);
 
-  const keep: AssessmentSnapshot[] = [];
   const expiredIds: string[] = [];
-  for (const s of byDay.values()) {
+  const keep: AssessmentSnapshot[] = [];
+  for (const s of sorted) {
     if (new Date(s.timestamp) >= cutoff) {
-      keep.push(s);
+      keep.push(s); // keep ALL non-expired snapshots in the UI (even same-day)
     } else {
       expiredIds.push(s.id);
     }
   }
 
-  keep.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   return { keep, removeIds: [...duplicateIds, ...expiredIds] };
 }
 
