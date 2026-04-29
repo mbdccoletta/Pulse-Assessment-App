@@ -51,7 +51,7 @@ export const CRITERION_ACTIONS: Record<string, RemediationAction> = {
   // ── Digital Experience ──
   d1:  { action: "Create a web application in Dynatrace and inject the RUM JavaScript snippet for user action tracking.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications", docLabel: "RUM user action setup" },
   d2:  { action: "Enable session tracking in your RUM application configuration to capture user sessions.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications", docLabel: "Session tracking" },
-  d3:  { action: "Enable Largest Contentful Paint (LCP) capture in RUM settings. Optimize to target <2.5s.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications", docLabel: "LCP monitoring" },
+  d3:  { action: "Enable Largest Contentful Paint (LCP) capture in RUM settings. Optimize to target <2.5s.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications/analyze-and-use/work-with-key-performance-metrics", docLabel: "Key performance metrics" },
   d4:  { action: "Enable Interaction to Next Paint (INP) tracking in RUM settings. Target <200ms.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications", docLabel: "INP monitoring" },
   d5:  { action: "Enable Cumulative Layout Shift (CLS) tracking in RUM settings. Target CLS <0.1.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications", docLabel: "CLS monitoring" },
   d6:  { action: "Enable JavaScript error tracking in RUM application settings for frontend error visibility.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications", docLabel: "Frontend error tracking" },
