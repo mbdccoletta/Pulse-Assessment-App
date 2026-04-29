@@ -91,8 +91,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const legendSpace = 22;
     const cx = w / 2;
     const cy = (h - legendSpace) / 2;
-    const labelMarginW = Math.max(w * 0.48, 160); // horizontal margin based on width
-    const labelMarginH = Math.max(h * 0.40, 140); // vertical margin based on height
+    const labelMarginW = Math.max(w * 0.42, 150); // horizontal margin based on width
+    const labelMarginH = Math.max(h * 0.36, 130); // vertical margin based on height
     const R = Math.min((w - labelMarginW) / 2, (h - legendSpace - labelMarginH) / 2);
     geoRef.current = { cx, cy, R, N, SEG };
 
@@ -219,10 +219,10 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     }
 
     // ── Connector lines + capability labels ──
-    // Elliptical placement with guaranteed minimum gap from ring
-    const minLabelGap = Math.max(Math.min(w, h) * 0.10, 42);
-    const labelRx = R + Math.max((w / 2 - R) / 2, minLabelGap);
-    const labelRy = R + Math.max(((h - legendSpace) / 2 - R) / 2, minLabelGap);
+    // Elliptical placement — 60% into available margin, with min gap proportional to R
+    const minLabelGap = R * 0.35;
+    const labelRx = R + Math.max((w / 2 - R) * 0.6, minLabelGap);
+    const labelRy = R + Math.max(((h - legendSpace) / 2 - R) * 0.6, minLabelGap);
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const maxLabelW = Math.max(w * 0.26, 110);
@@ -346,9 +346,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
 
     // Check label areas first (higher priority)
     const legendSpaceH = 22;
-    const minGapH = Math.max(Math.min(w, h) * 0.10, 42);
-    const labelRx = R + Math.max((w / 2 - R) / 2, minGapH);
-    const labelRy = R + Math.max(((h - legendSpaceH) / 2 - R) / 2, minGapH);
+    const minGapH = R * 0.35;
+    const labelRx = R + Math.max((w / 2 - R) * 0.6, minGapH);
+    const labelRy = R + Math.max(((h - legendSpaceH) / 2 - R) * 0.6, minGapH);
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const totalTextH = (fs1 + 2) + 2 + fs2;
@@ -704,9 +704,9 @@ export function renderRadarToDataURL(
   }
 
   // Connector lines + capability labels
-  const minGapE = Math.max(Math.min(w, h) * 0.10, 42);
-  const labelRx = R + Math.max((w / 2 - R) / 2, minGapE);
-  const labelRy = R + Math.max(((h - legendSpace) / 2 - R) / 2, minGapE);
+  const minGapE = R * 0.35;
+  const labelRx = R + Math.max((w / 2 - R) * 0.6, minGapE);
+  const labelRy = R + Math.max(((h - legendSpace) / 2 - R) * 0.6, minGapE);
   const fs1 = Math.max(Math.min(w, h) * 0.020, 10);
   const fs2 = Math.max(Math.min(w, h) * 0.016, 8);
   const labelH = fs1 + fs2 + 6;
