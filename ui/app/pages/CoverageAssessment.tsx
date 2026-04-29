@@ -20,6 +20,7 @@ import { CAP_SUMMARIES } from "../data/capSummaries";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
 import { CRITERION_REMEDIATION } from "../data/criterionRemediation";
 import { APP_ICON } from "../data/appIcon";
+import { APP_VERSION } from "../appVersion";
 import { type ReportLang } from "../reports/reportI18n";
 import { generateFirstDayReport } from "../reports/generateFirstDayReport";
 import { usePreflight, type PreflightCheck } from "../hooks/usePreflight";
@@ -1466,6 +1467,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
         <Text style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}`, color: textSec }}>
           <Strong style={{ color: Colors.Text.Success.Default }}>Tip:</Strong> Before running, explore the cards on the right to understand what each capability evaluates and how scores are calculated.
         </Text>
+        <Text style={{ marginTop: 16, fontSize: 11, color: textTert }}>v{APP_VERSION}</Text>
       </Flex>
     </Flex>
   );
