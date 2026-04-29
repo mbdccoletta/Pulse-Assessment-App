@@ -466,7 +466,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               }}>
                 <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>What You're Seeing</Flex>
                 <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
-                  Each card shows a <Strong style={{ color: text }}>weighted maturity score</Strong> (0–100%) per capability. The score combines three tiers: <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation</Strong> (50% weight), <Strong style={{ color: Colors.Charts.Status.Warning.Default }}>Best Practice</Strong> (30%), and <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}>Excellence</Strong> (20%). Cards are sorted from lowest to highest maturity.
+                  Each card shows a <Strong style={{ color: text }}>weighted maturity score</Strong> (0–100%) per capability. The score combines three tiers: <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation</Strong> (60% weight), <Strong style={{ color: Colors.Charts.Status.Warning.Default }}>Best Practice</Strong> (25%), and <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}>Excellence</Strong> (15%). Cards are sorted from lowest to highest maturity.
                 </Text>
               </Flex>
 
@@ -477,9 +477,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               }}>
                 <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Weighted Tiers</Flex>
                 <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
-                  <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation (50%)</Strong> — the essentials (hosts, services, basic data flow).
-                  <Strong style={{ color: Colors.Charts.Status.Warning.Default }}> Best Practice (30%)</Strong> — deeper adoption (trace correlation, advanced metrics).
-                  <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}> Excellence (20%)</Strong> — advanced maturity (multi-service traces, guardrails, cost tracking).
+                  <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation (60%)</Strong> — the essentials (hosts, services, basic data flow).
+                  <Strong style={{ color: Colors.Charts.Status.Warning.Default }}> Best Practice (25%)</Strong> — deeper adoption (trace correlation, advanced metrics).
+                  <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}> Excellence (15%)</Strong> — advanced maturity (multi-service traces, guardrails, cost tracking).
                 </Text>
               </Flex>
 
@@ -505,7 +505,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               }}>
                 <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>What to Look For</Flex>
                 <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
-                  Focus on <Strong style={{ color: text }}>Foundation tier first</Strong> — it carries the most weight (50%). Low-scoring capabilities need immediate attention. Click any card to see <Strong style={{ color: text }}>which specific criteria</Strong> are missing in each tier. Use <Strong style={{ color: text }}>Evolution Over Time</Strong> to track progress.
+                  Focus on <Strong style={{ color: text }}>Foundation tier first</Strong> — it carries the most weight (60%). Low-scoring capabilities need immediate attention. Click any card to see <Strong style={{ color: text }}>which specific criteria</Strong> are missing in each tier. Use <Strong style={{ color: text }}>Evolution Over Time</Strong> to track progress.
                 </Text>
               </Flex>
 
@@ -624,8 +624,8 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
         <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Suggested Approach</Flex>
         <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.7 }}>
           <Strong style={{ color: text }}>1.</Strong> Identify capabilities with <Strong style={{ color: Colors.Text.Critical.Default }}>low maturity scores</Strong> — these need the most attention.{" "}
-          <Strong style={{ color: text }}>2.</Strong> For each, complete the <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation</Strong> tier first — it carries <Strong style={{ color: text }}>50% weight</Strong>.{" "}
-          <Strong style={{ color: text }}>3.</Strong> Then advance to <Strong style={{ color: Colors.Charts.Status.Warning.Default }}>Best Practice</Strong> (30% weight) and <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}>Excellence</Strong> (20% weight).{" "}
+          <Strong style={{ color: text }}>2.</Strong> For each, complete the <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation</Strong> tier first — it carries <Strong style={{ color: text }}>60% weight</Strong>.{" "}
+          <Strong style={{ color: text }}>3.</Strong> Then advance to <Strong style={{ color: Colors.Charts.Status.Warning.Default }}>Best Practice</Strong> (25% weight) and <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}>Excellence</Strong> (15% weight).{" "}
           <Strong style={{ color: text }}>4.</Strong> Click any card to see <Strong style={{ color: text }}>which specific criteria</Strong> are missing in each tier.
         </Text>
       </Flex>
@@ -691,7 +691,9 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
     const fP = ti.foundation.t > 0 ? ti.foundation.p / ti.foundation.t : 0;
     const bP = ti.bestPractice.t > 0 ? ti.bestPractice.p / ti.bestPractice.t : 0;
     const eP = ti.excellence.t > 0 ? ti.excellence.p / ti.excellence.t : 0;
-    return { date: snap.timestamp, cov: snap.totalScore, mat: Math.round(fP * 50 + bP * 30 + eP * 20) };
+    const effB = fP >= 0.8 ? bP : 0;
+    const effE = effB >= 0.6 ? eP : 0;
+    return { date: snap.timestamp, cov: snap.totalScore, mat: Math.round(fP * 60 + effB * 25 + effE * 15) };
   }), [sortedSnaps, tierMap]);
 
   // ── Deltas from previous snapshot ──
@@ -1081,7 +1083,7 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
       {TIER_META.map((t, ti) => {
         const tier = m[t.key];
         const pct = tier.total > 0 ? Math.round((tier.passed / tier.total) * 100) : 0;
-        const weight = t.key === "foundation" ? "50%" : t.key === "bestPractice" ? "30%" : "20%";
+        const weight = t.key === "foundation" ? "60%" : t.key === "bestPractice" ? "25%" : "15%";
         return (
           <Flex flexDirection="column" key={t.key} style={{ marginBottom: 5 }}>
             <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
