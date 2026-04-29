@@ -91,8 +91,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const legendSpace = 22;
     const cx = w / 2;
     const cy = (h - legendSpace) / 2;
-    const labelMarginW = Math.max(w * 0.42, 150); // horizontal margin based on width
-    const labelMarginH = Math.max(h * 0.36, 130); // vertical margin based on height
+    const labelMarginW = Math.max(w * 0.36, 130); // horizontal margin based on width
+    const labelMarginH = Math.max(h * 0.32, 110); // vertical margin based on height
     const R = Math.min((w - labelMarginW) / 2, (h - legendSpace - labelMarginH) / 2);
     geoRef.current = { cx, cy, R, N, SEG };
 
