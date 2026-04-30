@@ -91,6 +91,25 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
   const [expandedPolar, setExpandedPolar] = useState(false);
   const radarHandleRef = useRef<CovMatRadarHandle | null>(null);
   const wasLoadingRef = useRef(false);
+  const [excludedCaps, setExcludedCaps] = useState<Set<string>>(new Set());
+
+  const toggleCap = useCallback((name: string) => {
+    setExcludedCaps(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const startFiltered = useCallback(() => {
+    // If nothing excluded → full assessment (pass nothing)
+    if (excludedCaps.size === 0) {
+      start();
+    } else {
+      const filtered = CAPABILITIES.filter(c => !excludedCaps.has(c.name));
+      start(filtered.length > 0 ? filtered : undefined);
+    }
+  }, [start, excludedCaps]);
 
   const t0 = useRef<number>(0);
   const dk = useCurrentTheme() === "dark";
@@ -203,10 +222,12 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             dk={dk} text={text} textSec={textSec} textTert={textTert}
             accent={accent} bgSubtle={bgSubtle} bgPrimary={bgPrimary}
             border={border} borderPri={borderPri}
-            tenant={tenant} start={start} resume={resume}
+            tenant={tenant} start={startFiltered} resume={resume}
             totalScore={totalScore} hasResults={capabilities.length > 0}
             exporting={exporting}
             onGenerateReport={(lang: ReportLang) => generateClientReport(lang)}
+            selectedCount={CAPABILITIES.length - excludedCaps.size}
+            totalCount={CAPABILITIES.length}
           />
 
           {/* Right panel — Capability cards */}
@@ -222,15 +243,30 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             ) : (
               <>
               <Container color="primary" variant="default" style={{ marginBottom: 16 }}>
-                <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 700, color: text, marginBottom: 4 }}>{CAPABILITIES.length} Capabilities Evaluated</Flex>
+                <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
+                  <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 700, color: text }}>{CAPABILITIES.length} Capabilities Available</Flex>
+                  {excludedCaps.size > 0 ? (
+                    <Flex alignItems="center" gap={8}>
+                      <Text style={{ fontSize: 12, fontWeight: 700, color: accent, background: accent + "15", padding: "2px 10px", borderRadius: 8 }}>{CAPABILITIES.length - excludedCaps.size} / {CAPABILITIES.length} selected</Text>
+                      <Text style={{ fontSize: 11, color: accent, cursor: "pointer", textDecoration: "underline", fontWeight: 600 }}
+                        onClick={() => setExcludedCaps(new Set())}>Select All</Text>
+                    </Flex>
+                  ) : (
+                    <Text style={{ fontSize: 11, fontWeight: 600, color: Colors.Text.Success.Default }}>✓ Full Assessment</Text>
+                  )}
+                </Flex>
                 <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>
-                  Each card shows what a capability evaluates. Click to see the <Strong style={{ color: text }}>full list of criteria</Strong>, the DQL query behind each one, and what the app looks for in your environment.
+                  Use the <Strong style={{ color: text }}>☑ checkbox</Strong> on each card to choose which capabilities to assess.
+                  Click the card body to explore criteria details.
+                  {excludedCaps.size === 0 ? " All capabilities are included — the assessment will run in full." : ` ${excludedCaps.size} capability${excludedCaps.size > 1 ? "ies" : "y"} excluded — only selected ones will be evaluated.`}
                 </Text>
               </Container>
               <Grid gridTemplateColumns="repeat(auto-fill, minmax(340px, 1fr))" gap={16}>
                 {CAPABILITIES.map((cap) => (
                   <IdleCapCard key={cap.name} cap={cap} dk={dk} text={text} textSec={textSec} textTert={textTert}
                     bgSurface={bgSurface} bgSubtle={bgSubtle} border={border}
+                    selected={!excludedCaps.has(cap.name)}
+                    onToggle={() => toggleCap(cap.name)}
                     onClick={() => setSelectedCap(cap.name)} />
                 ))}
               </Grid>
@@ -1280,13 +1316,14 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
 }
 
 /* ── Left panel — memoized to prevent re-renders during card interactions ── */
-const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, totalScore, hasResults, exporting, onGenerateReport }: {
+const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, totalScore, hasResults, exporting, onGenerateReport, selectedCount, totalCount }: {
   dk: boolean; text: string; textSec: string; textTert: string;
   accent: string; bgSubtle: string; bgPrimary: string; border: string; borderPri: string;
   tenant: string; start: () => void; resume: () => void;
   totalScore: number; hasResults: boolean;
   exporting: boolean;
   onGenerateReport: (lang: ReportLang) => void;
+  selectedCount: number; totalCount: number;
 }) {
   const preflight = usePreflight();
 
@@ -1389,7 +1426,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
           variant="emphasized"
           color="primary"
         >
-          {preflight.running ? "Validating…" : "Run Assessment"}
+          {preflight.running ? "Validating…" : selectedCount < totalCount ? `Run Assessment (${selectedCount}/${totalCount})` : "Run Assessment"}
         </Button>
         {hasResults && (
           <Flex flexDirection="column" alignItems="center" gap={6} style={{ marginTop: 12 }}>
@@ -1417,7 +1454,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
 
       <Flex gap={12}>
         {[
-          { value: String(CAPABILITIES.length), label: "Capabilities", color: accent, tip: `${CAPABILITIES.length} Dynatrace platform capabilities evaluated: ${CAPABILITIES.map(c => c.name).join(", ")}.` },
+          { value: String(selectedCount), label: "Capabilities", color: accent, tip: selectedCount < totalCount ? `${selectedCount} of ${totalCount} capabilities selected for assessment. Deselect capabilities on the right panel to customize.` : `${totalCount} Dynatrace platform capabilities evaluated: ${CAPABILITIES.map(c => c.name).join(", ")}.` },
           { value: String(CAPABILITIES.reduce((s, c) => s + c.criteria.length, 0)), label: "Criteria", color: Colors.Text.Success.Default, tip: "Total criteria evaluated via live DQL queries. Some criteria use cross-entity coverage (two queries) to measure real adoption depth." },
         ].map((kpi) => (
           <Tooltip key={kpi.label} text={kpi.tip}>
@@ -1433,7 +1470,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
         <Flex flexDirection="column" style={{ fontWeight: 700, color: accent, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>How it works</Flex>
         <Flex gap={8} style={{ marginBottom: 8 }}>
           <Text style={{ color: accent, fontWeight: 800, fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>1.</Text>
-          <Text>Click <Strong style={{ color: text }}>Run Assessment</Strong> — the app executes <Strong style={{ color: text }}>{CAPABILITIES.reduce((s, c) => s + c.criteria.length, 0)} DQL criteria</Strong> against your environment. Some criteria use <Strong style={{ color: text }}>cross-entity coverage</Strong> (e.g., % of hosts with CPU metrics) for deeper adoption measurement.</Text>
+          <Text><Strong style={{ color: text }}>Choose capabilities</Strong> on the right panel — use the checkbox on each card to include or exclude it. Then click <Strong style={{ color: text }}>Run Assessment</Strong>. If no capability is deselected, a <Strong style={{ color: text }}>full assessment</Strong> runs automatically across all {CAPABILITIES.length} capabilities.</Text>
         </Flex>
         <Flex gap={8} style={{ marginBottom: 8 }}>
           <Text style={{ color: accent, fontWeight: 800, fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>2.</Text>
@@ -1467,7 +1504,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
           Each failed criterion includes <Strong style={{ color: textSec }}>remediation guidance</Strong> with links to Dynatrace docs.
         </Text>
         <Text style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}`, color: textSec }}>
-          <Strong style={{ color: Colors.Text.Success.Default }}>Tip:</Strong> Before running, explore the cards on the right to understand what each capability evaluates and how scores are calculated.
+          <Strong style={{ color: Colors.Text.Success.Default }}>Tip:</Strong> You can deselect capabilities that are not relevant to your environment using the ☑ checkbox on each card. The assessment will only query the selected ones, making it faster and more focused.
         </Text>
         <Text style={{ marginTop: 16, fontSize: 11, color: textTert }}>v{APP_VERSION}</Text>
       </Flex>
@@ -1476,26 +1513,42 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
 });
 
 /* ── Card for grid view (click to zoom) ── */
-function IdleCapCard({ cap, dk, text, textSec, bgSurface, bgSubtle, border, onClick }: {
+function IdleCapCard({ cap, dk, text, textSec, bgSurface, bgSubtle, border, selected, onToggle, onClick }: {
   cap: { name: string; color: string; criteria: { id: string; label: string }[] };
   dk: boolean; text: string; textSec: string; textTert: string;
   bgSurface: string; bgSubtle: string; border: string;
+  selected: boolean; onToggle: () => void;
   onClick: () => void;
 }) {
   const summary = CAP_SUMMARIES[cap.name] || "";
   return (
     <Flex flexDirection="column" style={{ background: bgSurface,
-      border: `1px solid ${border}`,
-      borderRadius: 12, padding: "20px 24px", borderLeft: `4px solid ${cap.color}`,
-      cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s" } as const}
+      border: `1px solid ${selected ? border : (dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)")}`,
+      borderRadius: 12, padding: "20px 24px", borderLeft: `4px solid ${selected ? cap.color : (dk ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)")}`,
+      cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s, opacity 0.2s",
+      opacity: selected ? 1 : 0.45 } as const}
     onClick={(e) => { e.stopPropagation(); if (isTextSelection()) return; onClick(); }}
     onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 4px 16px ${cap.color}25`; }}
     onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
     >
       <Flex alignItems="center" gap={8} style={{ marginBottom: 12 }}>
-        <Text style={{ width: 14, height: 14, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
+        <Text style={{ width: 14, height: 14, borderRadius: "50%", background: selected ? cap.color : (dk ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"), flexShrink: 0 }} />
         <Text style={{ fontSize: 14, fontWeight: 700, color: text, flex: 1 }}>{cap.name}</Text>
-        <Text style={{ fontSize: 12, color: textSec, fontWeight: 700, background: bgSubtle, padding: "3px 12px", borderRadius: 10 }}>{cap.criteria.length}</Text>
+        <Flex alignItems="center" gap={6}>
+          <Text style={{ fontSize: 12, color: textSec, fontWeight: 700, background: bgSubtle, padding: "3px 12px", borderRadius: 10 }}>{cap.criteria.length}</Text>
+          <Text
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            style={{
+              width: 20, height: 20, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+              border: `2px solid ${selected ? cap.color : (dk ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.25)")}`,
+              background: selected ? cap.color : "transparent",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, fontWeight: 800, lineHeight: 1,
+              color: selected ? "#fff" : "transparent",
+              transition: "all 0.15s",
+            }}
+          >{selected ? "✓" : ""}</Text>
+        </Flex>
       </Flex>
       <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.7, marginLeft: 24, flex: 1 }}>
         {summary}
