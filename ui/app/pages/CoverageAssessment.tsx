@@ -54,6 +54,12 @@ const TIER_META: { key: "foundation" | "bestPractice" | "excellence"; label: str
   { key: "excellence", label: "Excellence", color: Colors.Charts.Status.Ideal.Default },
 ];
 
+const MiniBar = React.memo(({ pct, color, dk, h = 6 }: { pct: number; color: string; dk: boolean; h?: number }) => (
+  <Flex flexDirection="column" style={{ width: "100%", height: h, borderRadius: h / 2, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+    <Flex style={{ height: "100%", width: `${Math.min(100, pct)}%`, borderRadius: h / 2, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
+  </Flex>
+));
+
 function criterionTooltipContent(id: string, description: string, tier: string): string {
   const tierLabel = tier === "foundation" ? "Foundation" : tier === "bestPractice" ? "Best Practice" : "Excellence";
   const importance = CRITERION_IMPORTANCE[id];
@@ -150,17 +156,20 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
     if (loading || capabilities.length === 0) return;
     setAnim(0);
     t0.current = performance.now();
+    let animId: number;
     const run = (now: number) => {
       const p = Math.min((now - t0.current) / 1400, 1);
       setAnim(1 - Math.pow(1 - p, 3));
-      if (p < 1) requestAnimationFrame(run);
+      if (p < 1) animId = requestAnimationFrame(run);
     };
-    requestAnimationFrame(run);
+    animId = requestAnimationFrame(run);
+    return () => cancelAnimationFrame(animId);
   }, [loading, capabilities]);
 
   // Auto-size chart — use ResizeObserver for notebook/embedded containers
   useEffect(() => {
     const el = rootRef.current;
+    let tid: ReturnType<typeof setTimeout>;
     const calc = () => {
       const vh = el ? el.offsetHeight || window.innerHeight : window.innerHeight;
       const vw = el ? el.offsetWidth : window.innerWidth;
@@ -171,14 +180,15 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
       const maxSide = Math.min(vh - reserve, vw - (mobile ? 32 : 400), 720);
       setChartSize(Math.max(maxSide, mobile ? 200 : 220));
     };
+    const debounced = () => { clearTimeout(tid); tid = setTimeout(calc, 100); };
     calc();
     if (el && typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(calc);
+      const ro = new ResizeObserver(debounced);
       ro.observe(el);
-      return () => ro.disconnect();
+      return () => { ro.disconnect(); clearTimeout(tid); };
     }
-    window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
+    window.addEventListener("resize", debounced);
+    return () => { window.removeEventListener("resize", debounced); clearTimeout(tid); };
   }, []);
 
 
@@ -196,16 +206,23 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
   }, [capabilities.length, chartSize]);
 
   // Theme colors — using Strato design tokens for automatic dark/light adaptation
-  const bg = Colors.Background.Base.Default;
-  const bgSurface = Colors.Background.Surface.Default;
-  const bgSubtle = Colors.Background.Container.Neutral.Subdued;
-  const bgPrimary = Colors.Background.Container.Primary.Default;
-  const text = Colors.Text.Neutral.Default;
-  const textSec = Colors.Text.Neutral.Subdued;
-  const textTert = Colors.Text.Neutral.Disabled;
-  const accent = Colors.Text.Primary.Default;
-  const border = Colors.Border.Neutral.Default;
-  const borderPri = Colors.Border.Primary.Default;
+  const colors = useMemo(() => ({
+    bg: Colors.Background.Base.Default,
+    bgSurface: Colors.Background.Surface.Default,
+    bgSubtle: Colors.Background.Container.Neutral.Subdued,
+    bgPrimary: Colors.Background.Container.Primary.Default,
+    text: Colors.Text.Neutral.Default,
+    textSec: Colors.Text.Neutral.Subdued,
+    textTert: Colors.Text.Neutral.Disabled,
+    accent: Colors.Text.Primary.Default,
+    border: Colors.Border.Neutral.Default,
+    borderPri: Colors.Border.Primary.Default,
+    borderSub: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+    bgHover: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+  }), [dk]);
+  const { bg, bgSurface, bgSubtle, bgPrimary, text, textSec, textTert, accent, border, borderPri } = colors;
+  const borderSub = colors.borderSub;
+  const bgHover = colors.bgHover;
 
   return (
     <Flex flexDirection="column" ref={rootRef}
@@ -290,16 +307,18 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
       {/* Loading State */}
       {loading && (
         <Flex flexDirection="column" alignItems="center" justifyContent="center" gap={16} style={{ flex: 1 }}>
-          <Flex flexDirection="column" style={{ fontSize: 14, color: textSec }}>Running assessment... {progress}%</Flex>
-          <Flex flexDirection="column" style={{ width: 240 }}>
+          <Flex flexDirection="column" style={{ fontSize: 16, fontWeight: 700, color: text }}>Running Assessment</Flex>
+          <Flex flexDirection="column" style={{ width: "clamp(280px, 50%, 480px)" }}>
             <ProgressBar value={progress} color="primary" aria-label="Assessment progress" />
           </Flex>
-          <Flex flexDirection="column" style={{ fontSize: 12, color: textTert }}>Querying {capabilities.length > 0 ? capabilities.length : CAPABILITIES.length} capabilities via DQL</Flex>
-          {liveScannedRecords > 0 && (
-            <Flex flexDirection="column" alignItems="center" style={{ fontSize: 12, color: textSec, marginTop: 4 }}>
-              Records scanned: <Text style={{ fontWeight: 600, color: text }}>{formatRecords(liveScannedRecords)}</Text>
-            </Flex>
-          )}
+          <Flex flexDirection="column" alignItems="center" gap={4}>
+            <Flex flexDirection="column" style={{ fontSize: 13, color: textSec }}>{progress}% — Querying {capabilities.length > 0 ? capabilities.length : CAPABILITIES.length} capabilities via DQL</Flex>
+            {liveScannedRecords > 0 && (
+              <Flex flexDirection="column" style={{ fontSize: 12, color: textTert }}>
+                {formatRecords(liveScannedRecords)} records scanned
+              </Flex>
+            )}
+          </Flex>
         </Flex>
       )}
 
@@ -414,13 +433,13 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
 
             {/* Right: scrollable cards */}
             <Flex flexDirection="column" style={{
-              width: isMobile ? "100%" : "clamp(260px, 30%, 360px)",
+              width: isMobile ? "100%" : "clamp(300px, 32%, 440px)",
               flexShrink: 0,
               overflowY: "auto",
               padding: "6px 12px",
               borderLeft: isMobile ? "none" : `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
-              maxHeight: isMobile ? 300 : undefined,
+              maxHeight: isMobile ? "50vh" : undefined,
             }}>
               <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} />
             </Flex>
@@ -799,41 +818,35 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
   const [expandedChart, setExpandedChart] = useState<"radar" | "bubble" | null>(null);
 
-  const MiniBar = ({ pct, color, h = 6, delay = 0.3 }: { pct: number; color: string; h?: number; delay?: number }) => (
-    <Flex flexDirection="column" style={{ width: "100%", height: h, borderRadius: h / 2, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", overflow: "hidden" }}>
-      <Flex style={{ height: "100%", width: `${Math.min(100, pct)}%`, borderRadius: h / 2, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
-    </Flex>
-  );
-
   return (
     <Flex data-rec-root flexDirection="column" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "8px 20px" }}>
       <style>{recAnimStyle}</style>
 
-      <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 2, letterSpacing: 0.2, animation: "recFadeUp 0.3s ease both" }}>
+      <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 1, letterSpacing: 0.2, animation: "recFadeUp 0.3s ease both" }}>
         Executive Summary
       </Flex>
-      <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, marginBottom: 8, lineHeight: 1.4, animation: "recFadeUp 0.3s ease both 0.05s" }}>
+      <Flex flexDirection="column" style={{ fontSize: 11, color: textSec, marginBottom: 6, lineHeight: 1.4, animation: "recFadeUp 0.3s ease both 0.05s" }}>
         Overall assessment of observability coverage and maturity across {capabilities.length} capabilities · {totalCriteria} criteria evaluated
       </Flex>
 
       {/* ═══ SECTION 1: Highlights ═══ */}
       <Flex flexDirection="column" style={{
         borderRadius: 10, border: `1px solid ${borderSub}`, background: card,
-        padding: "12px 20px", boxShadow: cardGlow, marginBottom: 12,
+        padding: "6px 14px", boxShadow: cardGlow, marginBottom: 6,
         animation: "recFadeUp 0.5s ease both",
       }}>
 
         {/* ── Row 1: Scores ── */}
-        <Flex alignItems="center" gap={0} flexWrap="wrap" style={{ marginBottom: 8 }}>
+        <Flex alignItems="center" gap={0} flexWrap="wrap" style={{ marginBottom: 4 }}>
 
           {/* Coverage score */}
-          <Flex alignItems="center" gap={12} style={{ flex: "1 1 200px", padding: "6px 0" }}>
-            <Flex style={{ width: 4, height: 36, borderRadius: 2, background: covBandC, boxShadow: dk ? `0 0 6px ${covBandC}40` : "none" }} />
+          <Flex alignItems="center" gap={8} style={{ flex: "1 1 200px", padding: "2px 0" }}>
+            <Flex style={{ width: 3, height: 24, borderRadius: 2, background: covBandC, boxShadow: dk ? `0 0 6px ${covBandC}40` : "none" }} />
             <Flex flexDirection="column">
-              <Text style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 1 }}>COVERAGE</Text>
-              <Flex alignItems="baseline" gap={6}>
-                <Text style={{ fontSize: 24, fontWeight: 900, color: covBandC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{totalScore}%</Text>
-                <Text style={{ fontSize: 12, fontWeight: 600, color: covBandC, opacity: 0.8 }}>{bandLabel(totalScore)}</Text>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 0 }}>COVERAGE</Text>
+              <Flex alignItems="baseline" gap={4}>
+                <Text style={{ fontSize: 20, fontWeight: 900, color: covBandC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{totalScore}%</Text>
+                <Text style={{ fontSize: 11, fontWeight: 600, color: covBandC, opacity: 0.8 }}>{bandLabel(totalScore)}</Text>
                 {covDelta !== null && covDelta !== 0 && (
                   <Text style={{ fontSize: 12, fontWeight: 700, color: covDelta > 0 ? Colors.Text.Success.Default : Colors.Text.Critical.Default }}>
                     {covDelta > 0 ? "\u25B2" : "\u25BC"}{Math.abs(covDelta)}pp
@@ -841,19 +854,19 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
                 )}
               </Flex>
             </Flex>
-            <MiniBar pct={totalScore} color={covBandC} />
+            <MiniBar pct={totalScore} color={covBandC} dk={dk} />
           </Flex>
 
-          <Flex style={{ width: 1, height: 32, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 16px", flexShrink: 0 }} />
+          <Flex style={{ width: 1, height: 24, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 12px", flexShrink: 0 }} />
 
           {/* Maturity score */}
-          <Flex alignItems="center" gap={12} style={{ flex: "1 1 200px", padding: "6px 0" }}>
-            <Flex style={{ width: 4, height: 36, borderRadius: 2, background: matBandC, boxShadow: dk ? `0 0 6px ${matBandC}40` : "none" }} />
+          <Flex alignItems="center" gap={8} style={{ flex: "1 1 200px", padding: "2px 0" }}>
+            <Flex style={{ width: 3, height: 24, borderRadius: 2, background: matBandC, boxShadow: dk ? `0 0 6px ${matBandC}40` : "none" }} />
             <Flex flexDirection="column">
-              <Text style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 1 }}>MATURITY</Text>
-              <Flex alignItems="baseline" gap={6}>
-                <Text style={{ fontSize: 24, fontWeight: 900, color: matBandC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{overallMaturityLevel}%</Text>
-                <Text style={{ fontSize: 12, fontWeight: 600, color: matBandC, opacity: 0.8 }}>{bandLabel(overallMaturityLevel)}</Text>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 0 }}>MATURITY</Text>
+              <Flex alignItems="baseline" gap={4}>
+                <Text style={{ fontSize: 20, fontWeight: 900, color: matBandC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{overallMaturityLevel}%</Text>
+                <Text style={{ fontSize: 11, fontWeight: 600, color: matBandC, opacity: 0.8 }}>{bandLabel(overallMaturityLevel)}</Text>
                 {matDelta !== null && matDelta !== 0 && (
                   <Text style={{ fontSize: 12, fontWeight: 700, color: matDelta > 0 ? Colors.Text.Success.Default : Colors.Text.Critical.Default }}>
                     {matDelta > 0 ? "\u25B2" : "\u25BC"}{Math.abs(matDelta)}pp
@@ -861,89 +874,89 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
                 )}
               </Flex>
             </Flex>
-            <MiniBar pct={overallMaturityLevel} color={matBandC} />
+            <MiniBar pct={overallMaturityLevel} color={matBandC} dk={dk} />
           </Flex>
 
-          <Flex style={{ width: 1, height: 32, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 16px", flexShrink: 0 }} />
+          <Flex style={{ width: 1, height: 24, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 12px", flexShrink: 0 }} />
 
           {/* Quick stats */}
           <Flex alignItems="center" gap={12} style={{ flexShrink: 0 }}>
             <Flex flexDirection="column" style={{ textAlign: "center" as const }}>
-              <Text style={{ fontSize: 16, fontWeight: 900, color: Colors.Text.Primary.Default, lineHeight: 1 }}>{capabilities.length}</Text>
-              <Text style={{ fontSize: 12, fontWeight: 700, color: labelC, marginTop: 2, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Capabilities</Text>
+              <Text style={{ fontSize: 14, fontWeight: 900, color: Colors.Text.Primary.Default, lineHeight: 1 }}>{capabilities.length}</Text>
+              <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, marginTop: 1, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Capabilities</Text>
             </Flex>
             <Flex flexDirection="column" style={{ textAlign: "center" as const }}>
-              <Flex alignItems="baseline" style={{ fontSize: 16, fontWeight: 900, color: Colors.Text.Primary.Default, lineHeight: 1, justifyContent: "center" }}>{passedCriteria}<Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>/{totalCriteria}</Text></Flex>
-              <Text style={{ fontSize: 12, fontWeight: 700, color: labelC, marginTop: 2, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Criteria Met</Text>
+              <Flex alignItems="baseline" style={{ fontSize: 14, fontWeight: 900, color: Colors.Text.Primary.Default, lineHeight: 1, justifyContent: "center" }}>{passedCriteria}<Text style={{ fontSize: 10, fontWeight: 600, color: labelC }}>/{totalCriteria}</Text></Flex>
+              <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, marginTop: 1, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Criteria Met</Text>
             </Flex>
           </Flex>
         </Flex>
 
         {/* ── Row 2: Achievements vs Gaps (side by side) ── */}
-        <Grid gridTemplateColumns={isMobile ? "1fr" : "1fr 1fr"} gap={8}>
+        <Grid gridTemplateColumns={isMobile ? "1fr" : "1fr 1fr"} gap={6}>
 
           {/* Achievements column */}
           <Flex flexDirection="column" style={{
-            borderRadius: 8, padding: "8px 16px",
+            borderRadius: 8, padding: "4px 10px",
             background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
             borderLeft: "3px solid " + Colors.Text.Success.Default,
             animation: "recScaleIn 0.35s ease both 0.55s",
           }}>
-            <Flex alignItems="center" gap={6} style={{ marginBottom: 6 }}>
-              <Text style={{ fontSize: 14 }}>✓</Text>
-              <Text style={{ fontSize: 12, fontWeight: 800, color: Colors.Text.Success.Default, letterSpacing: 0.5, textTransform: "uppercase" as const }}>Achievements</Text>
-              <Text style={{ fontSize: 14, fontWeight: 900, color: text, marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{passedCriteria}</Text>
+            <Flex alignItems="center" gap={6} style={{ marginBottom: 2 }}>
+              <Text style={{ fontSize: 13 }}>✓</Text>
+              <Text style={{ fontSize: 11, fontWeight: 800, color: Colors.Text.Success.Default, letterSpacing: 0.5, textTransform: "uppercase" as const }}>Achievements</Text>
+              <Text style={{ fontSize: 13, fontWeight: 900, color: text, marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{passedCriteria}</Text>
             </Flex>
 
-            <Flex flexDirection="column" gap={4}>
+            <Flex flexDirection="column" gap={2}>
               <Flex alignItems="center" justifyContent="space-between">
-                <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Criteria passed</Text>
-                <Text style={{ fontSize: 14, fontWeight: 800, color: text }}>{passedCriteria}<Text style={{ color: labelC, fontWeight: 600 }}>/{totalCriteria}</Text></Text>
+                <Text style={{ fontSize: 11, fontWeight: 600, color: labelC }}>Criteria passed</Text>
+                <Text style={{ fontSize: 13, fontWeight: 800, color: text }}>{passedCriteria}<Text style={{ color: labelC, fontWeight: 600 }}>/{totalCriteria}</Text></Text>
               </Flex>
 
               {/* Excellent capabilities */}
               {excellentCount > 0 && (
                 <Flex alignItems="center" justifyContent="space-between">
-                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Excellent capabilities (≥80%)</Text>
-                  <Text style={{ fontSize: 14, fontWeight: 800, color: text }}>{excellentCount}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: 600, color: labelC }}>Excellent capabilities (≥80%)</Text>
+                  <Text style={{ fontSize: 13, fontWeight: 800, color: text }}>{excellentCount}</Text>
                 </Flex>
               )}
 
               {/* Good capabilities */}
               {goodCount > 0 && (
                 <Flex alignItems="center" justifyContent="space-between">
-                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Good capabilities (60–79%)</Text>
-                  <Text style={{ fontSize: 14, fontWeight: 800, color: text }}>{goodCount}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: 600, color: labelC }}>Good capabilities (60–79%)</Text>
+                  <Text style={{ fontSize: 13, fontWeight: 800, color: text }}>{goodCount}</Text>
                 </Flex>
               )}
 
               {/* Full coverage */}
               {fullCoverageCaps.length > 0 && (
                 <Flex alignItems="center" justifyContent="space-between">
-                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Full coverage (100%)</Text>
-                  <Text style={{ fontSize: 14, fontWeight: 800, color: text }}>{fullCoverageCaps.length}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: 600, color: labelC }}>Full coverage (100%)</Text>
+                  <Text style={{ fontSize: 13, fontWeight: 800, color: text }}>{fullCoverageCaps.length}</Text>
                 </Flex>
               )}
 
               {/* Best capability */}
               {bestCap && (
-                <Flex flexDirection="column" style={{ marginTop: 4, padding: "6px 12px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>TOP CAPABILITY</Flex>
-                  <Flex alignItems="center" justifyContent="space-between">
-                    <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestCap.name}</Text>
-                    <Text style={{ fontSize: 14, fontWeight: 900, color: maturityBandColor(bestCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestCap.score}%</Text>
+                <Flex alignItems="center" justifyContent="space-between" style={{ marginTop: 1, padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                  <Flex alignItems="center" gap={6}>
+                    <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, textTransform: "uppercase" as const, letterSpacing: 0.3 }}>Top Capability</Text>
+                    <Text style={{ fontSize: 11, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestCap.name}</Text>
                   </Flex>
+                  <Text style={{ fontSize: 13, fontWeight: 900, color: maturityBandColor(bestCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestCap.score}%</Text>
                 </Flex>
               )}
 
               {/* Best maturity */}
               {bestMatCap && bestMatCap.name !== bestCap?.name && (
-                <Flex flexDirection="column" style={{ padding: "6px 12px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>TOP MATURITY</Flex>
-                  <Flex alignItems="center" justifyContent="space-between">
-                    <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestMatCap.name}</Text>
-                    <Text style={{ fontSize: 14, fontWeight: 900, color: maturityBandColor(bestMatCap.maturity.maturityScore), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestMatCap.maturity.maturityScore}%</Text>
+                <Flex alignItems="center" justifyContent="space-between" style={{ padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                  <Flex alignItems="center" gap={6}>
+                    <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, textTransform: "uppercase" as const, letterSpacing: 0.3 }}>Top Maturity</Text>
+                    <Text style={{ fontSize: 11, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestMatCap.name}</Text>
                   </Flex>
+                  <Text style={{ fontSize: 13, fontWeight: 900, color: maturityBandColor(bestMatCap.maturity.maturityScore), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestMatCap.maturity.maturityScore}%</Text>
                 </Flex>
               )}
             </Flex>
@@ -951,57 +964,57 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
           {/* Gaps column */}
           <Flex flexDirection="column" style={{
-            borderRadius: 8, padding: "8px 16px",
+            borderRadius: 8, padding: "4px 10px",
             background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
             borderLeft: "3px solid " + Colors.Text.Critical.Default,
             animation: "recScaleIn 0.35s ease both 0.65s",
           }}>
-            <Flex alignItems="center" gap={6} style={{ marginBottom: 6 }}>
-              <Text style={{ fontSize: 14 }}>✗</Text>
-              <Text style={{ fontSize: 12, fontWeight: 800, color: Colors.Text.Critical.Default, letterSpacing: 0.5, textTransform: "uppercase" as const }}>Gaps</Text>
-              <Text style={{ fontSize: 14, fontWeight: 900, color: totalGaps > 0 ? Colors.Text.Critical.Default : Colors.Text.Success.Default, marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{totalGaps}</Text>
+            <Flex alignItems="center" gap={6} style={{ marginBottom: 2 }}>
+              <Text style={{ fontSize: 13 }}>✗</Text>
+              <Text style={{ fontSize: 11, fontWeight: 800, color: Colors.Text.Critical.Default, letterSpacing: 0.5, textTransform: "uppercase" as const }}>Gaps</Text>
+              <Text style={{ fontSize: 13, fontWeight: 900, color: totalGaps > 0 ? Colors.Text.Critical.Default : Colors.Text.Success.Default, marginLeft: "auto", fontFamily: "system-ui, sans-serif" }}>{totalGaps}</Text>
             </Flex>
 
-            <Flex flexDirection="column" gap={4}>
+            <Flex flexDirection="column" gap={2}>
               {/* Gap breakdown */}
               <Flex alignItems="center" justifyContent="space-between">
-                <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Critical gaps (value = 0)</Text>
-                <Text style={{ fontSize: 14, fontWeight: 800, color: totalCritical > 0 ? Colors.Text.Critical.Default : text }}>{totalCritical}</Text>
+                <Text style={{ fontSize: 11, fontWeight: 600, color: labelC }}>Critical gaps (value = 0)</Text>
+                <Text style={{ fontSize: 13, fontWeight: 800, color: totalCritical > 0 ? Colors.Text.Critical.Default : text }}>{totalCritical}</Text>
               </Flex>
 
               {/* Low/Critical caps */}
               {criticalCount > 0 && (
                 <Flex alignItems="center" justifyContent="space-between">
-                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Critical capabilities (&lt;20%)</Text>
-                  <Text style={{ fontSize: 14, fontWeight: 800, color: Colors.Text.Critical.Default }}>{criticalCount}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: 600, color: labelC }}>Critical capabilities (&lt;20%)</Text>
+                  <Text style={{ fontSize: 13, fontWeight: 800, color: Colors.Text.Critical.Default }}>{criticalCount}</Text>
                 </Flex>
               )}
               {lowCount > 0 && (
                 <Flex alignItems="center" justifyContent="space-between">
-                  <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>Low capabilities (20–39%)</Text>
-                  <Text style={{ fontSize: 14, fontWeight: 800, color: Colors.Text.Warning.Default }}>{lowCount}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: 600, color: labelC }}>Low capabilities (20–39%)</Text>
+                  <Text style={{ fontSize: 13, fontWeight: 800, color: Colors.Text.Warning.Default }}>{lowCount}</Text>
                 </Flex>
               )}
 
               {/* Worst capability */}
               {worstCap && (
-                <Flex flexDirection="column" style={{ marginTop: 4, padding: "6px 12px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>NEEDS MOST ATTENTION</Flex>
-                  <Flex alignItems="center" justifyContent="space-between">
-                    <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{worstCap.name}</Text>
-                    <Text style={{ fontSize: 14, fontWeight: 900, color: maturityBandColor(worstCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{worstCap.score}%</Text>
+                <Flex alignItems="center" justifyContent="space-between" style={{ marginTop: 1, padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                  <Flex alignItems="center" gap={6}>
+                    <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, textTransform: "uppercase" as const, letterSpacing: 0.3 }}>Needs Attention</Text>
+                    <Text style={{ fontSize: 11, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{worstCap.name}</Text>
                   </Flex>
+                  <Text style={{ fontSize: 13, fontWeight: 900, color: maturityBandColor(worstCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{worstCap.score}%</Text>
                 </Flex>
               )}
 
               {/* Most gaps capability */}
               {topGapCap && topGapCap.name !== worstCap?.name && (
-                <Flex flexDirection="column" style={{ padding: "6px 12px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
-                  <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, marginBottom: 2, textTransform: "uppercase" as const, letterSpacing: 0.4 }}>MOST GAPS</Flex>
-                  <Flex alignItems="center" justifyContent="space-between">
-                    <Text style={{ fontSize: 12, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{topGapCap.name}</Text>
-                    <Text style={{ fontSize: 14, fontWeight: 900, color: Colors.Text.Warning.Default, flexShrink: 0, marginLeft: 8 }}>{topGapCap.total} gaps</Text>
+                <Flex alignItems="center" justifyContent="space-between" style={{ padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                  <Flex alignItems="center" gap={6}>
+                    <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, textTransform: "uppercase" as const, letterSpacing: 0.3 }}>Most Gaps</Text>
+                    <Text style={{ fontSize: 11, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{topGapCap.name}</Text>
                   </Flex>
+                  <Text style={{ fontSize: 13, fontWeight: 900, color: Colors.Text.Warning.Default, flexShrink: 0, marginLeft: 8 }}>{topGapCap.total} gaps</Text>
                 </Flex>
               )}
             </Flex>
@@ -1015,7 +1028,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
         {/* ── Combo Bar-Line Chart — Coverage vs Maturity ── */}
         <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 300px", minWidth: 0,
           borderRadius: 12, border: `1px solid ${borderSub}`, background: card,
-          padding: "8px 16px 8px",
+          padding: "6px 14px 6px",
           boxShadow: cardGlow, overflow: "visible",
           animation: "recFadeUp 0.4s ease both 0.75s" }}>
           <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
@@ -1024,7 +1037,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
             </Flex>
             <ExpandChartButton onClick={() => setExpandedChart("radar")} />
           </Flex>
-          <Flex flexDirection="column" style={{ height: "clamp(360px, calc(100vh - 380px), 600px)", minHeight: 360 }}>
+          <Flex flexDirection="column" style={{ height: "clamp(260px, 38vh, 400px)", minHeight: 260 }}>
             <CovMatRadar ref={(h: CovMatRadarHandle | null) => { onRadarMount(h); }} data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.maturity.maturityScore, color: c.color }))} />
           </Flex>
         </Flex>
@@ -1039,7 +1052,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
         {/* ── Scatter Chart — Capability Map ── */}
         <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 300px", minWidth: 0,
           borderRadius: 12, border: `1px solid ${borderSub}`, background: card,
-          padding: "8px 16px 8px",
+          padding: "6px 14px 6px",
           boxShadow: cardGlow, overflow: "visible",
           animation: "recFadeUp 0.4s ease both 0.85s" }}>
         <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
@@ -1048,7 +1061,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
           </Flex>
           <ExpandChartButton onClick={() => setExpandedChart("bubble")} />
         </Flex>
-        <Flex flexDirection="column" style={{ height: "clamp(360px, calc(100vh - 380px), 600px)", minHeight: 360 }}>
+        <Flex flexDirection="column" style={{ height: "clamp(260px, 38vh, 400px)", minHeight: 260 }}>
           <CapabilityScatter data={scatterPoints} dotRadius={10} showLegend={false} />
         </Flex>
       </Flex>
@@ -1359,7 +1372,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
   }, [preflight.allPassed, preflight.markValidated, preflight.reset, start]);
   return (
     <Flex flexDirection="column" alignItems="center" gap={20} style={{ textAlign: "center",
-      padding: "36px 28px", overflowY: "auto",
+      padding: "24px 20px", overflowY: "auto",
       background: bgSubtle,
       borderRight: `1px solid ${border}` }}>
       <Flex flexDirection="column">
