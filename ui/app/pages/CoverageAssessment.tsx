@@ -157,20 +157,25 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
     requestAnimationFrame(run);
   }, [loading, capabilities]);
 
-  // Auto-size chart
+  // Auto-size chart — use ResizeObserver for notebook/embedded containers
   useEffect(() => {
+    const el = rootRef.current;
     const calc = () => {
-      const vh = window.innerHeight;
-      const vw = rootRef.current ? rootRef.current.offsetWidth : window.innerWidth;
-      const mobile = vw < 640;
+      const vh = el ? el.offsetHeight || window.innerHeight : window.innerHeight;
+      const vw = el ? el.offsetWidth : window.innerWidth;
+      const mobile = vw < 700;
       setIsMobile(mobile);
-      if (mobile) {
-        setChartSize(Math.max(Math.min(vh - 200, vw - 32, 720), 260));
-      } else {
-        setChartSize(Math.max(Math.min(vh - 200, vw - 400, 720), 300));
-      }
+      // Reserve space for toolbar (~50px) + footer (~140px) + padding
+      const reserve = mobile ? 160 : 240;
+      const maxSide = Math.min(vh - reserve, vw - (mobile ? 32 : 400), 720);
+      setChartSize(Math.max(maxSide, mobile ? 200 : 220));
     };
     calc();
+    if (el && typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(calc);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
     window.addEventListener("resize", calc);
     return () => window.removeEventListener("resize", calc);
   }, []);
@@ -211,12 +216,12 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
         if (dp && (Math.abs(e.clientX - dp.x) > 5 || Math.abs(e.clientY - dp.y) > 5)) return;
         setActiveIdx(null); setSelectedCap(null); setCollapseKey(k => k + 1);
       }} style={{ height: "100%",
-      overflow: "hidden", boxSizing: "border-box", padding: "0",
+      overflow: "auto", boxSizing: "border-box", padding: "0",
       fontFamily: "inherit",
       background: bg, color: text, transition: "background 0.4s, color 0.4s" }}>
       {/* Idle State — capability overview + start */}
       {idle && !loading && (
-        <Grid gridTemplateColumns="380px 1fr" gridTemplateRows="minmax(0,1fr)" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <Grid gridTemplateColumns={isMobile ? "1fr" : "380px 1fr"} gridTemplateRows="minmax(0,1fr)" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {/* Left panel — memoized so it never re-renders on card interactions */}
           <IdleLeftPanel
             dk={dk} text={text} textSec={textSec} textTert={textTert}
@@ -266,7 +271,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
                   </Text>
                 )}
               </Container>
-              <Grid gridTemplateColumns="repeat(auto-fill, minmax(340px, 1fr))" gap={16}>
+              <Grid gridTemplateColumns={`repeat(auto-fill, minmax(${isMobile ? "260px" : "340px"}, 1fr))`} gap={16}>
                 {CAPABILITIES.map((cap) => (
                   <IdleCapCard key={cap.name} cap={cap} dk={dk} text={text} textSec={textSec} textTert={textTert}
                     bgSurface={bgSurface} bgSubtle={bgSubtle} border={border}
@@ -352,10 +357,10 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             </Text>
           </Flex>
           {/* Main content: chart left, cards right — stacks vertically on mobile */}
-          <Flex style={{ flex: 1, flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: isMobile ? "auto" : "hidden" }}>
+          <Flex style={{ flex: 1, flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: "auto" }}>
           {viewMode === "coverage" ? (<>
             {/* Left: chart + scale */}
-            <Flex flexDirection="column" alignItems="center" justifyContent="center" style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden", position: "relative" }}>
+            <Flex flexDirection="column" alignItems="center" justifyContent="center" style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "visible", position: "relative" }}>
               <ExpandChartButton onClick={() => setExpandedPolar(true)} style={{ position: "absolute", top: 4, right: 8, zIndex: 10 }} />
               <Flex flexDirection="column" style={{ position: "relative", width: chartSize, height: chartSize, flexShrink: 0 }}
                 onClick={(e) => {
@@ -408,21 +413,20 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
 
             {/* Right: scrollable cards */}
             <Flex flexDirection="column" style={{
-              width: isMobile ? "100%" : 360,
-              minWidth: isMobile ? undefined : 320,
+              width: isMobile ? "100%" : "clamp(260px, 30%, 360px)",
               flexShrink: 0,
               overflowY: "auto",
               padding: "6px 12px",
               borderLeft: isMobile ? "none" : `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
-              maxHeight: isMobile ? 300 : "calc(100vh - 160px)",
+              maxHeight: isMobile ? 300 : undefined,
             }}>
               <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} />
             </Flex>
           </>) : viewMode === "maturity" ? (
-            <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} />
+            <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} isMobile={isMobile} />
           ) : (
-            <RecommendationsView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} totalScore={totalScore} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} history={history} onDrilldown={setViewMode} onRadarMount={(h) => { radarHandleRef.current = h; }} />
+            <RecommendationsView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} totalScore={totalScore} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} history={history} onDrilldown={setViewMode} onRadarMount={(h) => { radarHandleRef.current = h; }} isMobile={isMobile} />
           )}
           </Flex>
 
@@ -434,7 +438,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             background: dk ? "rgba(65,105,225,0.04)" : "rgba(65,105,225,0.02)",
           }}>
             <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 800, color: text, marginBottom: 8, letterSpacing: 0.2 }}>How to Analyze — Coverage View</Flex>
-            <Grid gridTemplateColumns={isMobile ? "1fr" : "1fr 1fr 1fr 1fr"} gap={12}>
+            <Grid gridTemplateColumns={isMobile ? "1fr" : "repeat(auto-fit, minmax(200px, 1fr))"} gap={12}>
 
               <Flex flexDirection="column" style={{
                 padding: "8px 12px", borderRadius: 6,
@@ -500,7 +504,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             background: dk ? "rgba(65,105,225,0.04)" : "rgba(65,105,225,0.02)",
           }}>
             <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 16, letterSpacing: 0.2 }}>How to Analyze — Maturity View</Flex>
-            <Grid gridTemplateColumns={isMobile ? "1fr" : "1fr 1fr 1fr 1fr"} gap={16}>
+            <Grid gridTemplateColumns={isMobile ? "1fr" : "repeat(auto-fit, minmax(200px, 1fr))"} gap={16}>
 
               <Flex flexDirection="column" style={{
                 padding: "12px 16px", borderRadius: 8,
@@ -576,10 +580,10 @@ const maturityAnimStyle = `
 @keyframes matCountUp { from { opacity: 0; } to { opacity: 1; } }
 `;
 
-function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturityLevel, collapseKey }: {
+function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturityLevel, collapseKey, isMobile }: {
   capabilities: CapabilityResult[];
   dk: boolean; text: string; textSec: string; textTert: string;
-  overallMaturityLevel: number; collapseKey: number;
+  overallMaturityLevel: number; collapseKey: number; isMobile: boolean;
 }) {
   const matBand = sharedBandLabel(overallMaturityLevel);
   const matColor = maturityBandColor(overallMaturityLevel);
@@ -649,7 +653,7 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
       </Flex>
 
       {/* ── Capability cards grid ── */}
-      <Grid gridTemplateColumns="repeat(auto-fill, minmax(340px, 1fr))" gap={16}>
+      <Grid gridTemplateColumns={`repeat(auto-fill, minmax(${isMobile ? "260px" : "340px"}, 1fr))`} gap={16}>
         {sorted.map((cap, i) => (
           <Flex flexDirection="column" key={cap.name} style={{ animation: `matFadeUp 0.4s ease both ${0.15 + i * 0.06}s` }}>
             <MaturityCard cap={cap} dk={dk} text={text} textSec={textSec} textTert={textTert} collapseKey={collapseKey} />
@@ -692,13 +696,14 @@ const recAnimStyle = `
 }
 `;
 
-function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalScore, overallMaturityLevel, collapseKey, history, onDrilldown, onRadarMount }: {
+function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalScore, overallMaturityLevel, collapseKey, history, onDrilldown, onRadarMount, isMobile }: {
   capabilities: CapabilityResult[];
   dk: boolean; text: string; textSec: string; textTert: string;
   totalScore: number; overallMaturityLevel: number; collapseKey: number;
   history: ReturnType<typeof useAssessmentHistory>;
   onDrilldown: (mode: ViewMode) => void;
   onRadarMount: (handle: CovMatRadarHandle | null) => void;
+  isMobile: boolean;
 }) {
   const borderSub = dk ? "rgba(91,106,207,0.25)" : "rgba(0,0,0,0.08)";
   const card = dk ? "rgba(20,22,40,0.85)" : "rgba(248,249,252,0.9)";
@@ -871,7 +876,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
         </Flex>
 
         {/* ── Row 2: Achievements vs Gaps (side by side) ── */}
-        <Grid gridTemplateColumns="1fr 1fr" gap={8}>
+        <Grid gridTemplateColumns={isMobile ? "1fr" : "1fr 1fr"} gap={8}>
 
           {/* Achievements column */}
           <Flex flexDirection="column" style={{
@@ -1002,9 +1007,9 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
       </Flex>
 
       {/* ═══ SECTIONS 2 & 3: Charts side by side ═══ */}
-      <Flex gap={12} style={{ marginBottom: 0 }}>
+      <Flex gap={12} flexWrap="wrap" style={{ marginBottom: 0 }}>
         {/* ── Combo Bar-Line Chart — Coverage vs Maturity ── */}
-        <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 0", minWidth: 340,
+        <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 300px", minWidth: 0,
           borderRadius: 12, border: `1px solid ${borderSub}`, background: card,
           padding: "8px 16px 8px",
           boxShadow: cardGlow, overflow: "visible",
@@ -1015,7 +1020,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
             </Flex>
             <ExpandChartButton onClick={() => setExpandedChart("radar")} />
           </Flex>
-          <Flex flexDirection="column" style={{ height: "calc(100vh - 540px)", minHeight: 180 }}>
+          <Flex flexDirection="column" style={{ height: "clamp(360px, calc(100vh - 380px), 600px)", minHeight: 360 }}>
             <CovMatRadar ref={(h: CovMatRadarHandle | null) => { onRadarMount(h); }} data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.maturity.maturityScore, color: c.color }))} />
           </Flex>
         </Flex>
@@ -1028,7 +1033,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
         </ExpandableChartModal>
 
         {/* ── Scatter Chart — Capability Map ── */}
-        <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 0", minWidth: 340,
+        <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 300px", minWidth: 0,
           borderRadius: 12, border: `1px solid ${borderSub}`, background: card,
           padding: "8px 16px 8px",
           boxShadow: cardGlow, overflow: "visible",
@@ -1039,7 +1044,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
           </Flex>
           <ExpandChartButton onClick={() => setExpandedChart("bubble")} />
         </Flex>
-        <Flex flexDirection="column" style={{ height: "calc(100vh - 540px)", minHeight: 180 }}>
+        <Flex flexDirection="column" style={{ height: "clamp(360px, calc(100vh - 380px), 600px)", minHeight: 360 }}>
           <CapabilityScatter data={scatterPoints} dotRadius={10} showLegend={false} />
         </Flex>
       </Flex>
