@@ -92,6 +92,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
   const radarHandleRef = useRef<CovMatRadarHandle | null>(null);
   const wasLoadingRef = useRef(false);
   const [excludedCaps, setExcludedCaps] = useState<Set<string>>(new Set());
+  const [showGuide, setShowGuide] = useState(false);
 
   const toggleCap = useCallback((name: string) => {
     setExcludedCaps(prev => {
@@ -163,10 +164,10 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
     const calc = () => {
       const vh = el ? el.offsetHeight || window.innerHeight : window.innerHeight;
       const vw = el ? el.offsetWidth : window.innerWidth;
-      const mobile = vw < 700;
+      const mobile = vw < 640;
       setIsMobile(mobile);
-      // Reserve space for toolbar (~50px) + footer (~140px) + padding
-      const reserve = mobile ? 160 : 240;
+      // Reserve space for toolbar (~50px) + collapsed guide bar (~32px) + padding
+      const reserve = mobile ? 100 : 140;
       const maxSide = Math.min(vh - reserve, vw - (mobile ? 32 : 400), 720);
       setChartSize(Math.max(maxSide, mobile ? 200 : 220));
     };
@@ -430,14 +431,18 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
           )}
           </Flex>
 
-          {/* How to Analyze — footer */}
-          {viewMode === "coverage" ? (<Flex flexDirection="column" style={{
-            flexShrink: 0,
-            padding: "12px 20px 16px",
-            borderTop: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"}`,
-            background: dk ? "rgba(65,105,225,0.04)" : "rgba(65,105,225,0.02)",
-          }}>
-            <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 800, color: text, marginBottom: 8, letterSpacing: 0.2 }}>How to Analyze — Coverage View</Flex>
+          {/* How to Analyze — collapsible footer */}
+          {(viewMode === "coverage" || viewMode === "maturity") && (
+          <Flex flexDirection="column" style={{ flexShrink: 0, borderTop: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"}`, background: dk ? "rgba(65,105,225,0.04)" : "rgba(65,105,225,0.02)" }}>
+            <Flex alignItems="center" gap={6} style={{ padding: "6px 20px", cursor: "pointer", userSelect: "none" }}
+              onClick={(e) => { e.stopPropagation(); setShowGuide(g => !g); }}>
+              <Text style={{ fontSize: 12, fontWeight: 800, color: text, letterSpacing: 0.2 }}>
+                How to Analyze — {viewMode === "coverage" ? "Coverage" : "Maturity"} View
+              </Text>
+              <Text style={{ fontSize: 10, color: textSec, transition: "transform 0.2s", transform: showGuide ? "rotate(180deg)" : "rotate(0deg)" }}>▼</Text>
+            </Flex>
+            {showGuide && (viewMode === "coverage" ? (
+            <Flex flexDirection="column" style={{ padding: "0 20px 12px" }}>
             <Grid gridTemplateColumns={isMobile ? "1fr" : "repeat(auto-fit, minmax(200px, 1fr))"} gap={12}>
 
               <Flex flexDirection="column" style={{
@@ -497,13 +502,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               </Flex>
 
             </Grid>
-          </Flex>) : viewMode === "maturity" ? (<Flex flexDirection="column" style={{
-            flexShrink: 0,
-            padding: "12px 20px 16px",
-            borderTop: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"}`,
-            background: dk ? "rgba(65,105,225,0.04)" : "rgba(65,105,225,0.02)",
-          }}>
-            <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 800, color: text, marginBottom: 16, letterSpacing: 0.2 }}>How to Analyze — Maturity View</Flex>
+            </Flex>
+            ) : (
+            <Flex flexDirection="column" style={{ padding: "0 20px 12px" }}>
             <Grid gridTemplateColumns={isMobile ? "1fr" : "repeat(auto-fit, minmax(200px, 1fr))"} gap={16}>
 
               <Flex flexDirection="column" style={{
@@ -557,7 +558,10 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               </Flex>
 
             </Grid>
-          </Flex>) : null}
+            </Flex>
+            ))}
+          </Flex>
+          )}
         </>
       )}
 

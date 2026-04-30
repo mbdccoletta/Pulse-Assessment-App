@@ -115,12 +115,23 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   const [showListB, setShowListB] = useState(false);
   const [dimension, setDimension] = useState<"coverage" | "maturity">("coverage");
   const [expandedRadar, setExpandedRadar] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  const [isMobile, setIsMobile] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 640);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    const el = rootRef.current;
+    const calc = () => {
+      const vw = el ? el.offsetWidth : window.innerWidth;
+      setIsMobile(vw < 640);
+    };
+    calc();
+    if (el && typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(calc);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener("resize", calc);
+    return () => window.removeEventListener("resize", calc);
   }, []);
 
   const bg = Colors.Background.Base.Default;
@@ -268,7 +279,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   );
 
   return (
-    <Flex flexDirection="column" onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, height: "100vh", padding: "4px 16px", overflow: "hidden" }}>
+    <Flex flexDirection="column" ref={rootRef} onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, height: "100%", padding: "4px 16px", overflow: "auto" }}>
       {/* Header + A/B Selectors — compact single row */}
       <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 4 }} onClick={(e) => e.stopPropagation()}>
         <Tooltip text="Return to the main assessment page." position="bottom">
