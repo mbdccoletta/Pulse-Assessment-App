@@ -258,8 +258,13 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
                 <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>
                   Use the <Strong style={{ color: text }}>☑ checkbox</Strong> on each card to choose which capabilities to assess.
                   Click the card body to explore criteria details.
-                  {excludedCaps.size === 0 ? " All capabilities are included — the assessment will run in full." : ` ${excludedCaps.size} capability${excludedCaps.size > 1 ? "ies" : "y"} excluded — only selected ones will be evaluated.`}
+                  {excludedCaps.size === 0 ? " All capabilities are included — the assessment will run in full." : excludedCaps.size === CAPABILITIES.length ? "" : ` ${excludedCaps.size} capability${excludedCaps.size > 1 ? "ies" : "y"} excluded — only selected ones will be evaluated.`}
                 </Text>
+                {excludedCaps.size === CAPABILITIES.length && (
+                  <Text style={{ fontSize: 12, fontWeight: 600, color: Colors.Text.Critical.Default, marginTop: 4 }}>
+                    ⚠ All capabilities are deselected. Please select at least one to run the assessment.
+                  </Text>
+                )}
               </Container>
               <Grid gridTemplateColumns="repeat(auto-fill, minmax(340px, 1fr))" gap={16}>
                 {CAPABILITIES.map((cap) => (
@@ -1420,13 +1425,13 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
           </Flex>
         )}
         <Button
-          onClick={preflight.running ? undefined : handleRunClick}
-          disabled={preflight.running}
+          onClick={(preflight.running || selectedCount === 0) ? undefined : handleRunClick}
+          disabled={preflight.running || selectedCount === 0}
           loading={preflight.running}
           variant="emphasized"
           color="primary"
         >
-          {preflight.running ? "Validating…" : selectedCount < totalCount ? `Run Assessment (${selectedCount}/${totalCount})` : "Run Assessment"}
+          {preflight.running ? "Validating…" : selectedCount === 0 ? "Select at least 1 capability" : selectedCount < totalCount ? `Run Assessment (${selectedCount}/${totalCount})` : "Run Assessment"}
         </Button>
         {hasResults && (
           <Flex flexDirection="column" alignItems="center" gap={6} style={{ marginTop: 12 }}>
