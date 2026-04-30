@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { getEnvironmentUrl } from "@dynatrace-sdk/app-environment";
-import { CAPABILITIES, type Threshold } from "../queries";
+import { CAPABILITIES, type CapabilityDef, type Threshold } from "../queries";
 import { CRITERION_TIERS, type CriterionTier } from "../data/criterionTiers";
 
 export interface TierResult {
@@ -79,7 +79,7 @@ export interface CoverageData {
   entityCounts: EntityCounts | null;
   liveScannedBytes: number;
   liveScannedRecords: number;
-  start: () => void;
+  start: (caps?: CapabilityDef[]) => void;
   refresh: () => void;
   reset: () => void;
   goHome: () => void;
@@ -255,6 +255,7 @@ export function useCoverageData(): CoverageData {
   const [liveScannedRecords, setLiveScannedRecords] = useState(0);
   const [runId, setRunId] = useState(0);
   const cancelRef = useRef(0);
+  const capsRef = useRef<CapabilityDef[]>(CAPABILITIES);
 
   const runAssessment = useCallback(async () => {
     const runToken = ++cancelRef.current;
@@ -267,7 +268,8 @@ export function useCoverageData(): CoverageData {
 
     try {
       // Collect all queries for deduplication (include queryB for cross-entity criteria)
-      const allQueries = CAPABILITIES.flatMap((c) => c.criteria.flatMap((cr) => cr.queryB ? [cr.query, cr.queryB] : [cr.query]));
+      const caps = capsRef.current;
+      const allQueries = caps.flatMap((c) => c.criteria.flatMap((cr) => cr.queryB ? [cr.query, cr.queryB] : [cr.query]));
       const uniqueCount = new Set(allQueries).size;
       let completed = 0;
 
@@ -282,7 +284,7 @@ export function useCoverageData(): CoverageData {
 
       if (cancelRef.current !== runToken) return; // cancelled
 
-      const results: CapabilityResult[] = CAPABILITIES.map((cap) => {
+      const results: CapabilityResult[] = caps.map((cap) => {
         const criteriaResults: CapabilityResult["criteriaResults"] = [];
         const details: string[] = [];
 
@@ -441,7 +443,7 @@ export function useCoverageData(): CoverageData {
     return h === "localhost" ? "localhost (dev)" : h.split(".")[0];
   })();
 
-  const startFn = useCallback(() => setRunId((n) => n + 1), []);
+  const startFn = useCallback((caps?: CapabilityDef[]) => { capsRef.current = caps && caps.length > 0 ? caps : CAPABILITIES; setRunId((n) => n + 1); }, []);
   const refreshFn = useCallback(() => setRunId((n) => n + 1), []);
   const resetFn = useCallback(() => { setIdle(true); setCapabilities([]); setStats(null); setEntityCounts(null); setError(null); }, []);
   const goHomeFn = useCallback(() => { setIdle(true); }, []);
