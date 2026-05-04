@@ -781,18 +781,26 @@
   <div class="container">
     <div class="section-header">
       <h2>Quick Start</h2>
-      <p>Get up and running in 5 steps.</p>
+      <p>Get up and running in 7 steps.</p>
     </div>
     <div class="quickstart">
       <div class="step">
         <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>Verify prerequisites</h4>
+          <code>node --version && npm --version</code>
+          <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 6px;">Node.js ≥ v20 and npm ≥ 10 are required.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
         <div class="step-content">
           <h4>Clone the repository</h4>
           <code>git clone https://github.com/mbdccoletta/Pulse-Assessment-App.git</code>
         </div>
       </div>
       <div class="step">
-        <div class="step-num">2</div>
+        <div class="step-num">3</div>
         <div class="step-content">
           <h4>Configure your tenant</h4>
           <p style="color: var(--text-secondary); font-size: 0.9rem;">
@@ -801,27 +809,40 @@
         </div>
       </div>
       <div class="step">
-        <div class="step-num">3</div>
+        <div class="step-num">4</div>
         <div class="step-content">
           <h4>Install dependencies</h4>
           <code>npm ci</code>
           <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 6px;">⚠ Use <code>npm ci</code>, not <code>npm install</code> — ensures exact versions from the lockfile.</p>
+          <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px;">⚠ Never delete <code>package-lock.json</code> — it pins the tested dependency versions.</p>
         </div>
       </div>
       <div class="step">
-        <div class="step-num">4</div>
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <h4>Verify installation</h4>
+          <code>npx dt-app --version</code>
+          <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 6px;">Should display the dt-app CLI version. If it fails, run <code>npm install -g dt-app</code>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
         <div class="step-content">
           <h4>Run locally (dev server)</h4>
           <code>npm run start</code>
         </div>
       </div>
       <div class="step">
-        <div class="step-num">5</div>
+        <div class="step-num">7</div>
         <div class="step-content">
           <h4>Deploy to production</h4>
           <code>npm run deploy</code>
         </div>
       </div>
+    </div>
+    <div style="margin-top: 20px; padding: 16px; background: rgba(0, 229, 255, 0.06); border: 1px solid rgba(0, 229, 255, 0.15); border-radius: 10px; max-width: 800px; margin-left: auto; margin-right: auto;">
+      <p style="color: var(--accent-cyan); font-weight: 700; font-size: 0.9rem; margin-bottom: 6px;">🔄 After every <code>git pull</code></p>
+      <p style="color: var(--text-secondary); font-size: 0.85rem;">Always run <code>npm ci</code> again to pick up any dependency changes. Skipping this step is the #1 cause of build errors.</p>
     </div>
   </div>
 </section>
