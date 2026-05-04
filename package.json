@@ -11,8 +11,9 @@
   "dependencies": {
     "@dynatrace-sdk/client-document": "^1.30.0",
     "@dynatrace-sdk/client-query": "^1.17.0",
-    "@dynatrace/strato-components": "^1.0.0",
-    "@dynatrace/strato-design-tokens": "^1.0.0",
+    "@dynatrace/strato-components": "~1.18.0",
+    "@dynatrace/strato-components-preview": "~1.11.2",
+    "@dynatrace/strato-design-tokens": "^1.1.0",
     "chart.js": "^4.5.1",
     "jspdf": "^4.2.1",
     "react": "^18.2.0",
