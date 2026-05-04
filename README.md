@@ -59,17 +59,20 @@ Pulse Assessment is a native **Dynatrace App** that evaluates your environment's
 
 ## Prerequisites
 
-- **Node.js** 24+
-- **Dynatrace App Toolkit** (`dt-app` CLI v1.8+)
+- **Node.js** 20+ (recommended: 22 LTS or later)
+- **npm** 10+ (ships with Node.js 20+)
+- **Dynatrace App Toolkit** (`dt-app` CLI v1.8+) — install via `npm install -g dt-app`
 - Access to a Dynatrace tenant (SaaS or Managed)
 - VSCode with the [Dynatrace Apps extension](https://marketplace.visualstudio.com/items?itemName=dynatrace.dynatrace-extensions) (recommended)
+
+> **Important:** Verify your Node.js version before starting: `node --version` (must be ≥ v20).
 
 ## Quick Start
 
 ### 1. Clone the repository
 ```bash
 git clone <repository-url>
-cd cca-app
+cd pulse-assessment
 ```
 
 ### 2. Configure your tenant
@@ -80,8 +83,10 @@ Edit `app.config.json` and set your environment URL:
 
 ### 3. Install dependencies
 ```bash
-npm install
+npm ci
 ```
+
+> **Use `npm ci`, not `npm install`.** This installs exact versions from `package-lock.json`, ensuring everyone gets the same dependency tree and avoiding version mismatch errors.
 
 ### 4. Run locally (dev mode)
 ```bash
@@ -186,6 +191,45 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture, data
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+
+## Troubleshooting
+
+### TS2307: Cannot find module '@dynatrace/strato-components-preview/...'
+
+If you see TypeScript errors like:
+```
+Cannot find module '@dynatrace/strato-components-preview/buttons' or its corresponding type declarations.
+Cannot find module '@dynatrace/strato-components-preview/overlays' or its corresponding type declarations.
+```
+
+**Cause:** Wrong versions of `@dynatrace/strato-components-preview` were installed — likely from running `npm install` instead of `npm ci`.
+
+**Fix:**
+```bash
+rm -rf node_modules
+npm ci
+```
+
+This ensures the exact versions from `package-lock.json` are installed. The subpath imports (`/buttons`, `/overlays`, `/layouts`, `/navigation`) require `@dynatrace/strato-components-preview >= 1.11.0`.
+
+### Build fails after `git pull`
+
+If dependencies changed in a pull, always re-install:
+```bash
+npm ci
+```
+
+### `dt-app` command not found
+
+Install the Dynatrace App Toolkit globally:
+```bash
+npm install -g dt-app
+```
+
+Or use it via `npx` (already configured in `package.json` scripts):
+```bash
+npx dt-app dev
+```
 
 ## Changelog
 
