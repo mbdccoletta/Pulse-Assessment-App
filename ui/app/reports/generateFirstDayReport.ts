@@ -574,7 +574,7 @@ export function generateFirstDayReport(input: ReportInput, lang: ReportLang = "e
     y += 4;
 
     consolCaps.forEach(cap => {
-      ensureSpace(8);
+      ensureSpace(12);
       const rawScore = cap.rawScore ?? cap.score;
       const gap = rawScore - cap.score;
       const rgb = hexToRgb(cap.color);
@@ -588,6 +588,13 @@ export function generateFirstDayReport(input: ReportInput, lang: ReportLang = "e
       pdf.text(`${cap.score}%`, colX[3], y);
       pdf.setTextColor(255, 100, 80);
       pdf.text(`-${gap}%`, colX[4], y);
+      // Flag contradiction: factor=0 but discovery found data
+      if (cap.consolidation === 0 && rawScore > 0) {
+        y += 3.5;
+        pdf.setFontSize(5.5); pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 100, 80);
+        pdf.text(`* Discovery found ${rawScore}% coverage in Dynatrace despite 0% consolidation factor — review recommended`, M + 4, y);
+      }
       y += 5;
     });
 
