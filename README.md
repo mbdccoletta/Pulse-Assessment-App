@@ -69,6 +69,19 @@ Pulse Assessment is a native **Dynatrace App** that evaluates your environment's
 
 ## Quick Start
 
+### TL;DR (3 commands)
+```bash
+git clone https://github.com/mbdccoletta/Pulse-Assessment-App.git
+cd Pulse-Assessment-App
+# Edit app.config.json → set your environmentUrl
+./setup.sh
+```
+
+The `setup.sh` script validates prerequisites (Node.js ≥ 20, npm ≥ 10), checks your tenant config, installs dependencies with `npm ci`, and verifies the `dt-app` CLI. After setup, run `npm run start` (dev) or `npm run deploy` (production).
+
+<details>
+<summary>Manual step-by-step instructions</summary>
+
 ### 1. Verify prerequisites
 ```bash
 node --version   # Must be >= v20
@@ -77,8 +90,8 @@ npm --version    # Must be >= 10
 
 ### 2. Clone the repository
 ```bash
-git clone <repository-url>
-cd pulse-assessment
+git clone https://github.com/mbdccoletta/Pulse-Assessment-App.git
+cd Pulse-Assessment-App
 ```
 
 ### 3. Configure your tenant
@@ -112,6 +125,8 @@ Opens in browser connected to your tenant with hot reload.
 npm run build
 npm run deploy
 ```
+
+</details>
 
 > **After every `git pull`**, always run `npm ci` again to pick up any dependency changes.
 

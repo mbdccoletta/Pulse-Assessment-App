@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { getEnvironmentUrl } from "@dynatrace-sdk/app-environment";
 import { CAPABILITIES, type CapabilityDef, type Threshold } from "../queries";
@@ -22,10 +22,17 @@ export interface MaturityResult {
 export interface CapabilityResult {
   name: string;
   color: string;
+  /** Effective score (adjusted by consolidation when active, otherwise same as rawScore). */
   score: number;
+  /** Original score from DQL queries (before consolidation adjustment). */
+  rawScore: number;
   details: string[];
   criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean }[];
   maturity: MaturityResult;
+  /** Consolidation factor (0–100). 100 = all data in DT, 30 = only 30% of estate in DT. */
+  consolidation: number;
+  /** Effective maturity score (adjusted by consolidation when active). */
+  effectiveMaturityScore: number;
 }
 
 export interface QueryStats {
@@ -79,6 +86,8 @@ export interface CoverageData {
   entityCounts: EntityCounts | null;
   liveScannedBytes: number;
   liveScannedRecords: number;
+  consolidation: Record<string, number>;
+  setConsolidation: (factors: Record<string, number>) => void;
   start: (caps?: CapabilityDef[]) => void;
   refresh: () => void;
   reset: () => void;
@@ -253,6 +262,7 @@ export function useCoverageData(): CoverageData {
   const [entityCounts, setEntityCounts] = useState<EntityCounts | null>(null);
   const [liveScannedBytes, setLiveScannedBytes] = useState(0);
   const [liveScannedRecords, setLiveScannedRecords] = useState(0);
+  const [consolidation, setConsolidation] = useState<Record<string, number>>({});
   const [runId, setRunId] = useState(0);
   const cancelRef = useRef(0);
   const capsRef = useRef<CapabilityDef[]>(CAPABILITIES);
@@ -362,7 +372,7 @@ export function useCoverageData(): CoverageData {
         const passedCount = criteriaResults.filter(cr => cr.points > 0).length;
         const capScore = Math.round((passedCount / cap.criteria.length) * 100);
 
-        return { name: cap.name, color: cap.color, score: capScore, details, criteriaResults, maturity };
+        return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, maturity, consolidation: 100, effectiveMaturityScore: maturityScore };
       });
 
       // Log summary
@@ -423,12 +433,24 @@ export function useCoverageData(): CoverageData {
     if (runId > 0) runAssessment();
   }, [runAssessment, runId]);
 
-  const totalScore = capabilities.length > 0
-    ? Math.round(capabilities.reduce((sum, c) => sum + c.score, 0) / capabilities.length)
+  // Apply consolidation factors to produce adjusted scores
+  const adjustedCapabilities = useMemo(() => {
+    if (Object.keys(consolidation).length === 0) return capabilities;
+    return capabilities.map(cap => {
+      const factor = consolidation[cap.name] ?? 100;
+      if (factor === 100) return cap;
+      const adjScore = Math.round(cap.rawScore * factor / 100);
+      const adjMaturity = Math.round(cap.maturity.maturityScore * factor / 100);
+      return { ...cap, consolidation: factor, score: adjScore, effectiveMaturityScore: adjMaturity };
+    });
+  }, [capabilities, consolidation]);
+
+  const totalScore = adjustedCapabilities.length > 0
+    ? Math.round(adjustedCapabilities.reduce((sum, c) => sum + c.score, 0) / adjustedCapabilities.length)
     : 0;
 
-  const overallMaturityLevel = capabilities.length > 0
-    ? Math.round(capabilities.reduce((sum, c) => sum + c.maturity.maturityScore, 0) / capabilities.length)
+  const overallMaturityLevel = adjustedCapabilities.length > 0
+    ? Math.round(adjustedCapabilities.reduce((sum, c) => sum + c.effectiveMaturityScore, 0) / adjustedCapabilities.length)
     : 0;
 
   const tenant = (() => {
@@ -445,14 +467,14 @@ export function useCoverageData(): CoverageData {
 
   const startFn = useCallback((caps?: CapabilityDef[]) => { capsRef.current = caps && caps.length > 0 ? caps : CAPABILITIES; setRunId((n) => n + 1); }, []);
   const refreshFn = useCallback(() => setRunId((n) => n + 1), []);
-  const resetFn = useCallback(() => { setIdle(true); setCapabilities([]); setStats(null); setEntityCounts(null); setError(null); }, []);
+  const resetFn = useCallback(() => { setIdle(true); setCapabilities([]); setStats(null); setEntityCounts(null); setError(null); setConsolidation({}); }, []);
   const goHomeFn = useCallback(() => { setIdle(true); }, []);
   const resumeFn = useCallback(() => {
     if (capabilities.length > 0) setIdle(false);
   }, [capabilities.length]);
 
   return {
-    capabilities,
+    capabilities: adjustedCapabilities,
     totalScore,
     overallMaturityLevel,
     loading,
@@ -463,6 +485,8 @@ export function useCoverageData(): CoverageData {
     entityCounts,
     liveScannedBytes,
     liveScannedRecords,
+    consolidation,
+    setConsolidation,
     tenant,
     date: new Date().toISOString().split("T")[0],
     start: startFn,
