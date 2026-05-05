@@ -119,6 +119,16 @@ export interface ReportStrings {
   // Opportunities
   opportunities: string;
 
+  // Unified Platform Value (consolidation)
+  unifiedPlatformTitle: string;
+  unifiedPlatformIntro: (consolCaps: number) => string;
+  unifiedBenefit1Title: string; unifiedBenefit1: string;
+  unifiedBenefit2Title: string; unifiedBenefit2: string;
+  unifiedBenefit3Title: string; unifiedBenefit3: string;
+  unifiedBenefit4Title: string; unifiedBenefit4: string;
+  unifiedBenefit5Title: string; unifiedBenefit5: string;
+  unifiedCallToAction: string;
+
   // Footer
   footer: (tenant: string, date: string) => string;
   page: (i: number, total: number) => string;
@@ -227,6 +237,21 @@ export const REPORT_EN: ReportStrings = {
 
   opportunities: "Opportunities for Growth",
 
+  unifiedPlatformTitle: "Why Consolidating Into a Single Platform Matters",
+  unifiedPlatformIntro: (consolCaps) =>
+    `This assessment identified ${consolCaps} capabilities where observability data is split across multiple tools. Consolidating all telemetry into Dynatrace Grail -- the causal data lakehouse -- unlocks capabilities that are impossible when data lives in silos.`,
+  unifiedBenefit1Title: "End-to-End Context",
+  unifiedBenefit1: "When logs, metrics, traces, and events live in the same lakehouse, Dynatrace Intelligence can correlate them automatically. A slow API response is traced from the user click, through the service call, to the database query, to the infrastructure bottleneck -- in seconds, not hours of manual cross-tool investigation.",
+  unifiedBenefit2Title: "Causal AI (Dynatrace Intelligence)",
+  unifiedBenefit2: "Dynatrace Intelligence requires full-stack data to determine root cause. With partial data, it can only detect problems -- not explain them. Every data source added to Grail exponentially increases the accuracy and speed of root cause analysis.",
+  unifiedBenefit3Title: "Topology-Aware Analytics",
+  unifiedBenefit3: "Smartscape maps every dependency in real time. Logs from a competitor tool cannot be linked to the service topology, the deployment version, or the affected users. Inside Dynatrace, every log line is automatically enriched with entity context, making queries like 'show me errors for users on this release in this region' trivial.",
+  unifiedBenefit4Title: "Operational Efficiency",
+  unifiedBenefit4: "Multiple tools mean multiple UIs, query languages, alert configurations, and vendor contracts. A unified platform eliminates context switching, reduces training costs, and provides a single source of truth for all teams -- SRE, DevOps, Security, and Business.",
+  unifiedBenefit5Title: "OpenPipeline Flexibility",
+  unifiedBenefit5: "Dynatrace OpenPipeline can ingest data from any source -- including existing tools -- and enrich it with full Dynatrace context. Migration can be incremental: start routing data through OpenPipeline to Grail while maintaining existing workflows, then sunset redundant tools as confidence grows.",
+  unifiedCallToAction: "Recommendation: Prioritize routing all observability data into Grail. Each additional data source strengthens Dynatrace Intelligence accuracy, Smartscape topology, and the overall value of the platform. The gap between current adjusted scores and full DT scores represents the untapped potential of a unified observability strategy.",
+
   footer: (tenant, date) => `Dynatrace Platform — First Day Results  |  ${tenant}  |  ${date}`,
   page: (i, total) => `Page ${i} / ${total}`,
 
@@ -333,6 +358,21 @@ export const REPORT_PT: ReportStrings = {
 
   opportunities: "Oportunidades de Crescimento",
 
+  unifiedPlatformTitle: "Por Que Consolidar em Uma Plataforma Unica Importa",
+  unifiedPlatformIntro: (consolCaps) =>
+    `Esta avaliacao identificou ${consolCaps} capacidades onde os dados de observabilidade estao divididos entre multiplas ferramentas. Consolidar toda a telemetria no Dynatrace Grail -- o lakehouse causal de dados -- desbloqueia capacidades que sao impossiveis quando os dados vivem em silos.`,
+  unifiedBenefit1Title: "Contexto de Ponta a Ponta",
+  unifiedBenefit1: "Quando logs, metricas, traces e eventos vivem no mesmo lakehouse, o Dynatrace Intelligence consegue correlaciona-los automaticamente. Uma resposta lenta de API eh rastreada desde o clique do usuario, passando pela chamada de servico, ate a query no banco e o gargalo de infraestrutura -- em segundos, nao horas de investigacao manual cruzando ferramentas.",
+  unifiedBenefit2Title: "IA Causal (Dynatrace Intelligence)",
+  unifiedBenefit2: "O Dynatrace Intelligence requer dados full-stack para determinar a causa raiz. Com dados parciais, ele so consegue detectar problemas -- nao explica-los. Cada fonte de dados adicionada ao Grail aumenta exponencialmente a precisao e velocidade da analise de causa raiz.",
+  unifiedBenefit3Title: "Analytics Ciente da Topologia",
+  unifiedBenefit3: "O Smartscape mapeia cada dependencia em tempo real. Logs de uma ferramenta concorrente nao podem ser vinculados a topologia de servicos, a versao do deploy ou aos usuarios afetados. Dentro do Dynatrace, cada linha de log eh automaticamente enriquecida com contexto de entidade, tornando queries como 'mostre erros para usuarios nesta release nesta regiao' triviais.",
+  unifiedBenefit4Title: "Eficiencia Operacional",
+  unifiedBenefit4: "Multiplas ferramentas significam multiplas UIs, linguagens de query, configuracoes de alerta e contratos com fornecedores. Uma plataforma unificada elimina troca de contexto, reduz custos de treinamento e fornece uma unica fonte de verdade para todas as equipes -- SRE, DevOps, Seguranca e Negocios.",
+  unifiedBenefit5Title: "Flexibilidade do OpenPipeline",
+  unifiedBenefit5: "O OpenPipeline do Dynatrace pode ingerir dados de qualquer fonte -- incluindo ferramentas existentes -- e enriquece-los com o contexto completo do Dynatrace. A migracao pode ser incremental: comece roteando dados pelo OpenPipeline para o Grail mantendo os workflows existentes, e depois descontinue ferramentas redundantes conforme a confianca cresce.",
+  unifiedCallToAction: "Recomendacao: Priorize o roteamento de todos os dados de observabilidade para o Grail. Cada fonte de dados adicional fortalece a precisao do Dynatrace Intelligence, a topologia Smartscape e o valor geral da plataforma. A diferenca entre os scores ajustados atuais e os scores completos do DT representa o potencial inexplorado de uma estrategia unificada de observabilidade.",
+
   footer: (tenant, date) => `Plataforma Dynatrace — Resultados do Primeiro Dia  |  ${tenant}  |  ${date}`,
   page: (i, total) => `Pagina ${i} / ${total}`,
 
@@ -438,6 +478,21 @@ export const REPORT_ES: ReportStrings = {
   teamAiBaseline: "Monitoreo LLM, uso de tokens, seguimiento de calidad de respuesta.",
 
   opportunities: "Oportunidades de Crecimiento",
+
+  unifiedPlatformTitle: "Por Que Consolidar en Una Plataforma Unica Importa",
+  unifiedPlatformIntro: (consolCaps) =>
+    `Esta evaluacion identifico ${consolCaps} capacidades donde los datos de observabilidad estan divididos entre multiples herramientas. Consolidar toda la telemetria en Dynatrace Grail -- el lakehouse causal de datos -- desbloquea capacidades que son imposibles cuando los datos viven en silos.`,
+  unifiedBenefit1Title: "Contexto de Extremo a Extremo",
+  unifiedBenefit1: "Cuando logs, metricas, traces y eventos viven en el mismo lakehouse, Dynatrace Intelligence puede correlacionarlos automaticamente. Una respuesta lenta de API se rastrea desde el clic del usuario, pasando por la llamada de servicio, hasta la consulta en la base de datos y el cuello de botella de infraestructura -- en segundos, no horas de investigacion manual cruzando herramientas.",
+  unifiedBenefit2Title: "IA Causal (Dynatrace Intelligence)",
+  unifiedBenefit2: "Dynatrace Intelligence requiere datos full-stack para determinar la causa raiz. Con datos parciales, solo puede detectar problemas -- no explicarlos. Cada fuente de datos anadida a Grail aumenta exponencialmente la precision y velocidad del analisis de causa raiz.",
+  unifiedBenefit3Title: "Analytics Consciente de la Topologia",
+  unifiedBenefit3: "Smartscape mapea cada dependencia en tiempo real. Los logs de una herramienta competidora no pueden vincularse a la topologia de servicios, la version del despliegue o los usuarios afectados. Dentro de Dynatrace, cada linea de log se enriquece automaticamente con contexto de entidad, haciendo triviales consultas como 'mostrar errores para usuarios en esta version en esta region'.",
+  unifiedBenefit4Title: "Eficiencia Operativa",
+  unifiedBenefit4: "Multiples herramientas significan multiples UIs, lenguajes de consulta, configuraciones de alerta y contratos con proveedores. Una plataforma unificada elimina el cambio de contexto, reduce costos de capacitacion y proporciona una unica fuente de verdad para todos los equipos -- SRE, DevOps, Seguridad y Negocios.",
+  unifiedBenefit5Title: "Flexibilidad de OpenPipeline",
+  unifiedBenefit5: "OpenPipeline de Dynatrace puede ingerir datos de cualquier fuente -- incluidas herramientas existentes -- y enriquecerlos con el contexto completo de Dynatrace. La migracion puede ser incremental: comience enrutando datos a traves de OpenPipeline hacia Grail mientras mantiene los flujos existentes, y luego retire herramientas redundantes a medida que crece la confianza.",
+  unifiedCallToAction: "Recomendacion: Priorice el enrutamiento de todos los datos de observabilidad hacia Grail. Cada fuente de datos adicional fortalece la precision de Dynatrace Intelligence, la topologia Smartscape y el valor general de la plataforma. La brecha entre los puntajes ajustados actuales y los puntajes completos de DT representa el potencial sin explotar de una estrategia unificada de observabilidad.",
 
   footer: (tenant, date) => `Plataforma Dynatrace — Resultados del Primer Dia  |  ${tenant}  |  ${date}`,
   page: (i, total) => `Pagina ${i} / ${total}`,
