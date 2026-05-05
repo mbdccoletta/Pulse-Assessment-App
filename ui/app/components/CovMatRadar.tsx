@@ -86,9 +86,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const legendSpace = 22;
     const cx = w / 2;
     const cy = (h - legendSpace) / 2;
-    const labelMarginW = Math.max(w * 0.44, 160); // horizontal margin based on width
-    const labelMarginH = Math.max(h * 0.38, 130); // vertical margin based on height
-    const R = Math.min((w - labelMarginW) / 2, (h - legendSpace - labelMarginH) / 2);
+    const availH = h - legendSpace;
+    // Use 28% of smallest dimension for chart radius — leaves generous room for labels
+    const R = Math.min(w, availH) * 0.28;
     geoRef.current = { cx, cy, R, N, SEG };
 
     ctx.clearRect(0, 0, w, h);
@@ -224,10 +224,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     }
 
     // ── Connector lines + capability labels ──
-    // Elliptical placement — 70% into available margin, with min gap proportional to R
-    const minLabelGap = R * 0.45;
-    const labelRx = R + Math.max((w / 2 - R) * 0.7, minLabelGap);
-    const labelRy = R + Math.max(((h - legendSpace) / 2 - R) * 0.7, minLabelGap);
+    // Single circular label radius = R + fixed gap — ensures all connector lines are equal length
+    const labelGap = R * 0.28;  // connector line length = labelGap - small margins
+    const labelR = R + labelGap;
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const maxLabelW = Math.max(w * 0.26, 110);
@@ -241,9 +240,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const dim = activeIdx !== null && activeIdx !== undefined && !act;
       const isR = cos > 0.15, isL = cos < -0.15;
 
-      // Label anchor on ellipse — consistent spacing adapted to canvas shape
-      let lx = cx + cos * labelRx;
-      let ly = cy + sin * labelRy;
+      // Label anchor on circle — uniform distance from center
+      let lx = cx + cos * labelR;
+      let ly = cy + sin * labelR;
       if (isR) lx = Math.min(lx, w - maxLabelW - labelPad);
       else if (isL) lx = Math.max(lx, maxLabelW + labelPad);
 
@@ -268,33 +267,18 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const nameStartY = textTopY;
       const scoreY = textTopY + nameBlockH + 2;
 
-      // ── Dashed connector line — from ring edge toward label text ──
-      // Use unclamped label position to compute direction so clamped labels still get lines
-      const unclampedLx = cx + cos * labelRx;
-      const unclampedLy = cy + sin * labelRy;
-      const dlx = unclampedLx - cx, dly = unclampedLy - cy;
-      const labelDist = Math.hypot(dlx, dly);
-      const ux = dlx / labelDist, uy = dly / labelDist;
-      // Line starts just outside ring edge
-      const startD = R + 4;
-      // Line ends at the closer of: text start OR the clamped label position
-      const clampedDist = Math.hypot(lx - cx, ly - cy);
-      const stopD = Math.min(labelDist, clampedDist) - totalTextH / 2 - 2;
-      if (stopD > startD + 2) {
-        const sx = cx + ux * startD, sy = cy + uy * startD;
-        const ex = cx + ux * stopD, ey = cy + uy * stopD;
+      // ── Dashed connector line — purely radial, all same length ──
+      const connStart = R + 4;
+      const connEnd = labelR - totalTextH / 2 - 4;
+      if (connEnd > connStart + 2) {
+        const sx = cx + cos * connStart;
+        const sy = cy + sin * connStart;
+        const ex = cx + cos * connEnd;
+        const ey = cy + sin * connEnd;
         ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
-        ctx.strokeStyle = dk ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)";
-        ctx.globalAlpha = dim ? 0.2 : 1;
-        ctx.setLineDash([5, 4]); ctx.lineWidth = act ? 2.5 : 1.5; ctx.stroke(); ctx.setLineDash([]);
-        ctx.globalAlpha = 1;
-      } else {
-        // Fallback: draw short line directly from ring to label center
-        const sx = cx + ux * (R + 2), sy = cy + uy * (R + 2);
-        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(lx, ly);
-        ctx.strokeStyle = dk ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.25)";
-        ctx.globalAlpha = dim ? 0.2 : 1;
-        ctx.setLineDash([4, 3]); ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]);
+        ctx.strokeStyle = dk ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.2)";
+        ctx.globalAlpha = dim ? 0.15 : 0.7;
+        ctx.setLineDash([4, 4]); ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]);
         ctx.globalAlpha = 1;
       }
 
@@ -405,18 +389,16 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const h = rect.height;
 
     // Check label areas first (higher priority)
-    const legendSpaceH = 22;
-    const minGapH = R * 0.45;
-    const labelRx = R + Math.max((w / 2 - R) * 0.7, minGapH);
-    const labelRy = R + Math.max(((h - legendSpaceH) / 2 - R) * 0.7, minGapH);
+    const labelGapH = R * 0.28;
+    const labelRH = R + labelGapH;
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const totalTextH = (fs1 + 2) + 2 + fs2;
     for (let i = 0; i < N; i++) {
       const midA = i * SEG + SEG / 2 - Math.PI / 2;
       const cos = Math.cos(midA), sin = Math.sin(midA);
-      const lx = cx + cos * labelRx;
-      const ly = cy + sin * labelRy;
+      const lx = cx + cos * labelRH;
+      const ly = cy + sin * labelRH;
       const isR = cos > 0.15, isL = cos < -0.15;
       const labelW = 130;
       const left = isR ? lx - 4 : isL ? lx - labelW + 4 : lx - labelW / 2;
@@ -447,7 +429,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     // Fallback: click anywhere in a sector selects that capability
     const dx = mx - cx, dy = my - cy;
     const dist = Math.hypot(dx, dy);
-    if (dist > hR2 + 10 && dist < Math.max(labelRx, labelRy)) {
+    if (dist > hR2 + 10 && dist < labelRH) {
       let angle = Math.atan2(dy, dx) + Math.PI / 2; // rotate so 0 is top
       if (angle < 0) angle += Math.PI * 2;
       const sectorIdx = Math.floor(angle / SEG);
