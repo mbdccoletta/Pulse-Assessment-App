@@ -538,19 +538,28 @@ export function generateFirstDayReport(input: ReportInput, lang: ReportLang = "e
     });
   }
 
-  /* ── Consolidation Opportunity Section ── */
+  /* ══════════════════════════════════════════
+     PAGE — CONSOLIDATION OPPORTUNITY
+     ══════════════════════════════════════════ */
   const consolCaps = capabilities.filter(c => c.consolidation !== undefined && c.consolidation < 100);
   if (consolCaps.length > 0) {
-    const neededH = 18 + consolCaps.length * 8;
-    ensureSpace(neededH);
-    y += 4;
-    sectionHeader("Consolidation Opportunity", 180, 120, 40);
+    pdf.addPage(); paintBg(); addTopBar();
+    y = 22;
+    sectionHeader(T.consolPageTitle, 180, 120, 40);
+
+    // Intro
+    pdf.setFontSize(7); pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(190, 190, 210);
+    const consolIntroLines = pdf.splitTextToSize(T.unifiedPlatformIntro(consolCaps.length), CW - 4);
+    pdf.text(consolIntroLines, M + 2, y);
+    y += consolIntroLines.length * 3.5 + 4;
+
+    // ── Score adjustment table ──
     pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
     pdf.setTextColor(170, 165, 185);
-    pdf.text("Scores adjusted by the estimated percentage of observability data already in Dynatrace.", M, y);
+    pdf.text(T.consolTableSubtitle, M, y);
     y += 6;
 
-    // Table header
     const colX = [M, M + 65, M + 90, M + 115, M + 140];
     pdf.setFontSize(6); pdf.setFont("helvetica", "bold");
     pdf.setTextColor(140, 145, 180);
@@ -582,20 +591,79 @@ export function generateFirstDayReport(input: ReportInput, lang: ReportLang = "e
       y += 5;
     });
 
-    /* ── Unified Platform Value (after consolidation table) ── */
-    ensureSpace(90);
-    y += 6;
-    sectionHeader(T.unifiedPlatformTitle, 55, 100, 220);
+    // ── Total potential gap ──
+    const totalRaw = Math.round(consolCaps.reduce((s, c) => s + (c.rawScore ?? c.score), 0) / consolCaps.length);
+    const totalAdj = Math.round(consolCaps.reduce((s, c) => s + c.score, 0) / consolCaps.length);
+    const totalGap = totalRaw - totalAdj;
+    y += 2;
+    pdf.setDrawColor(60, 60, 90); pdf.setLineWidth(0.3);
+    pdf.line(M, y, M + CW, y);
+    y += 4;
+    pdf.setFontSize(6.5); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(255, 170, 50);
+    pdf.text(`Average across ${consolCaps.length} capabilities:  DT ${totalRaw}%  |  Adjusted ${totalAdj}%  |  Gap -${totalGap}pp`, M, y);
+    y += 8;
 
-    // Intro paragraph
-    pdf.setFontSize(7); pdf.setFont("helvetica", "normal");
-    pdf.setTextColor(190, 190, 210);
-    const introLines = pdf.splitTextToSize(T.unifiedPlatformIntro(consolCaps.length), CW - 4);
-    ensureSpace(introLines.length * 3.5 + 8);
-    pdf.text(introLines, M + 2, y);
-    y += introLines.length * 3.5 + 4;
+    // ── Helper to render a titled list section ──
+    const renderSection = (title: string, items: string[], color: [number, number, number]) => {
+      ensureSpace(14);
+      // Section title
+      pdf.setFillColor(color[0], color[1], color[2]);
+      pdf.roundedRect(M, y - 1, CW, 8, 2, 2, "F");
+      pdf.setFontSize(8); pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(title, M + 5, y + 4);
+      y += 12;
 
-    // Benefits
+      items.forEach((item, idx) => {
+        const colonIdx = item.indexOf(":");
+        const hasTitle = colonIdx > 0 && colonIdx < 60;
+        const itemTitle = hasTitle ? item.slice(0, colonIdx + 1) : "";
+        const itemBody = hasTitle ? item.slice(colonIdx + 1).trim() : item;
+
+        const bodyLines = pdf.splitTextToSize(itemBody, CW - 14);
+        const blockH = (hasTitle ? 4 : 0) + bodyLines.length * 3.2 + 4;
+        ensureSpace(blockH);
+
+        // Bullet number
+        pdf.setFillColor(color[0], color[1], color[2]);
+        pdf.circle(M + 3, y + 1, 1.5, "F");
+        pdf.setFontSize(5.5); pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(`${idx + 1}`, M + 3, y + 2, { align: "center" });
+
+        if (hasTitle) {
+          pdf.setFontSize(7); pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(color[0], color[1], color[2]);
+          pdf.text(itemTitle, M + 8, y + 2);
+          y += 4;
+        }
+
+        pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(180, 180, 200);
+        pdf.text(bodyLines, M + 8, y + 2);
+        y += bodyLines.length * 3.2 + 4;
+      });
+    };
+
+    // ── Cost Reduction ──
+    renderSection(T.costReductionTitle, T.costReductionItems, [255, 170, 50]);
+
+    // ── ROI ──
+    renderSection(T.roiConsolTitle, T.roiConsolItems, [80, 220, 160]);
+
+    // ── Risks ──
+    renderSection(T.riskTitle, T.riskItems, [255, 100, 100]);
+
+    // ── Why Consolidate (platform benefits) ──
+    ensureSpace(14);
+    pdf.setFillColor(55, 100, 220);
+    pdf.roundedRect(M, y - 1, CW, 8, 2, 2, "F");
+    pdf.setFontSize(8); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(T.unifiedPlatformTitle, M + 5, y + 4);
+    y += 12;
+
     const benefits = [
       { title: T.unifiedBenefit1Title, text: T.unifiedBenefit1, color: [80, 220, 160] as [number, number, number] },
       { title: T.unifiedBenefit2Title, text: T.unifiedBenefit2, color: [180, 140, 255] as [number, number, number] },
@@ -609,16 +677,13 @@ export function generateFirstDayReport(input: ReportInput, lang: ReportLang = "e
       const blockH = 5 + bodyLines.length * 3.2 + 3;
       ensureSpace(blockH);
 
-      // Accent bar
       pdf.setFillColor(b.color[0], b.color[1], b.color[2]);
       pdf.roundedRect(M, y, 2, blockH - 2, 0.5, 0.5, "F");
 
-      // Title
       pdf.setFontSize(7); pdf.setFont("helvetica", "bold");
       pdf.setTextColor(b.color[0], b.color[1], b.color[2]);
       pdf.text(b.title, M + 5, y + 3);
 
-      // Body
       pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
       pdf.setTextColor(180, 180, 200);
       pdf.text(bodyLines, M + 5, y + 7);
@@ -626,7 +691,10 @@ export function generateFirstDayReport(input: ReportInput, lang: ReportLang = "e
       y += blockH + 1;
     });
 
-    // Call to action
+    // ── Migration Path ──
+    renderSection(T.migrationPathTitle, T.migrationPathItems, [100, 220, 200]);
+
+    // ── Call to action ──
     ensureSpace(20);
     y += 2;
     pdf.setFillColor(55, 100, 220);
