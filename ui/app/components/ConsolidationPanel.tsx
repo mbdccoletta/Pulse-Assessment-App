@@ -21,23 +21,16 @@ export interface ConsolidationPanelHandle { collapse: () => void; }
 export const ConsolidationPanel = React.memo(forwardRef<ConsolidationPanelHandle, Props>(function ConsolidationPanel({ consolidation, onApply, dk, text, textSec, accent, border, excludedCaps }, ref) {
   const [open, setOpen] = useState(false);
   useImperativeHandle(ref, () => ({ collapse: () => setOpen(false) }), []);
-  const [draft, setDraft] = useState<Record<string, number>>(() => ({ ...consolidation }));
 
   const handleSliderChange = useCallback((capName: string, value: number) => {
-    setDraft(prev => ({ ...prev, [capName]: value }));
-  }, []);
-
-  const handleApply = useCallback(() => {
-    onApply(draft);
-  }, [draft, onApply]);
+    onApply({ ...consolidation, [capName]: value });
+  }, [consolidation, onApply]);
 
   const handleReset = useCallback(() => {
-    const empty: Record<string, number> = {};
-    setDraft(empty);
-    onApply(empty);
+    onApply({});
   }, [onApply]);
 
-  const hasAnyCustom = Object.values(draft).some(v => v < 100);
+  const hasAnyCustom = Object.values(consolidation).some(v => v < 100);
   const activeCaps = CAPABILITIES.filter(c => !excludedCaps.has(c.name));
 
 
@@ -120,7 +113,7 @@ export const ConsolidationPanel = React.memo(forwardRef<ConsolidationPanelHandle
       {/* Sliders */}
       <Flex flexDirection="column" style={{ padding: "8px 16px 12px" }} gap={8}>
         {activeCaps.map(cap => {
-          const value = draft[cap.name] ?? 100;
+          const value = consolidation[cap.name] ?? 100;
           const isCustom = value < 100;
           return (
             <Flex key={cap.name} flexDirection="column" gap={2}>
@@ -159,9 +152,6 @@ export const ConsolidationPanel = React.memo(forwardRef<ConsolidationPanelHandle
         padding: "8px 16px 12px",
         borderTop: `1px solid ${border}`,
       }}>
-        <Button onClick={handleApply} variant="emphasized" color="primary" size="condensed">
-          Apply
-        </Button>
         {hasAnyCustom && (
           <Button onClick={handleReset} size="condensed">
             Reset to 100%
