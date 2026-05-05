@@ -28,6 +28,7 @@ import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
 import { CovMatRadar, renderRadarToDataURL, type CovMatRadarHandle } from "../components/CovMatRadar";
 import { CapabilityScatter, renderScatterToDataURL } from "../components/CapabilityScatter";
 import { ConsolidationPanel } from "../components/ConsolidationPanel";
+import type { ConsolidationPanelHandle } from "../components/ConsolidationPanel";
 
 const SCALE = SCORE_BANDS.map(b => ({
   l: b.label,
@@ -1385,8 +1386,10 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
   excludedCaps: Set<string>;
 }) {
   const preflight = usePreflight();
+  const consolidationRef = React.useRef<ConsolidationPanelHandle>(null);
 
   const handleRunClick = useCallback(async () => {
+    consolidationRef.current?.collapse();
     if (preflight.validated) {
       start();
       return;
@@ -1423,6 +1426,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
       <Flex flexDirection="column" alignItems="center">
         {/* Consolidation Context — above Run button */}
         <ConsolidationPanel
+          ref={consolidationRef}
           consolidation={consolidation}
           onApply={onConsolidationChange}
           dk={dk} text={text} textSec={textSec} accent={accent} border={border}

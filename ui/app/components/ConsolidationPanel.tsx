@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Text, Strong } from "@dynatrace/strato-components/typography";
@@ -16,8 +16,11 @@ interface Props {
   excludedCaps: Set<string>;
 }
 
-export const ConsolidationPanel: React.FC<Props> = React.memo(function ConsolidationPanel({ consolidation, onApply, dk, text, textSec, accent, border, excludedCaps }) {
+export interface ConsolidationPanelHandle { collapse: () => void; }
+
+export const ConsolidationPanel = React.memo(forwardRef<ConsolidationPanelHandle, Props>(function ConsolidationPanel({ consolidation, onApply, dk, text, textSec, accent, border, excludedCaps }, ref) {
   const [open, setOpen] = useState(false);
+  useImperativeHandle(ref, () => ({ collapse: () => setOpen(false) }), []);
   const [draft, setDraft] = useState<Record<string, number>>(() => ({ ...consolidation }));
 
   const handleSliderChange = useCallback((capName: string, value: number) => {
@@ -36,6 +39,7 @@ export const ConsolidationPanel: React.FC<Props> = React.memo(function Consolida
 
   const hasAnyCustom = Object.values(draft).some(v => v < 100);
   const activeCaps = CAPABILITIES.filter(c => !excludedCaps.has(c.name));
+
 
   if (!open) {
     return (
@@ -166,4 +170,4 @@ export const ConsolidationPanel: React.FC<Props> = React.memo(function Consolida
       </Flex>
     </Flex>
   );
-});
+}));
