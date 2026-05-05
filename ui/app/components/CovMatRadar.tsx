@@ -86,8 +86,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const legendSpace = 22;
     const cx = w / 2;
     const cy = (h - legendSpace) / 2;
-    const labelMarginW = Math.max(w * 0.36, 130); // horizontal margin based on width
-    const labelMarginH = Math.max(h * 0.32, 110); // vertical margin based on height
+    const labelMarginW = Math.max(w * 0.44, 160); // horizontal margin based on width
+    const labelMarginH = Math.max(h * 0.38, 130); // vertical margin based on height
     const R = Math.min((w - labelMarginW) / 2, (h - legendSpace - labelMarginH) / 2);
     geoRef.current = { cx, cy, R, N, SEG };
 
@@ -224,10 +224,10 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     }
 
     // ── Connector lines + capability labels ──
-    // Elliptical placement — 60% into available margin, with min gap proportional to R
-    const minLabelGap = R * 0.35;
-    const labelRx = R + Math.max((w / 2 - R) * 0.6, minLabelGap);
-    const labelRy = R + Math.max(((h - legendSpace) / 2 - R) * 0.6, minLabelGap);
+    // Elliptical placement — 70% into available margin, with min gap proportional to R
+    const minLabelGap = R * 0.45;
+    const labelRx = R + Math.max((w / 2 - R) * 0.7, minLabelGap);
+    const labelRy = R + Math.max(((h - legendSpace) / 2 - R) * 0.7, minLabelGap);
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const maxLabelW = Math.max(w * 0.26, 110);
@@ -268,18 +268,33 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const nameStartY = textTopY;
       const scoreY = textTopY + nameBlockH + 2;
 
-      // ── Dashed connector line — from ring edge toward label center ──
-      const dlx = lx - cx, dly = ly - cy;
+      // ── Dashed connector line — from ring edge toward label text ──
+      // Use unclamped label position to compute direction so clamped labels still get lines
+      const unclampedLx = cx + cos * labelRx;
+      const unclampedLy = cy + sin * labelRy;
+      const dlx = unclampedLx - cx, dly = unclampedLy - cy;
       const labelDist = Math.hypot(dlx, dly);
       const ux = dlx / labelDist, uy = dly / labelDist;
-      const startD = R + 8;
-      const stopD = labelDist - totalTextH / 2 - 8;
-      if (startD < stopD) {
+      // Line starts just outside ring edge
+      const startD = R + 4;
+      // Line ends at the closer of: text start OR the clamped label position
+      const clampedDist = Math.hypot(lx - cx, ly - cy);
+      const stopD = Math.min(labelDist, clampedDist) - totalTextH / 2 - 2;
+      if (stopD > startD + 2) {
         const sx = cx + ux * startD, sy = cy + uy * startD;
         const ex = cx + ux * stopD, ey = cy + uy * stopD;
         ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
-        ctx.strokeStyle = ml.color; ctx.globalAlpha = alpha;
-        ctx.setLineDash([5, 4]); ctx.lineWidth = act ? 3 : 2; ctx.stroke(); ctx.setLineDash([]);
+        ctx.strokeStyle = dk ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)";
+        ctx.globalAlpha = dim ? 0.2 : 1;
+        ctx.setLineDash([5, 4]); ctx.lineWidth = act ? 2.5 : 1.5; ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      } else {
+        // Fallback: draw short line directly from ring to label center
+        const sx = cx + ux * (R + 2), sy = cy + uy * (R + 2);
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(lx, ly);
+        ctx.strokeStyle = dk ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.25)";
+        ctx.globalAlpha = dim ? 0.2 : 1;
+        ctx.setLineDash([4, 3]); ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]);
         ctx.globalAlpha = 1;
       }
 
@@ -391,9 +406,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
 
     // Check label areas first (higher priority)
     const legendSpaceH = 22;
-    const minGapH = R * 0.35;
-    const labelRx = R + Math.max((w / 2 - R) * 0.6, minGapH);
-    const labelRy = R + Math.max(((h - legendSpaceH) / 2 - R) * 0.6, minGapH);
+    const minGapH = R * 0.45;
+    const labelRx = R + Math.max((w / 2 - R) * 0.7, minGapH);
+    const labelRy = R + Math.max(((h - legendSpaceH) / 2 - R) * 0.7, minGapH);
     const fs1 = Math.max(Math.min(w, h) * 0.018, 10);
     const fs2 = Math.max(Math.min(w, h) * 0.015, 8);
     const totalTextH = (fs1 + 2) + 2 + fs2;
