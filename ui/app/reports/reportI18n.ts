@@ -128,6 +128,17 @@ export interface ReportStrings {
   unifiedBenefit4Title: string; unifiedBenefit4: string;
   unifiedBenefit5Title: string; unifiedBenefit5: string;
   unifiedCallToAction: string;
+  // Cost & ROI arguments
+  consolPageTitle: string;
+  consolTableSubtitle: string;
+  costReductionTitle: string;
+  costReductionItems: string[];
+  roiConsolTitle: string;
+  roiConsolItems: string[];
+  riskTitle: string;
+  riskItems: string[];
+  migrationPathTitle: string;
+  migrationPathItems: string[];
 
   // Footer
   footer: (tenant: string, date: string) => string;
@@ -251,7 +262,34 @@ export const REPORT_EN: ReportStrings = {
   unifiedBenefit5Title: "OpenPipeline Flexibility",
   unifiedBenefit5: "Dynatrace OpenPipeline can ingest data from any source -- including existing tools -- and enrich it with full Dynatrace context. Migration can be incremental: start routing data through OpenPipeline to Grail while maintaining existing workflows, then sunset redundant tools as confidence grows.",
   unifiedCallToAction: "Recommendation: Prioritize routing all observability data into Grail. Each additional data source strengthens Dynatrace Intelligence accuracy, Smartscape topology, and the overall value of the platform. The gap between current adjusted scores and full DT scores represents the untapped potential of a unified observability strategy.",
-
+  consolPageTitle: "Consolidation Opportunity",
+  consolTableSubtitle: "Scores adjusted by the estimated percentage of observability data already in Dynatrace.",
+  costReductionTitle: "Cost Reduction with Tool Consolidation",
+  costReductionItems: [
+    "Eliminate redundant licensing fees: Each additional monitoring tool carries its own license, ingestion, and storage costs. Consolidating into Dynatrace removes duplicate spend on data ingestion, retention, and per-host/per-GB pricing from competing vendors.",
+    "Reduce operational overhead: Multiple tools require separate teams for administration, upgrades, integration maintenance, and incident response coordination. A single platform cuts operational FTEs dedicated to tooling by 40-60% (industry benchmark).",
+    "Lower training and onboarding costs: Teams need to learn only one query language (DQL), one UI, and one alerting framework instead of maintaining expertise across 3-5 different tools.",
+    "Consolidate vendor contracts: Simplify procurement, reduce legal and compliance review cycles, and gain negotiation leverage with a single strategic vendor relationship.",
+  ],
+  roiConsolTitle: "Return on Investment",
+  roiConsolItems: [
+    "Faster Mean Time to Resolution (MTTR): Dynatrace Intelligence provides automatic root cause analysis across the full stack. With data from other tools, teams spend 60-80% of incident time correlating data manually across UIs. Unified data cuts MTTR by up to 90%.",
+    "Preventive vs. reactive operations: With all data in Grail, Dynatrace Intelligence can detect anomalies and predict problems before they impact users -- impossible when data is fragmented across tools.",
+    "Developer productivity: Engineers spend 25-35% of their time context-switching between monitoring tools. A single platform returns this time to feature development and innovation.",
+    "Business impact visibility: Correlating technical metrics with business KPIs (revenue, conversions, SLAs) is only possible when all signals live in the same lakehouse. Fragmented data creates blind spots in business observability.",
+  ],
+  riskTitle: "Risk of Maintaining Multiple Tools",
+  riskItems: [
+    "Blind spots between tools: Problems that span multiple domains (e.g., a database slowdown affecting a microservice affecting the frontend) are invisible when each domain is monitored by a different tool.",
+    "Alert fatigue and false positives: Without unified context, each tool generates independent alerts. Teams receive redundant or contradictory notifications, leading to alert fatigue and missed critical incidents.",
+    "Audit and compliance gaps: Demonstrating end-to-end observability for compliance frameworks (SOC2, ISO 27001, PCI-DSS) is significantly harder with fragmented tooling. A single platform provides unified audit trails.",
+  ],
+  migrationPathTitle: "Recommended Migration Path",
+  migrationPathItems: [
+    "Phase 1 -- Parallel ingestion: Use Dynatrace OpenPipeline to ingest data from existing tools (Splunk, Datadog, ELK, etc.) into Grail while maintaining current workflows. Zero disruption.",
+    "Phase 2 -- Validate and compare: Run both systems in parallel. Compare alert quality, root cause accuracy, and dashboard coverage. Dynatrace Intelligence typically identifies 3-5x more root causes automatically.",
+    "Phase 3 -- Sunset redundant tools: Once teams trust the unified view, decommission overlapping tools. Realize immediate cost savings on licensing and operational overhead.",
+  ],
   footer: (tenant, date) => `Dynatrace Platform — First Day Results  |  ${tenant}  |  ${date}`,
   page: (i, total) => `Page ${i} / ${total}`,
 
@@ -372,7 +410,34 @@ export const REPORT_PT: ReportStrings = {
   unifiedBenefit5Title: "Flexibilidade do OpenPipeline",
   unifiedBenefit5: "O OpenPipeline do Dynatrace pode ingerir dados de qualquer fonte -- incluindo ferramentas existentes -- e enriquece-los com o contexto completo do Dynatrace. A migracao pode ser incremental: comece roteando dados pelo OpenPipeline para o Grail mantendo os workflows existentes, e depois descontinue ferramentas redundantes conforme a confianca cresce.",
   unifiedCallToAction: "Recomendacao: Priorize o roteamento de todos os dados de observabilidade para o Grail. Cada fonte de dados adicional fortalece a precisao do Dynatrace Intelligence, a topologia Smartscape e o valor geral da plataforma. A diferenca entre os scores ajustados atuais e os scores completos do DT representa o potencial inexplorado de uma estrategia unificada de observabilidade.",
-
+  consolPageTitle: "Oportunidade de Consolidacao",
+  consolTableSubtitle: "Scores ajustados pela porcentagem estimada de dados de observabilidade ja no Dynatrace.",
+  costReductionTitle: "Reducao de Custos com Consolidacao de Ferramentas",
+  costReductionItems: [
+    "Eliminar taxas de licenciamento redundantes: Cada ferramenta de monitoramento adicional possui seus proprios custos de licenca, ingestao e armazenamento. Consolidar no Dynatrace remove gastos duplicados em ingestao de dados, retencao e cobranca por host/por GB de fornecedores concorrentes.",
+    "Reduzir overhead operacional: Multiplas ferramentas exigem equipes separadas para administracao, atualizacoes, manutencao de integracoes e coordenacao de resposta a incidentes. Uma plataforma unica reduz FTEs operacionais dedicados a ferramentas em 40-60% (benchmark do setor).",
+    "Reduzir custos de treinamento e onboarding: Equipes precisam aprender apenas uma linguagem de query (DQL), uma interface e um framework de alertas ao inves de manter expertise em 3-5 ferramentas diferentes.",
+    "Consolidar contratos de fornecedores: Simplificar procurement, reduzir ciclos de revisao juridica e compliance, e ganhar poder de negociacao com um unico relacionamento estrategico de fornecedor.",
+  ],
+  roiConsolTitle: "Retorno sobre Investimento",
+  roiConsolItems: [
+    "MTTR mais rapido: O Dynatrace Intelligence fornece analise automatica de causa raiz em todo o stack. Com dados em outras ferramentas, equipes gastam 60-80% do tempo de incidentes correlacionando dados manualmente entre UIs. Dados unificados reduzem o MTTR em ate 90%.",
+    "Operacoes preventivas vs. reativas: Com todos os dados no Grail, o Dynatrace Intelligence consegue detectar anomalias e prever problemas antes de impactarem usuarios -- impossivel quando dados estao fragmentados entre ferramentas.",
+    "Produtividade do desenvolvedor: Engenheiros gastam 25-35% do tempo alternando entre ferramentas de monitoramento. Uma plataforma unica devolve esse tempo para desenvolvimento de features e inovacao.",
+    "Visibilidade de impacto no negocio: Correlacionar metricas tecnicas com KPIs de negocio (receita, conversoes, SLAs) so eh possivel quando todos os sinais vivem no mesmo lakehouse. Dados fragmentados criam pontos cegos na observabilidade de negocio.",
+  ],
+  riskTitle: "Riscos de Manter Multiplas Ferramentas",
+  riskItems: [
+    "Pontos cegos entre ferramentas: Problemas que atravessam multiplos dominios (ex: lentidao no banco afetando um microsservico afetando o frontend) sao invisiveis quando cada dominio eh monitorado por uma ferramenta diferente.",
+    "Fadiga de alertas e falsos positivos: Sem contexto unificado, cada ferramenta gera alertas independentes. Equipes recebem notificacoes redundantes ou contraditorias, levando a fadiga de alertas e incidentes criticos perdidos.",
+    "Lacunas de auditoria e compliance: Demonstrar observabilidade de ponta a ponta para frameworks de compliance (SOC2, ISO 27001, PCI-DSS) eh significativamente mais dificil com ferramentas fragmentadas. Uma plataforma unica fornece trilhas de auditoria unificadas.",
+  ],
+  migrationPathTitle: "Caminho de Migracao Recomendado",
+  migrationPathItems: [
+    "Fase 1 -- Ingestao paralela: Use o OpenPipeline do Dynatrace para ingerir dados de ferramentas existentes (Splunk, Datadog, ELK, etc.) no Grail mantendo workflows atuais. Zero disruptura.",
+    "Fase 2 -- Validar e comparar: Execute ambos os sistemas em paralelo. Compare qualidade de alertas, precisao de causa raiz e cobertura de dashboards. O Dynatrace Intelligence tipicamente identifica 3-5x mais causas raiz automaticamente.",
+    "Fase 3 -- Descomissionar ferramentas redundantes: Uma vez que as equipes confiam na visao unificada, desative ferramentas sobrepostas. Realize economias imediatas em licenciamento e overhead operacional.",
+  ],
   footer: (tenant, date) => `Plataforma Dynatrace — Resultados do Primeiro Dia  |  ${tenant}  |  ${date}`,
   page: (i, total) => `Pagina ${i} / ${total}`,
 
@@ -493,7 +558,34 @@ export const REPORT_ES: ReportStrings = {
   unifiedBenefit5Title: "Flexibilidad de OpenPipeline",
   unifiedBenefit5: "OpenPipeline de Dynatrace puede ingerir datos de cualquier fuente -- incluidas herramientas existentes -- y enriquecerlos con el contexto completo de Dynatrace. La migracion puede ser incremental: comience enrutando datos a traves de OpenPipeline hacia Grail mientras mantiene los flujos existentes, y luego retire herramientas redundantes a medida que crece la confianza.",
   unifiedCallToAction: "Recomendacion: Priorice el enrutamiento de todos los datos de observabilidad hacia Grail. Cada fuente de datos adicional fortalece la precision de Dynatrace Intelligence, la topologia Smartscape y el valor general de la plataforma. La brecha entre los puntajes ajustados actuales y los puntajes completos de DT representa el potencial sin explotar de una estrategia unificada de observabilidad.",
-
+  consolPageTitle: "Oportunidad de Consolidacion",
+  consolTableSubtitle: "Puntajes ajustados por el porcentaje estimado de datos de observabilidad ya en Dynatrace.",
+  costReductionTitle: "Reduccion de Costos con Consolidacion de Herramientas",
+  costReductionItems: [
+    "Eliminar tarifas de licenciamiento redundantes: Cada herramienta de monitoreo adicional tiene sus propios costos de licencia, ingestion y almacenamiento. Consolidar en Dynatrace elimina gastos duplicados en ingestion de datos, retencion y precios por host/por GB de proveedores competidores.",
+    "Reducir overhead operativo: Multiples herramientas requieren equipos separados para administracion, actualizaciones, mantenimiento de integraciones y coordinacion de respuesta a incidentes. Una plataforma unica reduce FTEs operativos dedicados a herramientas en un 40-60% (benchmark de la industria).",
+    "Reducir costos de capacitacion y onboarding: Los equipos necesitan aprender solo un lenguaje de consulta (DQL), una interfaz y un marco de alertas en vez de mantener expertise en 3-5 herramientas diferentes.",
+    "Consolidar contratos de proveedores: Simplificar adquisiciones, reducir ciclos de revision legal y cumplimiento, y ganar poder de negociacion con una unica relacion estrategica de proveedor.",
+  ],
+  roiConsolTitle: "Retorno sobre la Inversion",
+  roiConsolItems: [
+    "MTTR mas rapido: Dynatrace Intelligence proporciona analisis automatico de causa raiz en todo el stack. Con datos en otras herramientas, los equipos gastan 60-80% del tiempo de incidentes correlacionando datos manualmente entre UIs. Datos unificados reducen el MTTR hasta un 90%.",
+    "Operaciones preventivas vs. reactivas: Con todos los datos en Grail, Dynatrace Intelligence puede detectar anomalias y predecir problemas antes de que impacten a los usuarios -- imposible cuando los datos estan fragmentados entre herramientas.",
+    "Productividad del desarrollador: Los ingenieros gastan 25-35% de su tiempo cambiando entre herramientas de monitoreo. Una plataforma unica devuelve ese tiempo al desarrollo de funcionalidades e innovacion.",
+    "Visibilidad de impacto en el negocio: Correlacionar metricas tecnicas con KPIs de negocio (ingresos, conversiones, SLAs) solo es posible cuando todas las senales viven en el mismo lakehouse. Datos fragmentados crean puntos ciegos en la observabilidad de negocio.",
+  ],
+  riskTitle: "Riesgos de Mantener Multiples Herramientas",
+  riskItems: [
+    "Puntos ciegos entre herramientas: Problemas que cruzan multiples dominios (ej: lentitud en BD afectando un microservicio afectando el frontend) son invisibles cuando cada dominio es monitoreado por una herramienta diferente.",
+    "Fatiga de alertas y falsos positivos: Sin contexto unificado, cada herramienta genera alertas independientes. Los equipos reciben notificaciones redundantes o contradictorias, llevando a fatiga de alertas e incidentes criticos perdidos.",
+    "Brechas de auditoria y cumplimiento: Demostrar observabilidad de extremo a extremo para marcos de cumplimiento (SOC2, ISO 27001, PCI-DSS) es significativamente mas dificil con herramientas fragmentadas. Una plataforma unica proporciona pistas de auditoria unificadas.",
+  ],
+  migrationPathTitle: "Ruta de Migracion Recomendada",
+  migrationPathItems: [
+    "Fase 1 -- Ingestion paralela: Use OpenPipeline de Dynatrace para ingerir datos de herramientas existentes (Splunk, Datadog, ELK, etc.) en Grail manteniendo flujos de trabajo actuales. Cero disrupcion.",
+    "Fase 2 -- Validar y comparar: Ejecute ambos sistemas en paralelo. Compare calidad de alertas, precision de causa raiz y cobertura de dashboards. Dynatrace Intelligence tipicamente identifica 3-5x mas causas raiz automaticamente.",
+    "Fase 3 -- Descomisionar herramientas redundantes: Una vez que los equipos confian en la vista unificada, desactive herramientas superpuestas. Realice ahorros inmediatos en licenciamiento y overhead operativo.",
+  ],
   footer: (tenant, date) => `Plataforma Dynatrace — Resultados del Primer Dia  |  ${tenant}  |  ${date}`,
   page: (i, total) => `Pagina ${i} / ${total}`,
 
