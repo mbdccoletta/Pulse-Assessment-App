@@ -6,8 +6,11 @@ export interface ReportInput {
   capabilities: {
     name: string;
     score: number;
+    rawScore?: number;
     color: string;
     criteriaResults: { points: number }[];
+    /** Consolidation factor (0–100). 100 = all in DT. */
+    consolidation?: number;
   }[];
   totalScore: number;
   tenant: string;
@@ -532,6 +535,51 @@ export function generateFirstDayReport(input: ReportInput, lang: ReportLang = "e
       pdf.setTextColor(170, 165, 185);
       pdf.text(`-  ${cap.name}`, M + 4, y);
       y += 3.5;
+    });
+  }
+
+  /* ── Consolidation Opportunity Section ── */
+  const consolCaps = capabilities.filter(c => c.consolidation !== undefined && c.consolidation < 100);
+  if (consolCaps.length > 0) {
+    const neededH = 18 + consolCaps.length * 8;
+    ensureSpace(neededH);
+    y += 4;
+    sectionHeader("Consolidation Opportunity", 180, 120, 40);
+    pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(170, 165, 185);
+    pdf.text("Scores adjusted by the estimated percentage of observability data already in Dynatrace.", M, y);
+    y += 6;
+
+    // Table header
+    const colX = [M, M + 65, M + 90, M + 115, M + 140];
+    pdf.setFontSize(6); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(140, 145, 180);
+    pdf.text("Capability", colX[0], y);
+    pdf.text("DT Score", colX[1], y);
+    pdf.text("In DT %", colX[2], y);
+    pdf.text("Adjusted", colX[3], y);
+    pdf.text("Gap", colX[4], y);
+    y += 1;
+    pdf.setDrawColor(60, 60, 90); pdf.setLineWidth(0.3);
+    pdf.line(M, y, M + CW, y);
+    y += 4;
+
+    consolCaps.forEach(cap => {
+      ensureSpace(8);
+      const rawScore = cap.rawScore ?? cap.score;
+      const gap = rawScore - cap.score;
+      const rgb = hexToRgb(cap.color);
+      pdf.setFontSize(6); pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(rgb[0], rgb[1], rgb[2]);
+      pdf.text(cap.name, colX[0], y);
+      pdf.setTextColor(200, 200, 215);
+      pdf.text(`${rawScore}%`, colX[1], y);
+      pdf.setTextColor(255, 170, 50);
+      pdf.text(`${cap.consolidation}%`, colX[2], y);
+      pdf.text(`${cap.score}%`, colX[3], y);
+      pdf.setTextColor(255, 100, 80);
+      pdf.text(`-${gap}%`, colX[4], y);
+      y += 5;
     });
   }
 

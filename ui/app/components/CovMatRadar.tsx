@@ -30,6 +30,10 @@ interface DataPoint {
   coverage: number;
   maturity: number;
   color: string;
+  /** Raw coverage before consolidation (shown as ghost polygon when present and differs from coverage). */
+  rawCoverage?: number;
+  /** Raw maturity before consolidation. */
+  rawMaturity?: number;
 }
 
 interface Props {
@@ -133,6 +137,14 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
 
     // ── Maturity polygon ──
     if (showMat) drawPoly(ctx, data.map(d => d.maturity), cx, cy, R, N, SEG, MAT_C, dk, true, minBlipR);
+
+    // ── Raw score ghost polygons (consolidation active) — dashed outline showing original scores ──
+    const hasRaw = data.some(d => d.rawCoverage !== undefined && d.rawCoverage !== d.coverage);
+    if (hasRaw) {
+      const RAW_C = dk ? "#ffffff" : "#888888";
+      if (showCov) drawPoly(ctx, data.map(d => d.rawCoverage ?? d.coverage), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
+      if (showMat) drawPoly(ctx, data.map(d => d.rawMaturity ?? d.maturity), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
+    }
 
     // ── Center hub (drawn before blips so blips appear on top) ──
     const avgCov = Math.round(data.reduce((a, d) => a + d.coverage, 0) / N);
@@ -717,6 +729,14 @@ export function renderRadarToDataURL(
   const minBlipR = hR + 6 + dotSizeBase + 4;
   drawPoly(ctx, data.map(d => d.coverage), cx, cy, R, N, SEG, COV_C, dk, false, minBlipR);
   drawPoly(ctx, data.map(d => d.maturity), cx, cy, R, N, SEG, MAT_C, dk, true, minBlipR);
+
+  // Raw score ghost polygons (consolidation active)
+  const hasRawStatic = data.some(d => d.rawCoverage !== undefined && d.rawCoverage !== d.coverage);
+  if (hasRawStatic) {
+    const RAW_C = dk ? "#ffffff" : "#888888";
+    drawPoly(ctx, data.map(d => d.rawCoverage ?? d.coverage), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
+    drawPoly(ctx, data.map(d => d.rawMaturity ?? d.maturity), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
+  }
 
   // Center hub
   const avgCov = Math.round(data.reduce((a, d) => a + d.coverage, 0) / N);

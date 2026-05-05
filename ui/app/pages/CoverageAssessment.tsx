@@ -27,6 +27,7 @@ import { usePreflight, type PreflightCheck } from "../hooks/usePreflight";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
 import { CovMatRadar, renderRadarToDataURL, type CovMatRadarHandle } from "../components/CovMatRadar";
 import { CapabilityScatter, renderScatterToDataURL } from "../components/CapabilityScatter";
+import { ConsolidationPanel } from "../components/ConsolidationPanel";
 
 const SCALE = SCORE_BANDS.map(b => ({
   l: b.label,
@@ -81,7 +82,7 @@ interface Props {
 }
 
 export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) => {
-  const { capabilities, totalScore, overallMaturityLevel, loading, idle, progress, error, tenant, date, stats, entityCounts, liveScannedRecords, start, refresh, reset, goHome, resume } = coverageData;
+  const { capabilities, totalScore, overallMaturityLevel, loading, idle, progress, error, tenant, date, stats, entityCounts, liveScannedRecords, consolidation, setConsolidation, start, refresh, reset, goHome, resume } = coverageData;
   const navigate = useNavigate();
   const lastSavedRef = useRef<string>("");
   const [anim, setAnim] = useState(0);
@@ -251,6 +252,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             onGenerateReport={(lang: ReportLang) => generateClientReport(lang)}
             selectedCount={CAPABILITIES.length - excludedCaps.size}
             totalCount={CAPABILITIES.length}
+            consolidation={consolidation}
+            onConsolidationChange={setConsolidation}
+            excludedCaps={excludedCaps}
           />
 
           {/* Right panel — Capability cards */}
@@ -620,7 +624,7 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
     excT: acc.excT + c.maturity.excellence.total,
   }), { fnd: 0, fndT: 0, bp: 0, bpT: 0, exc: 0, excT: 0 }), [capabilities]);
 
-  const sorted = useMemo(() => [...capabilities].sort((a, b) => a.maturity.maturityScore - b.maturity.maturityScore), [capabilities]);
+  const sorted = useMemo(() => [...capabilities].sort((a, b) => a.effectiveMaturityScore - b.effectiveMaturityScore), [capabilities]);
 
   return (
     <Flex flexDirection="column" style={{ flex: 1, overflowY: "auto", padding: 20 }}>
@@ -779,7 +783,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
       const critical = gaps.filter(cr => cr.value === 0).length;
       const quickWin = gaps.filter(cr => cr.isRatio && cr.value > 0 && cr.value < 100).length;
       const other = gaps.length - critical - quickWin;
-      return { name: cap.name, color: cap.color, cov: cap.score, mat: cap.maturity.maturityScore, total: gaps.length, critical, quickWin, other };
+      return { name: cap.name, color: cap.color, cov: cap.score, mat: cap.effectiveMaturityScore, total: gaps.length, critical, quickWin, other };
     }).sort((a, b) => b.total - a.total),
     [capabilities]
   );
@@ -792,7 +796,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
     capabilities.map(c => ({
       name: c.name,
       x: c.score,
-      y: c.maturity.maturityScore,
+      y: c.effectiveMaturityScore,
       color: c.color,
     })),
     [capabilities]
@@ -807,8 +811,8 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   const topGapCap = capGaps.length > 0 ? capGaps[0] : null;
   const bestCap = [...capabilities].sort((a, b) => b.score - a.score)[0] ?? null;
   const worstCap = [...capabilities].sort((a, b) => a.score - b.score)[0] ?? null;
-  const bestMatCap = [...capabilities].sort((a, b) => b.maturity.maturityScore - a.maturity.maturityScore)[0] ?? null;
-  const worstMatCap = [...capabilities].sort((a, b) => a.maturity.maturityScore - b.maturity.maturityScore)[0] ?? null;
+  const bestMatCap = [...capabilities].sort((a, b) => b.effectiveMaturityScore - a.effectiveMaturityScore)[0] ?? null;
+  const worstMatCap = [...capabilities].sort((a, b) => a.effectiveMaturityScore - b.effectiveMaturityScore)[0] ?? null;
   const excellentCount = capabilities.filter(c => c.score >= 80).length;
   const goodCount = capabilities.filter(c => c.score >= 60 && c.score < 80).length;
   const criticalCount = capabilities.filter(c => c.score < 20).length;
@@ -940,23 +944,28 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
               {/* Best capability */}
               {bestCap && (
-                <Flex alignItems="center" justifyContent="space-between" style={{ marginTop: 1, padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                <Flex alignItems="center" justifyContent="space-between" style={{ marginTop: 1, padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", borderLeft: bestCap.consolidation < 100 ? `2px solid ${Colors.Charts.Status.Warning.Default}` : undefined }}>
                   <Flex alignItems="center" gap={6}>
                     <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, textTransform: "uppercase" as const, letterSpacing: 0.3 }}>Top Capability</Text>
                     <Text style={{ fontSize: 11, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestCap.name}</Text>
+                    {bestCap.consolidation < 100 && <Text style={{ fontSize: 9, fontWeight: 600, color: Colors.Charts.Status.Warning.Default }}>{bestCap.consolidation}% DT</Text>}
                   </Flex>
-                  <Text style={{ fontSize: 13, fontWeight: 900, color: maturityBandColor(bestCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestCap.score}%</Text>
+                  <Flex alignItems="center" gap={4} style={{ flexShrink: 0, marginLeft: 8 }}>
+                    {bestCap.consolidation < 100 && <Text style={{ fontSize: 10, color: Colors.Text.Neutral.Disabled, textDecoration: "line-through" }}>{bestCap.rawScore}%</Text>}
+                    <Text style={{ fontSize: 13, fontWeight: 900, color: maturityBandColor(bestCap.score), fontFamily: "system-ui, sans-serif" }}>{bestCap.score}%</Text>
+                  </Flex>
                 </Flex>
               )}
 
               {/* Best maturity */}
               {bestMatCap && bestMatCap.name !== bestCap?.name && (
-                <Flex alignItems="center" justifyContent="space-between" style={{ padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                <Flex alignItems="center" justifyContent="space-between" style={{ padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", borderLeft: bestMatCap.consolidation < 100 ? `2px solid ${Colors.Charts.Status.Warning.Default}` : undefined }}>
                   <Flex alignItems="center" gap={6}>
                     <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, textTransform: "uppercase" as const, letterSpacing: 0.3 }}>Top Maturity</Text>
                     <Text style={{ fontSize: 11, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestMatCap.name}</Text>
+                    {bestMatCap.consolidation < 100 && <Text style={{ fontSize: 9, fontWeight: 600, color: Colors.Charts.Status.Warning.Default }}>{bestMatCap.consolidation}% DT</Text>}
                   </Flex>
-                  <Text style={{ fontSize: 13, fontWeight: 900, color: maturityBandColor(bestMatCap.maturity.maturityScore), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestMatCap.maturity.maturityScore}%</Text>
+                  <Text style={{ fontSize: 13, fontWeight: 900, color: maturityBandColor(bestMatCap.effectiveMaturityScore), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{bestMatCap.effectiveMaturityScore}%</Text>
                 </Flex>
               )}
             </Flex>
@@ -998,12 +1007,16 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
               {/* Worst capability */}
               {worstCap && (
-                <Flex alignItems="center" justifyContent="space-between" style={{ marginTop: 1, padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }}>
+                <Flex alignItems="center" justifyContent="space-between" style={{ marginTop: 1, padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", borderLeft: worstCap.consolidation < 100 ? `2px solid ${Colors.Charts.Status.Warning.Default}` : undefined }}>
                   <Flex alignItems="center" gap={6}>
                     <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, textTransform: "uppercase" as const, letterSpacing: 0.3 }}>Needs Attention</Text>
                     <Text style={{ fontSize: 11, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{worstCap.name}</Text>
+                    {worstCap.consolidation < 100 && <Text style={{ fontSize: 9, fontWeight: 600, color: Colors.Charts.Status.Warning.Default }}>{worstCap.consolidation}% DT</Text>}
                   </Flex>
-                  <Text style={{ fontSize: 13, fontWeight: 900, color: maturityBandColor(worstCap.score), fontFamily: "system-ui, sans-serif", flexShrink: 0, marginLeft: 8 }}>{worstCap.score}%</Text>
+                  <Flex alignItems="center" gap={4} style={{ flexShrink: 0, marginLeft: 8 }}>
+                    {worstCap.consolidation < 100 && <Text style={{ fontSize: 10, color: Colors.Text.Neutral.Disabled, textDecoration: "line-through" }}>{worstCap.rawScore}%</Text>}
+                    <Text style={{ fontSize: 13, fontWeight: 900, color: maturityBandColor(worstCap.score), fontFamily: "system-ui, sans-serif" }}>{worstCap.score}%</Text>
+                  </Flex>
                 </Flex>
               )}
 
@@ -1038,14 +1051,14 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
             <ExpandChartButton onClick={() => setExpandedChart("radar")} />
           </Flex>
           <Flex flexDirection="column" style={{ height: "clamp(260px, 38vh, 400px)", minHeight: 260 }}>
-            <CovMatRadar ref={(h: CovMatRadarHandle | null) => { onRadarMount(h); }} data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.maturity.maturityScore, color: c.color }))} />
+            <CovMatRadar ref={(h: CovMatRadarHandle | null) => { onRadarMount(h); }} data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.effectiveMaturityScore, color: c.color, rawCoverage: c.consolidation < 100 ? c.rawScore : undefined, rawMaturity: c.consolidation < 100 ? c.maturity.maturityScore : undefined }))} />
           </Flex>
         </Flex>
 
         {/* ── Expanded Radar Chart Modal ── */}
         <ExpandableChartModal open={expandedChart === "radar"} onClose={() => setExpandedChart(null)} title="Coverage vs Maturity by Capability">
           <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
-            <CovMatRadar data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.maturity.maturityScore, color: c.color }))} />
+            <CovMatRadar data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.effectiveMaturityScore, color: c.color, rawCoverage: c.consolidation < 100 ? c.rawScore : undefined, rawMaturity: c.consolidation < 100 ? c.maturity.maturityScore : undefined }))} />
           </Flex>
         </ExpandableChartModal>
 
@@ -1098,7 +1111,8 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
   const [expanded, setExpanded] = useState(false);
   useEffect(() => { setExpanded(false); }, [collapseKey]);
   const m = cap.maturity;
-  const scoreColor = maturityBandColor(m.maturityScore);
+  const effectiveMat = cap.effectiveMaturityScore;
+  const scoreColor = maturityBandColor(effectiveMat);
 
   return (
     <Flex flexDirection="column"
@@ -1107,7 +1121,7 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
         background: Colors.Background.Container.Neutral.Default,
         border: `1px solid ${Colors.Border.Neutral.Default}`,
         borderRadius: 12, padding: "16px 20px",
-        borderLeft: `4px solid ${cap.color}`,
+        borderLeft: `4px solid ${cap.consolidation < 100 ? Colors.Charts.Status.Warning.Default : cap.color}`,
         cursor: "pointer",
         transition: "box-shadow 0.2s, transform 0.2s",
       }}
@@ -1121,13 +1135,28 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
           fontSize: 12, fontWeight: 800, padding: "2px 12px", borderRadius: 6,
           background: scoreColor + (dk ? "25" : "15"),
           color: scoreColor, fontFamily: "system-ui, sans-serif",
-        }}>{m.maturityScore}%</Text>
+        }}>{effectiveMat}%</Text>
         <Text style={{
           fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
           color: scoreColor, opacity: 0.8,
         }}>{m.maturityBand}</Text>
         <Text style={{ fontSize: 12, color: textSec, fontWeight: 600 }}>{expanded ? "▾" : "▸"}</Text>
       </Flex>
+
+      {/* Consolidation banner */}
+      {cap.consolidation < 100 && (
+        <Flex alignItems="center" gap={6} style={{ marginBottom: 8, padding: "3px 8px", borderRadius: 6,
+          background: dk ? "rgba(255,170,50,0.08)" : "rgba(255,170,50,0.05)",
+          border: `1px solid ${dk ? "rgba(255,170,50,0.15)" : "rgba(255,170,50,0.12)"}`,
+        }}>
+          <Text style={{ fontSize: 10, fontWeight: 700, color: Colors.Charts.Status.Warning.Default, letterSpacing: 0.3 }}>
+            CONSOLIDATION: {cap.consolidation}% in Dynatrace
+          </Text>
+          <Text style={{ fontSize: 10, color: dk ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.35)" }}>
+            DT maturity {cap.maturity.maturityScore}% → adjusted {effectiveMat}%
+          </Text>
+        </Flex>
+      )}
 
       {/* Overall maturity bar */}
       <Flex flexDirection="column" style={{ marginBottom: 12 }}>
@@ -1137,7 +1166,7 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
         }}>
           <Flex flexDirection="column" style={{
             height: "100%", borderRadius: 4,
-            width: `${m.maturityScore}%`,
+            width: `${effectiveMat}%`,
             background: `linear-gradient(90deg, ${scoreColor}cc, ${scoreColor})`,
             animation: "matBarFill 0.8s ease both 0.3s",
           }} />
@@ -1343,7 +1372,7 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
 }
 
 /* ── Left panel — memoized to prevent re-renders during card interactions ── */
-const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, totalScore, hasResults, exporting, onGenerateReport, selectedCount, totalCount }: {
+const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, totalScore, hasResults, exporting, onGenerateReport, selectedCount, totalCount, consolidation, onConsolidationChange, excludedCaps }: {
   dk: boolean; text: string; textSec: string; textTert: string;
   accent: string; bgSubtle: string; bgPrimary: string; border: string; borderPri: string;
   tenant: string; start: () => void; resume: () => void;
@@ -1351,6 +1380,9 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
   exporting: boolean;
   onGenerateReport: (lang: ReportLang) => void;
   selectedCount: number; totalCount: number;
+  consolidation: Record<string, number>;
+  onConsolidationChange: (factors: Record<string, number>) => void;
+  excludedCaps: Set<string>;
 }) {
   const preflight = usePreflight();
 
@@ -1389,6 +1421,13 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
 
       {/* Run Assessment button + preflight — right below title */}
       <Flex flexDirection="column" alignItems="center">
+        {/* Consolidation Context — above Run button */}
+        <ConsolidationPanel
+          consolidation={consolidation}
+          onApply={onConsolidationChange}
+          dk={dk} text={text} textSec={textSec} accent={accent} border={border}
+          excludedCaps={excludedCaps}
+        />
         {/* Preflight validation results */}
         {(preflight.running || preflight.hasFails) && (
           <Flex flexDirection="column" style={{

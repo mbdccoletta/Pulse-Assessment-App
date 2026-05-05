@@ -11,6 +11,8 @@ export interface AssessmentSnapshot {
     name: string;
     color: string;
     score: number;
+    /** Consolidation factor (0–100). Defaults to 100 if absent (backwards compat). */
+    consolidation?: number;
     criteriaResults: {
       id: string;
       label: string;
@@ -210,7 +212,8 @@ export function useAssessmentHistory() {
       capabilities: capabilities.map((c) => ({
         name: c.name,
         color: c.color,
-        score: c.score,
+        score: c.rawScore,
+        ...(c.consolidation < 100 ? { consolidation: c.consolidation } : {}),
         criteriaResults: c.criteriaResults.map((cr) => ({
           id: cr.id,
           label: cr.label,

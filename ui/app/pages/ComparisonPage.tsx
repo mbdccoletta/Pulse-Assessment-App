@@ -42,6 +42,8 @@ interface CapDiff {
   currMaturity: number;
   prevMaturity: number;
   maturityDelta: number;
+  currConsolidation: number;
+  prevConsolidation: number;
   critDiffs: CritDiff[];
   improved: CritDiff[];
   degraded: CritDiff[];
@@ -180,6 +182,8 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
         currMaturity: currMat,
         prevMaturity: prevMat,
         maturityDelta: currMat - prevMat,
+        currConsolidation: cc.consolidation ?? 100,
+        prevConsolidation: pc?.consolidation ?? 100,
         critDiffs,
         improved: critDiffs.filter((c) => c.pointsDelta > 0),
         degraded: critDiffs.filter((c) => c.pointsDelta < 0),
@@ -443,7 +447,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
     <Flex flexDirection="column" ref={capBarRef} style={{ marginBottom: 4 }}>
       <Flex onClick={(e) => { e.stopPropagation(); if (onHeaderClick) onHeaderClick(); else setLocalOpen(!localOpen); }}
         role="button" tabIndex={0} aria-expanded={open}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (onHeaderClick) onHeaderClick(); else setLocalOpen(!localOpen); } }} alignItems="center" gap={6} style={{ padding: "4px 0", cursor: "pointer", borderBottom: `1px solid ${border}` }}>
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (onHeaderClick) onHeaderClick(); else setLocalOpen(!localOpen); } }} alignItems="center" gap={6} style={{ padding: "4px 0", cursor: "pointer", borderBottom: `1px solid ${border}`, borderLeft: cap.currConsolidation < 100 ? `3px solid ${Colors.Charts.Status.Warning.Default}` : undefined, paddingLeft: cap.currConsolidation < 100 ? 6 : 0 }}>
         <Text style={{ width: 8, height: 8, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
         <Text style={{ flex: 1, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cap.name}</Text>
         <Text style={{ fontSize: 12, color: textSec, fontVariantNumeric: "tabular-nums" }}>{prev}%</Text>
@@ -458,6 +462,17 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
         )}
         <Text style={{ fontSize: 11, color: textTert, transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▾</Text>
       </Flex>
+      {/* Consolidation banner */}
+      {cap.currConsolidation < 100 && (
+        <Flex alignItems="center" gap={6} style={{ marginTop: 2, marginLeft: 14, padding: "2px 8px", borderRadius: 5,
+          background: dk ? "rgba(255,170,50,0.08)" : "rgba(255,170,50,0.05)",
+          border: `1px solid ${dk ? "rgba(255,170,50,0.15)" : "rgba(255,170,50,0.12)"}`,
+        }}>
+          <Text style={{ fontSize: 9, fontWeight: 700, color: Colors.Charts.Status.Warning.Default, letterSpacing: 0.3 }}>
+            CONSOLIDATION: {cap.currConsolidation}% in Dynatrace
+          </Text>
+        </Flex>
+      )}
       {/* Score bar */}
       <Flex
         onClick={(e) => { e.stopPropagation(); if (onHeaderClick) onHeaderClick(); else setLocalOpen(!localOpen); }}
