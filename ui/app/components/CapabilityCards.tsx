@@ -161,14 +161,21 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                 <Text style={{ fontSize: 16, fontWeight: 700, color: cap.color, fontFamily: "system-ui, sans-serif" }}>
                   {Math.round(cap.score * anim)}%
                 </Text>
-                {cap.consolidation < 100 && (
-                  <Text style={{
-                    fontSize: 10, padding: "1px 6px", borderRadius: 4,
-                    background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                    color: Colors.Text.Neutral.Disabled, fontWeight: 600,
-                    fontFamily: "system-ui, sans-serif",
-                    textDecoration: "line-through",
-                  }}>{Math.round(cap.rawScore * anim)}%</Text>
+                {cap.consolidation < 100 && cap.rawScore > 0 && (
+                  <Flex alignItems="center" gap={4} style={{
+                    padding: "2px 8px", borderRadius: 6,
+                    background: cap.consolidation === 0
+                      ? (dk ? "rgba(255,100,80,0.12)" : "rgba(255,100,80,0.08)")
+                      : (dk ? "rgba(255,170,50,0.10)" : "rgba(255,170,50,0.06)"),
+                    border: `1px solid ${cap.consolidation === 0
+                      ? (dk ? "rgba(255,100,80,0.3)" : "rgba(255,100,80,0.2)")
+                      : (dk ? "rgba(255,170,50,0.25)" : "rgba(255,170,50,0.18)")}`,
+                  }}>
+                    <Text style={{
+                      fontSize: 10, fontWeight: 700,
+                      color: cap.consolidation === 0 ? Colors.Text.Critical.Default : Colors.Charts.Status.Warning.Default,
+                    }}>{cap.consolidation === 0 ? "Discovery:" : "DT:"} {cap.rawScore}%</Text>
+                  </Flex>
                 )}
                 <Text style={{
                   fontSize: 11, padding: "2px 8px", borderRadius: 6,
@@ -183,33 +190,6 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                 opacity: act ? 0.9 : 0.55,
               }} />
             </Flex>
-            {cap.consolidation < 100 && (
-              <Flex alignItems="center" gap={6} style={{ marginTop: 4, padding: "3px 8px", borderRadius: 6,
-                background: dk ? "rgba(255,170,50,0.08)" : "rgba(255,170,50,0.05)",
-                border: `1px solid ${dk ? "rgba(255,170,50,0.15)" : "rgba(255,170,50,0.12)"}`,
-              }}>
-                <Flex flexDirection="column" style={{ flex: 1 }}>
-                  <Flex alignItems="center" gap={6}>
-                    <Text style={{ fontSize: 10, fontWeight: 700, color: Colors.Charts.Status.Warning.Default, letterSpacing: 0.3 }}>
-                      CONSOLIDATION: {cap.consolidation}% in Dynatrace
-                    </Text>
-                    <Text style={{ fontSize: 10, color: dk ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.35)" }}>
-                      DT score {cap.rawScore}% → adjusted {Math.round(cap.score * anim)}%
-                    </Text>
-                  </Flex>
-                  <Flex alignItems="center" gap={4} style={{ marginTop: 2 }}>
-                    <Flex flexDirection="column" style={{ flex: 1, height: 3, borderRadius: 2, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", overflow: "hidden" }}>
-                      <Flex flexDirection="column" style={{
-                        height: "100%", borderRadius: 2,
-                        background: `${cap.color}40`,
-                        width: `${cap.rawScore * anim}%`, transition: "width 1.4s cubic-bezier(0.4,0,0.2,1)",
-                        opacity: 0.5,
-                      }} />
-                    </Flex>
-                  </Flex>
-                </Flex>
-              </Flex>
-            )}
             {act && (
               <Flex flexDirection="column" style={{ marginTop: 6 }}>
                 {cap.criteriaResults.map((cr) => (
