@@ -581,6 +581,63 @@ export function generateFirstDayReport(input: ReportInput, lang: ReportLang = "e
       pdf.text(`-${gap}%`, colX[4], y);
       y += 5;
     });
+
+    /* ── Unified Platform Value (after consolidation table) ── */
+    ensureSpace(90);
+    y += 6;
+    sectionHeader(T.unifiedPlatformTitle, 55, 100, 220);
+
+    // Intro paragraph
+    pdf.setFontSize(7); pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(190, 190, 210);
+    const introLines = pdf.splitTextToSize(T.unifiedPlatformIntro(consolCaps.length), CW - 4);
+    ensureSpace(introLines.length * 3.5 + 8);
+    pdf.text(introLines, M + 2, y);
+    y += introLines.length * 3.5 + 4;
+
+    // Benefits
+    const benefits = [
+      { title: T.unifiedBenefit1Title, text: T.unifiedBenefit1, color: [80, 220, 160] as [number, number, number] },
+      { title: T.unifiedBenefit2Title, text: T.unifiedBenefit2, color: [180, 140, 255] as [number, number, number] },
+      { title: T.unifiedBenefit3Title, text: T.unifiedBenefit3, color: [80, 180, 255] as [number, number, number] },
+      { title: T.unifiedBenefit4Title, text: T.unifiedBenefit4, color: [255, 180, 80] as [number, number, number] },
+      { title: T.unifiedBenefit5Title, text: T.unifiedBenefit5, color: [100, 220, 200] as [number, number, number] },
+    ];
+
+    benefits.forEach(b => {
+      const bodyLines = pdf.splitTextToSize(b.text, CW - 12);
+      const blockH = 5 + bodyLines.length * 3.2 + 3;
+      ensureSpace(blockH);
+
+      // Accent bar
+      pdf.setFillColor(b.color[0], b.color[1], b.color[2]);
+      pdf.roundedRect(M, y, 2, blockH - 2, 0.5, 0.5, "F");
+
+      // Title
+      pdf.setFontSize(7); pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(b.color[0], b.color[1], b.color[2]);
+      pdf.text(b.title, M + 5, y + 3);
+
+      // Body
+      pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(180, 180, 200);
+      pdf.text(bodyLines, M + 5, y + 7);
+
+      y += blockH + 1;
+    });
+
+    // Call to action
+    ensureSpace(20);
+    y += 2;
+    pdf.setFillColor(55, 100, 220);
+    pdf.roundedRect(M, y - 2, CW, 1, 0.3, 0.3, "F");
+    y += 4;
+    pdf.setFontSize(7); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(80, 180, 255);
+    const ctaLines = pdf.splitTextToSize(T.unifiedCallToAction, CW - 4);
+    ensureSpace(ctaLines.length * 3.5 + 4);
+    pdf.text(ctaLines, M + 2, y);
+    y += ctaLines.length * 3.5 + 4;
   }
 
   /* ── Footer on every page ── */
