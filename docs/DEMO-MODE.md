@@ -4,6 +4,17 @@
 > without touching Grail. Zero DPS consumed, deterministic results,
 > reproducible across reloads.
 
+> **Production posture:** the demo UI (magenta "🎭 Performance simulation"
+> footer bar with scenario chips, Force-refresh, Download-perf-JSON) is
+> **hidden by default** in customer tenants. SEs unlock it with one of:
+>
+> - URL param `?dev=1`
+> - `localStorage.cca.dev = '1'`
+> - Activating any demo scenario (e.g. `?demo=xlarge-telco` — the demo
+>   activation implies "we need the controls" so the bar is forced visible)
+>
+> See `ui/app/hooks/useDevMode.ts` for the gate logic.
+
 ---
 
 ## Why this exists

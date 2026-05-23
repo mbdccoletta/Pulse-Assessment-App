@@ -8,6 +8,7 @@ import { useAssessmentHistory } from "./hooks/useAssessmentHistory";
 import { useCoverageData } from "./hooks/useCoverageData";
 import { useScaleTier } from "./hooks/useScaleTier";
 import { useDemoMode } from "./demo/useDemoMode";
+import { useDevMode } from "./hooks/useDevMode";
 
 const CoverageAssessment = React.lazy(() =>
   import("./pages/CoverageAssessment").then(m => ({ default: m.CoverageAssessment }))
@@ -24,6 +25,13 @@ export const App = () => {
   // v2.5.0: live host-count detection + live query execution.
   const demo = useDemoMode();
   const scale = useScaleTier(demo.scenario);
+  // Dev mode gates the SE-facing diagnostic UI (Demo Mode chips, force
+  // refresh, perf JSON download). Active when ?dev=1, localStorage.cca.dev,
+  // OR when a demo scenario is already loaded (so shared demo links keep
+  // working end-to-end). In a customer tenant with no flag set, the
+  // DemoControlBar is hidden entirely — the only Scale Tier UX surface is
+  // the auto-detected banner.
+  const { isDev } = useDevMode(demo.scenario !== null);
   // Thread the scale metadata into useCoverageData so the downloadable perf
   // report records exactly which tier was auto-detected vs forced.
   const coverageData = useCoverageData(scale.tier, demo.scenario, {
@@ -49,7 +57,7 @@ export const App = () => {
             </Flex>
           }>
             <Routes>
-              <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} scale={scale} demo={demo} />} />
+              <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} scale={scale} demo={demo} isDev={isDev} />} />
               <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} coverageData={coverageData} saveSnapshot={history.saveSnapshot} />} />
             </Routes>
           </Suspense>

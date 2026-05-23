@@ -94,9 +94,14 @@ interface Props {
    *  the banner switches to demo styling. The DemoControlBar in the footer
    *  uses the catalog + setScenario to expose one-click scenario switching. */
   demo?: UseDemoModeResult;
+  /** Production gate: when false (customer tenant, no `?dev=1`, no active
+   *  demo), the DemoControlBar + Force-refresh + Download-perf-JSON
+   *  controls are hidden. The customer sees a clean app; SEs flip the
+   *  flag via URL or console to unlock the diagnostic surface. */
+  isDev?: boolean;
 }
 
-export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, scale, demo }) => {
+export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, scale, demo, isDev }) => {
   // Convenience handle. Components that only care about the active scenario
   // read this; components that also need the catalog or the setter (the
   // DemoControlBar) use the full `demo` prop.
@@ -633,11 +638,16 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
           "Simulate xLarge tenant" button is reachable at every stage
           (idle / loading / loaded / error). position:sticky keeps it visible
           as the user scrolls the radar/cards area. zIndex sits above the
-          radar overlays but below modals. Outside the idle/loaded conditionals
-          on purpose — the previous placement inside the loaded gate meant
-          the button only appeared after the operator clicked Run, which is
-          the opposite of what's needed for a demo control. */}
-      {demo && (
+          radar overlays but below modals.
+
+          ── Production gate ─────────────────────────────────────────
+          Rendered ONLY when isDev=true. In a customer tenant without
+          ?dev=1 / localStorage.cca.dev / an active demo, the entire
+          diagnostic surface is invisible — the customer sees just the
+          radar + cards + the auto-detected Scale Tier banner. SEs unlock
+          the controls by appending ?dev=1 to the URL or calling
+          __pulseDemo('<scenario>') in the console. */}
+      {demo && isDev && (
         <Flex
           style={{
             position: "sticky",
