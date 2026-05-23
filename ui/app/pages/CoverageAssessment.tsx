@@ -17,6 +17,7 @@ import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
 import { ScaleTierBanner } from "../components/ScaleTierBanner";
 import { DemoControlBar } from "../components/DemoControlBar";
+import { DpsCostBadge } from "../components/DpsCostBadge";
 import type { UseScaleTierResult } from "../hooks/useScaleTier";
 import type { UseDemoModeResult } from "../demo/useDemoMode";
 import { CAPABILITIES } from "../queries";
@@ -405,6 +406,17 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                   · {formatRecords(stats.scannedRecords)} records scanned
                 </Text>
               )}
+              {/* DPS cost estimate — visible to all users (no dev gate). Shows
+                  estimated USD for the current run + cache savings + annual
+                  projections in the tooltip. See DpsCostBadge.tsx. */}
+              <DpsCostBadge
+                stats={stats}
+                liveScannedBytes={coverageData.liveScannedBytes}
+                lastRunMeta={coverageData.lastRunMeta}
+                loading={loading}
+                textColor={text}
+                textSecColor={textSec}
+              />
             </Text>
           </Flex>
           {/* Scale Tier banner — only renders when tier !== 'exact'. Tells the
