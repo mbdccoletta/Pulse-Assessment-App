@@ -21,6 +21,13 @@ export interface Criterion {
   query: string;
   /** Denominator query — result = query / queryB × 100 (coverage %). Omit for queries that compute ratio internally. */
   queryB?: string;
+  /** Hard-coded denominator when the expected value is a known constant
+   *  (e.g., "5 expected log levels"). Use this INSTEAD of queryB whenever
+   *  the denominator would be a query that just discards its result and
+   *  returns a literal — those queries waste ~15 GB of Grail scan each
+   *  (confirmed in the v2.5.0 perf report) for zero information gain.
+   *  Mutually exclusive with queryB; useCoverageData honors queryB first. */
+  denominatorConstant?: number;
   thresholds: Threshold[];
 }
 
@@ -444,7 +451,10 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "l9", label: "Log severity diversity (%)",
         description: "Percentage of severity levels being ingested (out of 5: ERROR, WARN, INFO, DEBUG, TRACE).",
         query: "fetch logs | filter timestamp > now() - 2h | summarize countDistinct(loglevel)",
-        queryB: "fetch logs | filter timestamp > now() - 2h | summarize count = count() | fields always5 = 5",
+        // denominator was previously a query that scanned ~15 GB of logs just
+        // to discard the count and return the literal 5. See Task #51 / v2.5.1
+        // perf-waste audit. Now expressed as a code constant.
+        denominatorConstant: 5,
         thresholds: [{ min: 60 }, { min: 40 }],
       },
       {
@@ -458,7 +468,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "l11", label: "Dedicated buckets usage",
         description: "Number of distinct Grail buckets used for log storage (expected >= 2 for proper segregation).",
         query: "fetch logs, scanLimitGBytes:-1 | filter timestamp > now() - 2h | summarize countDistinct(dt.system.bucket)",
-        queryB: "fetch logs | filter timestamp > now() - 2h | summarize count = count() | fields always2 = 2",
+        denominatorConstant: 2,
         thresholds: [{ min: 100 }, { min: 50 }],
       },
       {
@@ -486,7 +496,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "l15", label: "Log-based events",
         description: "Presence of events generated from log data — indicates mature log-based alerting.",
         query: 'fetch events | filter timestamp > now() - 24h | filter event.kind == "LOG" | summarize count()',
-        queryB: "fetch logs | filter timestamp > now() - 2h | summarize count = count() | fields always1 = 1",
+        denominatorConstant: 1,
         thresholds: [{ min: 100 }, { min: 50 }],
       },
       {
@@ -515,7 +525,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "s2", label: "Security event type coverage (%)",
         description: "Percentage of security event types detected vs expected categories.",
         query: 'fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 24h | summarize countDistinct(event.type)',
-        queryB: 'fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 24h | summarize count = countDistinct(event.type) | fields expected = 5',
+        denominatorConstant: 5,
         thresholds: [{ min: 60 }, { min: 20 }],
       },
       {
@@ -550,7 +560,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "s7", label: "Event kind diversity (%)",
         description: "Percentage of event kinds monitored vs expected (out of 5).",
         query: "fetch events | filter timestamp > now() - 2h | summarize countDistinct(event.kind)",
-        queryB: "fetch events | filter timestamp > now() - 2h | summarize count = countDistinct(event.kind) | fields expected = 5",
+        denominatorConstant: 5,
         thresholds: [{ min: 60 }, { min: 40 }],
       },
       {
@@ -607,7 +617,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "t3", label: "Problem category coverage (%)",
         description: "Percentage of problem categories detected (out of 4: AVAILABILITY, ERROR, SLOWDOWN, RESOURCE).",
         query: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | summarize countDistinct(event.category)",
-        queryB: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | summarize count = countDistinct(event.category) | fields expected = 4",
+        denominatorConstant: 4,
         thresholds: [{ min: 75 }, { min: 50 }, { min: 25 }],
       },
       {
@@ -692,7 +702,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "ai3", label: "AI provider diversity (%)",
         description: "Percentage of known AI providers detected vs expected (out of 5).",
         query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | fieldsAdd provider = coalesce(gen_ai.system, gen_ai.provider.name) | summarize countDistinct(provider)",
-        queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | fieldsAdd provider = coalesce(gen_ai.system, gen_ai.provider.name) | summarize count = countDistinct(provider) | fields expected = 5",
+        denominatorConstant: 5,
         thresholds: [{ min: 40 }, { min: 20 }],
       },
       {
@@ -756,7 +766,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "b2", label: "Bizevent type diversity (%)",
         description: "Percentage of expected business event types detected (out of 10 baseline types).",
         query: "fetch bizevents | filter timestamp > now() - 2h | summarize countDistinct(event.type)",
-        queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count = countDistinct(event.type) | fields expected = 10",
+        denominatorConstant: 10,
         thresholds: [{ min: 60 }, { min: 30 }],
       },
       {
@@ -770,7 +780,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "b4", label: "Bizevent provider diversity (%)",
         description: "Percentage of expected business event providers detected (out of 5 baseline providers).",
         query: "fetch bizevents | filter timestamp > now() - 2h | summarize countDistinct(event.provider)",
-        queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count = countDistinct(event.provider) | fields expected = 5",
+        denominatorConstant: 5,
         thresholds: [{ min: 60 }, { min: 20 }],
       },
       {
@@ -827,14 +837,14 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "sd3", label: "Event kind diversity (%)",
         description: "Percentage of event kinds present (out of 5 main kinds).",
         query: "fetch events | filter timestamp > now() - 2h | summarize countDistinct(event.kind)",
-        queryB: "fetch events | filter timestamp > now() - 2h | summarize count = countDistinct(event.kind) | fields expected = 5",
+        denominatorConstant: 5,
         thresholds: [{ min: 60 }, { min: 40 }],
       },
       {
         id: "sd4", label: "Event type diversity (%)",
         description: "Percentage of expected delivery event types detected (out of 10 baseline types).",
         query: "fetch events | filter timestamp > now() - 2h | summarize countDistinct(event.type)",
-        queryB: "fetch events | filter timestamp > now() - 2h | summarize count = countDistinct(event.type) | fields expected = 10",
+        denominatorConstant: 10,
         thresholds: [{ min: 60 }, { min: 30 }],
       },
       {

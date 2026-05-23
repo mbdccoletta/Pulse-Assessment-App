@@ -15,6 +15,10 @@ import { ChartLabels } from "../components/ChartLabels";
 import { CapabilityCards } from "../components/CapabilityCards";
 import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
+import { ScaleTierBanner } from "../components/ScaleTierBanner";
+import { DemoControlBar } from "../components/DemoControlBar";
+import type { UseScaleTierResult } from "../hooks/useScaleTier";
+import type { UseDemoModeResult } from "../demo/useDemoMode";
 import { CAPABILITIES } from "../queries";
 import { CAP_SUMMARIES } from "../data/capSummaries";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
@@ -80,9 +84,23 @@ function isTextSelection(): boolean {
 interface Props {
   history: ReturnType<typeof useAssessmentHistory>;
   coverageData: CoverageData;
+  /** Scale Tier context (auto-detect + manual override). Optional so older
+   *  callers / tests that don't thread the tier through still compile —
+   *  in that case the banner is simply not rendered. */
+  scale?: UseScaleTierResult;
+  /** Demo mode context: catalog of scenarios + active scenario + setter.
+   *  When the active scenario is non-null, snapshot persistence is suppressed
+   *  (we don't want canned values polluting Evolution Over Time history) and
+   *  the banner switches to demo styling. The DemoControlBar in the footer
+   *  uses the catalog + setScenario to expose one-click scenario switching. */
+  demo?: UseDemoModeResult;
 }
 
-export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) => {
+export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, scale, demo }) => {
+  // Convenience handle. Components that only care about the active scenario
+  // read this; components that also need the catalog or the setter (the
+  // DemoControlBar) use the full `demo` prop.
+  const demoScenario = demo?.scenario ?? null;
   const { capabilities, totalScore, overallMaturityLevel, loading, idle, progress, error, tenant, date, stats, entityCounts, liveScannedRecords, consolidation, setConsolidation, start, refresh, reset, goHome, resume } = coverageData;
   const navigate = useNavigate();
   const lastSavedRef = useRef<string>("");
@@ -137,7 +155,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
     }, 0);
   }, [capabilities, exporting, tenant, date, stats, entityCounts, totalScore]);
 
-  // Save snapshot only when an assessment run finishes (loading transitions true → false)
+  // Save snapshot only when an assessment run finishes (loading transitions true → false).
+  // In demo mode we DELIBERATELY skip the save: canned scenario values would
+  // mix with real snapshots in Evolution Over Time and corrupt trend lines.
   useEffect(() => {
     if (loading) {
       wasLoadingRef.current = true;
@@ -145,13 +165,14 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
     }
     if (wasLoadingRef.current && capabilities.length > 0) {
       wasLoadingRef.current = false;
+      if (demoScenario) return; // demo data must not be persisted
       const sig = capabilities.map(c => `${c.name}:${c.score}`).join(",");
       if (sig !== lastSavedRef.current) {
         lastSavedRef.current = sig;
         history.saveSnapshot(capabilities, totalScore, tenant);
       }
     }
-  }, [loading, capabilities, totalScore, tenant, history]);
+  }, [loading, capabilities, totalScore, tenant, history, demoScenario]);
 
   // Animate on data load
   useEffect(() => {
@@ -381,6 +402,17 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
               )}
             </Text>
           </Flex>
+          {/* Scale Tier banner — only renders when tier !== 'exact'. Tells the
+              viewer that coverage values are sampled estimates and exposes a
+              manual override toggle. Component is a no-op on small/medium
+              tenants, so this insertion is zero-impact for the existing UX.
+              In demo mode the banner ALWAYS renders, with magenta styling, so
+              it's never confused with a live sampled run. */}
+          {(scale || demoScenario) && (
+            <Flex style={{ padding: "0 16px", marginTop: 8, flexShrink: 0 }}>
+              <ScaleTierBanner scale={scale!} demoScenario={demoScenario} />
+            </Flex>
+          )}
           {/* Main content: chart left, cards right — stacks vertically on mobile */}
           <Flex style={{ flex: 1, flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: "auto" }}>
           {viewMode === "coverage" ? (<>
@@ -594,6 +626,45 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
         <Flex flexDirection="column" style={{ textAlign: "center", padding: 24, color: Colors.Text.Critical.Default }}>
           <Flex flexDirection="column" style={{ fontSize: 14, marginBottom: 8 }}>Assessment failed</Flex>
           <Flex flexDirection="column" style={{ fontSize: 12, color: textSec }}>{error}</Flex>
+        </Flex>
+      )}
+
+      {/* Demo control bar — pinned to the bottom of the page so the
+          "Simulate xLarge tenant" button is reachable at every stage
+          (idle / loading / loaded / error). position:sticky keeps it visible
+          as the user scrolls the radar/cards area. zIndex sits above the
+          radar overlays but below modals. Outside the idle/loaded conditionals
+          on purpose — the previous placement inside the loaded gate meant
+          the button only appeared after the operator clicked Run, which is
+          the opposite of what's needed for a demo control. */}
+      {demo && (
+        <Flex
+          style={{
+            position: "sticky",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            flexShrink: 0,
+            zIndex: 5,
+          }}
+        >
+          <DemoControlBar
+            catalog={demo.catalog}
+            activeScenario={demo.scenario}
+            setScenario={demo.setScenario}
+            liveHostCount={scale?.hostCount ?? null}
+            liveTenantName={tenant}
+            isMobile={isMobile}
+            onRunTest={refresh}
+            hasPerfReport={coverageData.perfEntries != null}
+            onDownloadPerfReport={coverageData.downloadPerfReport}
+            cacheStats={coverageData.lastRunMeta ? {
+              hits: coverageData.lastRunMeta.cacheHits,
+              misses: coverageData.lastRunMeta.cacheMisses,
+              bytesSaved: coverageData.lastRunMeta.cachedBytesSaved,
+            } : null}
+            onForceRefresh={coverageData.forceRefresh}
+          />
         </Flex>
       )}
     </Flex>
