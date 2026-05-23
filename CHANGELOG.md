@@ -4,6 +4,32 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.0] — 2026-05-22
+
+### Added — Scale Tier (xlarge tenant support)
+- **`scale-tier.ts`** — pure module that adapts DQL queries to tenant scale via three tiers:
+  - `exact` (≤ 5,000 hosts) — queries returned verbatim, ground-truth coverage values, identical behavior to v2.4.x.
+  - `large` (5,000–50,000 hosts) — narrows logs/spans/events/bizevents to a 30-minute window with a 200 GB `scanLimitGBytes` safety net. Distinct-count accuracy preserved on workloads with continuous ingest.
+  - `xlarge` (> 50,000 hosts) — 5-minute window with a 50 GB `scanLimitGBytes` cap. Coverage values are sampled estimates (±5–10% on typical workloads). Required above 50k hosts to fit inside the Grail per-query timeout.
+- **`useScaleTier`** hook — detects host count via one cheap entity query on mount, auto-selects the tier, persists manual overrides in `localStorage`.
+- **`ScaleTierBanner`** component — visible disclosure that the assessment is running in a sampled tier. Hidden entirely in `exact` mode (zero presentation impact for tenants ≤ 5k hosts). Includes inline tier-switch buttons.
+- `useCoverageData` now accepts an optional `tier` parameter; the executed DQL is transformed via `scaleQuery(originalQ, tier)` before hitting Grail, but the result cache remains keyed by the **original** query string so all downstream consumers (scoring, snapshots, capability cards, PDF reports) are unaffected.
+
+### Changed
+- `App.tsx` now mounts `useScaleTier()` and threads the resolved tier into `useCoverageData()` and into `CoverageAssessment` (via a new optional `scale` prop).
+- `CoverageAssessment` renders the `ScaleTierBanner` below the toolbar when `tier !== 'exact'`.
+
+### Unchanged (deliberate, by design)
+- `queries.ts` — every DQL string is **bit-identical** to v2.4.2. Scale Tier transforms queries at execution time, not in the source. This keeps the assessment definition versionable, auditable and easy to review.
+- Scoring logic in `useCoverageData` — formula and thresholds untouched.
+- Snapshot persistence and Evolution Over Time comparison — snapshots from v2.4.x remain compatible.
+- Strato components, layouts, theming — no presentation changes for tenants ≤ 5k hosts.
+
+### Performance impact (measured on bwm98081, 54 hosts; extrapolated to 80k hosts)
+- 80k-host single assessment scan: ~176 TB (Exact) → ~3.2 TB (xLarge) — **98.2% reduction**.
+- 80k-host single assessment DPS: ~$1,800 → ~$32 — **98.2% reduction**.
+- 80k-host wall-time: ~30–40 min (Exact, with query timeouts) → ~3–5 min (xLarge, within timeout). See `docs/PERFORMANCE-REPORT-80K-HOSTS.md` §6 for the full matrix.
+
 ## [2.3.40] — 2025-07-17
 
 ### Changed
