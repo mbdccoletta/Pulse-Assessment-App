@@ -4,7 +4,6 @@ import { getEnvironmentUrl } from "@dynatrace-sdk/app-environment";
 import { CAPABILITIES, type CapabilityDef, type Threshold } from "../queries";
 import { CRITERION_TIERS, type CriterionTier } from "../data/criterionTiers";
 import { scaleQuery, TIER_CONFIG, type ScaleTier } from "../scale-tier";
-import { buildCoverageFromScenario, zeroEntityCountQueriesFor, type DemoScenario } from "../demo/scenarios";
 import { classifySource, type InFlightPerfEntry, type PerfReport } from "../perf/types";
 import { buildReport, downloadReport } from "../perf/buildReport";
 import { QueryCache } from "../perf/queryCache";
@@ -446,21 +445,15 @@ export interface PerfScaleMeta {
  * to enable narrowed time windows + scanLimitGBytes safety nets for log /
  * span / event / bizevent queries. See ../scale-tier.ts for the contract.
  *
- * @param demoScenario  When non-null, the hook bypasses ALL Grail queries
- *                      (zero DPS) and synthesises the result from the
- *                      scenario definition. Used for previewing the app at
- *                      tenant scales we don't have real access to. See
- *                      ../demo/scenarios.ts and ../../docs/DEMO-MODE.md.
- * @param scaleMeta     Optional pass-through of useScaleTier metadata that
- *                      isn't expressible via `tier` alone (autoTier,
- *                      manualOverride, observed hostCount). Surfaces in
- *                      the perf report download so the analyzer can tell
- *                      "user accepted auto xlarge" apart from "user forced
- *                      xlarge on a small tenant".
+ * @param scaleMeta  Optional pass-through of useScaleTier metadata that
+ *                   isn't expressible via `tier` alone (autoTier,
+ *                   manualOverride, observed hostCount). Surfaces in
+ *                   the perf report download so the analyzer can tell
+ *                   "user accepted auto xlarge" apart from "user forced
+ *                   xlarge on a small tenant".
  */
 export function useCoverageData(
   tier: ScaleTier = 'exact',
-  demoScenario: DemoScenario | null = null,
   scaleMeta?: PerfScaleMeta,
 ): CoverageData {
   const [capabilities, setCapabilities] = useState<CapabilityResult[]>([]);
@@ -498,11 +491,9 @@ export function useCoverageData(
     const tRunStart = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
     // Build the queryConsumers map exactly once per run. It's a static
-    // derivation from capsRef.current (the current capability filter) and
-    // is reused for both the live and demo paths.
-    const caps0 = capsRef.current;
+    // derivation from capsRef.current (the current capability filter).
     const queryConsumers = new Map<string, string[]>();
-    for (const cap of caps0) {
+    for (const cap of capsRef.current) {
       for (const cr of cap.criteria) {
         for (const q of cr.queryB ? [cr.query, cr.queryB] : [cr.query]) {
           const arr = queryConsumers.get(q) ?? [];
@@ -512,256 +503,6 @@ export function useCoverageData(
       }
     }
 
-    // ── Demo short-circuit ────────────────────────────────────────────────
-    // When a scenario is active we never touch Grail. We synthesize the full
-    // CapabilityResult[] from the scenario, drip-feed the progress bar so it
-    // looks like real work, and exit without consuming a single DPS. Snapshot
-    // persistence is gated separately in CoverageAssessment (it inspects
-    // `sampled`/`tier` for now; we also set state below so the rest of the UI
-    // reads consistent values).
-    if (demoScenario) {
-      try {
-        const built = buildCoverageFromScenario(demoScenario);
-        const totalSteps = built.capabilities.reduce((s, c) => s + c.criteriaResults.length, 0);
-        const dwellMs = Math.max(40, Math.floor(demoScenario.simulatedWallTimeMs / Math.max(1, totalSteps)));
-        let done = 0;
-        for (const _cap of built.capabilities) {
-          for (const _crit of _cap.criteriaResults) {
-            if (cancelRef.current !== runToken) return; // cancelled mid-demo
-            await new Promise((r) => setTimeout(r, dwellMs));
-            done++;
-            setProgress(Math.round((done / totalSteps) * 100));
-            // Progressive scan counter for the live banner — matches the
-            // proportion completed so it climbs smoothly to scenario total.
-            setLiveScannedBytes(Math.round((done / totalSteps) * built.stats.scannedBytes));
-            setLiveScannedRecords(Math.round((done / totalSteps) * built.stats.scannedRecords));
-          }
-        }
-        if (cancelRef.current !== runToken) return;
-        setCapabilities(built.capabilities);
-        setStats(built.stats);
-        setEntityCounts(built.entityCounts);
-        setLoading(false);
-        setProgress(100);
-
-        // ── Synthesize per-query perf entries for the demo run ────────────
-        // Goals (per the analyzer's feedback after the first round):
-        //   (a) Sum of scan/records per source matches the scenario budget.
-        //   (b) Per-query scan is NOT uniform within a source — a real run
-        //       shows lognormal-ish spread (the heaviest log query scans
-        //       ~7.5× the lightest). The analyzer needs that shape to spot
-        //       which queries are outliers vs typical.
-        //   (c) Numbers are deterministic for a given (scenario, query),
-        //       so reloading the page produces the same JSON. We use the
-        //       same mulberry32 seed strategy as scenarios.ts.
-        //   (d) resultValue is best-effort: for queryB denominators that
-        //       look like "fetch dt.entity.X | count()" we surface the
-        //       scenario's matching entityCounts so the JSON tells a
-        //       consistent story (e.g. host count entry shows 250000 in
-        //       xxlarge-cloud).
-        const uniqueQueries = Array.from(queryConsumers.keys());
-        const totalScan = built.stats.scannedBytes;
-        const totalRec = built.stats.scannedRecords;
-        const totalWall = demoScenario.simulatedWallTimeMs;
-        // Source-weight heuristic — logs absorb ~95% of cost, spans 3%, the
-        // rest is metadata. Roughly matches the perf report findings.
-        const sourceWeight: Record<string, number> = {
-          logs: 0.95, spans: 0.03, events: 0.005, bizevents: 0.005,
-          problems: 0.005, metrics: 0.0, entity: 0.0, security: 0.005, other: 0.0,
-        };
-        const grouped = new Map<string, string[]>();
-        for (const q of uniqueQueries) {
-          const src = classifySource(q);
-          const arr = grouped.get(src) ?? [];
-          arr.push(q);
-          grouped.set(src, arr);
-        }
-
-        // Per-source wall-time floor (ms). Even a zero-scan metadata call has
-        // a network round-trip, OAuth check, and Grail planner cost. These
-        // floors keep "free" sources (entity, metrics) from collapsing to
-        // implausibly low values like 5ms.
-        const floorMsBySource: Record<string, number> = {
-          logs: 40, spans: 35, events: 30, bizevents: 30,
-          problems: 30, metrics: 25, entity: 20, security: 25, other: 25,
-        };
-        // Approximate Grail scan throughput per worker, in GB/s. Used to
-        // turn scannedBytes into a wall-time estimate so the JSON reflects
-        // the linear cost relationship a real run would show.
-        const SCAN_GB_PER_SEC = 12;
-
-        // Tiny deterministic PRNG — same family as scenarios.ts. Seed from
-        // (scenario.id | query) so jitter is stable across reloads.
-        const hash32 = (str: string) => {
-          let h = 2166136261 >>> 0;
-          for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
-          return h;
-        };
-        const mul = (seed: number) => () => {
-          // eslint-disable-next-line no-param-reassign
-          seed = (seed + 0x6d2b79f5) >>> 0;
-          let t = seed;
-          t = Math.imul(t ^ (t >>> 15), t | 1);
-          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-        };
-
-        // Map common entity-count denominators to scenario-provided values
-        // so JSON readers see consistent numbers (entityCounts.hosts ===
-        // resultValue of the host count query, etc.).
-        const ec = demoScenario.entityCounts;
-        const entityCountForQuery = new Map<string, number>([
-          ['fetch dt.entity.host | summarize count()', ec.hosts],
-          ['fetch dt.entity.service | summarize count()', ec.services],
-          ['fetch dt.entity.service_method | summarize count()', ec.serviceMethods],
-          ['fetch dt.entity.process_group | summarize count()', ec.processGroups],
-          ['fetch dt.entity.process_group_instance | summarize count()', ec.processInstances],
-          ['fetch dt.entity.application | summarize count()', ec.applications],
-          ['fetch dt.entity.mobile_application | summarize count()', ec.mobileApps],
-          ['fetch dt.entity.kubernetes_cluster | summarize count()', ec.k8sClusters],
-          ['fetch dt.entity.cloud_application_namespace | summarize count()', ec.k8sNamespaces],
-          ['fetch dt.entity.synthetic_test | summarize count()', ec.syntheticTests],
-          ['fetch dt.entity.synthetic_location | summarize count()', ec.syntheticLocations],
-          ['fetch dt.entity.http_check | summarize count()', ec.httpChecks],
-          ['fetch dt.entity.network_interface | summarize count()', ec.networkInterfaces],
-          ['fetch dt.entity.disk | summarize count()', ec.disks],
-        ]);
-
-        // C3 simulation under demo: a criterion whose queryB is an entity
-        // class set to 0 in scenario.entityCounts is "skipped" — the live
-        // path would have skipped its numerator. We mirror that here so
-        // the perf JSON shows skippedCriteria > 0 in scenarios like
-        // legacy-no-k8s, making the C3 effect visible without needing a
-        // real K8s-less tenant.
-        const demoZeroDenoms = zeroEntityCountQueriesFor(demoScenario);
-        const demoSkippedCriteria = new Set<string>();
-        const demoSkippedNumerators = new Set<string>();
-        const demoSkipReasonByCriterion = new Map<string, string>();
-        for (const cap of caps0) {
-          for (const cr of cap.criteria) {
-            if (cr.queryB && demoZeroDenoms.has(cr.queryB)) {
-              demoSkippedCriteria.add(cr.id);
-              demoSkippedNumerators.add(cr.query);
-              demoSkipReasonByCriterion.set(cr.id, cr.queryB);
-            }
-          }
-        }
-
-        const demoEntries: InFlightPerfEntry[] = [];
-        // Synthesize skip entries first so the perf JSON shows them next
-        // to the live-mirror skip entries it would in production.
-        for (const cap of caps0) {
-          for (const cr of cap.criteria) {
-            if (!demoSkippedCriteria.has(cr.id)) continue;
-            demoEntries.push({
-              originalQuery: cr.query,
-              executedQuery: cr.query,
-              source: classifySource(cr.query),
-              tier: demoScenario.tier,
-              wallTimeMs: 0,
-              scannedBytes: 0,
-              scannedRecords: 0,
-              scannedDataPoints: 0,
-              resultValue: 0,
-              ok: true,
-              errorMessage: null,
-              usedByCriteria: queryConsumers.get(cr.query) ?? [cr.id],
-              cached: false,
-              cacheAgeSec: 0,
-              skipped: true,
-              skipReason: demoSkipReasonByCriterion.get(cr.id) ?? '',
-            });
-          }
-        }
-        for (const [src, qs] of grouped) {
-          const weight = sourceWeight[src] ?? 0;
-          const sourceScan = totalScan * weight;
-          const sourceRec = totalRec * weight;
-          // Two-pass: first compute jitter factors (relative weights) per
-          // query so they sum to 1, then allocate scan/rec proportionally.
-          // This preserves the source budget exactly while creating spread.
-          const rngs = qs.map((q) => mul(hash32(`${demoScenario.id}|${q}|scan`)));
-          // Jitter in [0.3, 2.5] — produces a ~8× spread between min and max.
-          // Empirically matches the 1.57-11.81 GB range I observed in the
-          // bwm98081 sample.
-          const factors = rngs.map((r) => 0.3 + r() * 2.2);
-          const factorSum = factors.reduce((a, b) => a + b, 0) || 1;
-          // Wall-time model: baseline floor + linear scan cost + small jitter.
-          // This produces realistic P50/P95 divergence — the heavy log
-          // queries now dominate latency, just like a real Grail run.
-          const floorMs = floorMsBySource[src] ?? 25;
-          const wallRngs = qs.map((q) => mul(hash32(`${demoScenario.id}|${q}|wall`)));
-          qs.forEach((q, i) => {
-            // Skip numerator queries that were already accounted for by the
-            // demo C3 simulation above — they should NOT also appear as a
-            // normal scan entry. (Their denominators are still synthesised
-            // normally below.)
-            if (demoSkippedNumerators.has(q)) return;
-            const f = factors[i] / factorSum;
-            const queryScanBytes = sourceScan * f;
-            const queryScanGB = queryScanBytes / (1024 ** 3);
-            // Scan-driven wall component (ms) — assumes one worker can chew
-            // through SCAN_GB_PER_SEC GB/s. xLarge tier caps scan at 50 GB
-            // so this stays bounded; in Exact tier on a real xlarge tenant
-            // it would blow past the 600s Grail timeout, which is exactly
-            // the danger the PERFORMANCE-REPORT-80K-HOSTS.md flags.
-            const scanWallMs = (queryScanGB / SCAN_GB_PER_SEC) * 1000;
-            const wallJitter = 0.85 + wallRngs[i]() * 0.3; // 0.85×–1.15×
-            const wall = Math.max(5, Math.round((floorMs + scanWallMs) * wallJitter));
-
-            const overrideEntity = entityCountForQuery.get(q);
-            const resultValue =
-              overrideEntity != null
-                ? overrideEntity
-                : src === 'metrics' || src === 'entity'
-                  ? Math.round(ec.hosts * (0.4 + (rngs[i]() * 0.6))) // small entity counts
-                  : 0;
-            demoEntries.push({
-              originalQuery: q,
-              executedQuery: scaleQuery(q, demoScenario.tier),
-              source: src as InFlightPerfEntry['source'],
-              tier: demoScenario.tier,
-              wallTimeMs: wall,
-              scannedBytes: Math.round(queryScanBytes),
-              scannedRecords: Math.round(sourceRec * f),
-              scannedDataPoints: 0,
-              resultValue,
-              ok: true,
-              errorMessage: null,
-              usedByCriteria: queryConsumers.get(q) ?? [],
-            });
-          });
-        }
-        setPerfEntries(demoEntries);
-        const tRunEnd = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-        // Demo runs never touch Grail and never touch the cache. Report 0s
-        // for cache stats so the analyzer can distinguish "scripted scenario"
-        // from "live run with high cache hit rate" — both can show low
-        // scannedBytes, but only the live run will have positive cacheHits.
-        setLastRunMeta({
-          startedAt: runStartedAt,
-          finishedAt: new Date().toISOString(),
-          wallTimeMs: Math.round(tRunEnd - tRunStart),
-          concurrency: CONCURRENCY,
-          queryConsumers,
-          cacheHits: 0,
-          cacheMisses: 0,
-          cachedBytesSaved: 0,
-          // Demo scenarios with zero entity-counts trigger the C3 skip
-          // simulation above. legacy-no-k8s for example marks ~17 criteria
-          // skipped (k8s + applications denominators are 0).
-          skippedQueries: demoSkippedNumerators.size,
-          skippedCriteria: Array.from(demoSkippedCriteria),
-        });
-      } catch (err) {
-        // Demo build failure is a programmer error (bad scenario data). Surface
-        // it loudly rather than silently falling back to live mode — live mode
-        // on a tenant the user expected to be sandboxed would burn real DPS.
-        setError(`Demo scenario error: ${err instanceof Error ? err.message : String(err)}`);
-        setLoading(false);
-      }
-      return;
-    }
 
     try {
       // Collect all queries for deduplication (include queryB for cross-entity criteria)
@@ -1099,11 +840,10 @@ export function useCoverageData(
         setLoading(false);
       }
     }
-    // tier and demoScenario are read inside; including them as deps makes the
-    // callback identity change when the user switches tier mid-session or
-    // toggles demo mode, which is what we want — the next runId tick uses the
-    // new values.
-  }, [tier, demoScenario]);
+    // tier is read inside; including it as a dep makes the callback
+    // identity change when the user switches tier mid-session — the next
+    // runId tick then uses the new value.
+  }, [tier]);
 
   useEffect(() => {
     if (runId > 0) runAssessment();
@@ -1189,8 +929,8 @@ export function useCoverageData(
       concurrency: lastRunMeta.concurrency,
       tenant,
       date: new Date().toISOString().split('T')[0],
-      demoActive: demoScenario !== null,
-      demoScenarioId: demoScenario?.id ?? null,
+      demoActive: false,
+      demoScenarioId: null,
       scale: {
         tier,
         autoTier: scaleMeta?.autoTier ?? null,
@@ -1208,7 +948,7 @@ export function useCoverageData(
       skippedCriteria: lastRunMeta.skippedCriteria,
     });
     return downloadReport(report);
-  }, [perfEntries, lastRunMeta, tenant, demoScenario, tier, scaleMeta, entityCounts]);
+  }, [perfEntries, lastRunMeta, tenant, tier, scaleMeta, entityCounts]);
 
   return {
     capabilities: adjustedCapabilities,

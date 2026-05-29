@@ -16,10 +16,8 @@ import { CapabilityCards } from "../components/CapabilityCards";
 import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
 import { ScaleTierBanner } from "../components/ScaleTierBanner";
-import { DemoControlBar } from "../components/DemoControlBar";
 import { DpsCostBadge } from "../components/DpsCostBadge";
 import type { UseScaleTierResult } from "../hooks/useScaleTier";
-import type { UseDemoModeResult } from "../demo/useDemoMode";
 import { CAPABILITIES } from "../queries";
 import { CAP_SUMMARIES } from "../data/capSummaries";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
@@ -89,24 +87,13 @@ interface Props {
    *  callers / tests that don't thread the tier through still compile —
    *  in that case the banner is simply not rendered. */
   scale?: UseScaleTierResult;
-  /** Demo mode context: catalog of scenarios + active scenario + setter.
-   *  When the active scenario is non-null, snapshot persistence is suppressed
-   *  (we don't want canned values polluting Evolution Over Time history) and
-   *  the banner switches to demo styling. The DemoControlBar in the footer
-   *  uses the catalog + setScenario to expose one-click scenario switching. */
-  demo?: UseDemoModeResult;
-  /** Production gate: when false (customer tenant, no `?dev=1`, no active
-   *  demo), the DemoControlBar + Force-refresh + Download-perf-JSON
-   *  controls are hidden. The customer sees a clean app; SEs flip the
-   *  flag via URL or console to unlock the diagnostic surface. */
+  /** Production gate: when false (customer tenant, no `?dev=1`), the
+   *  diagnostic controls (Force-refresh, Download perf JSON) are hidden.
+   *  SEs flip the flag via URL or console to unlock the diagnostic surface. */
   isDev?: boolean;
 }
 
-export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, scale, demo, isDev }) => {
-  // Convenience handle. Components that only care about the active scenario
-  // read this; components that also need the catalog or the setter (the
-  // DemoControlBar) use the full `demo` prop.
-  const demoScenario = demo?.scenario ?? null;
+export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, scale, isDev }) => {
   const { capabilities, totalScore, overallMaturityLevel, loading, idle, progress, error, tenant, date, stats, entityCounts, liveScannedRecords, consolidation, setConsolidation, start, refresh, reset, goHome, resume } = coverageData;
   const navigate = useNavigate();
   const lastSavedRef = useRef<string>("");
@@ -171,14 +158,13 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
     }
     if (wasLoadingRef.current && capabilities.length > 0) {
       wasLoadingRef.current = false;
-      if (demoScenario) return; // demo data must not be persisted
       const sig = capabilities.map(c => `${c.name}:${c.score}`).join(",");
       if (sig !== lastSavedRef.current) {
         lastSavedRef.current = sig;
         history.saveSnapshot(capabilities, totalScore, tenant);
       }
     }
-  }, [loading, capabilities, totalScore, tenant, history, demoScenario]);
+  }, [loading, capabilities, totalScore, tenant, history]);
 
   // Animate on data load
   useEffect(() => {
@@ -394,6 +380,26 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 <Menu.Item onSelect={() => generateClientReport("es")}>Download Espanol (ES)</Menu.Item>
               </Menu.Content>
             </Menu>
+            {/* Diagnostic controls — gated by isDev (?dev=1 or
+                localStorage.cca.dev). Hidden from customer view. */}
+            {isDev && coverageData.perfEntries != null && (
+              <Button
+                size="condensed"
+                onClick={() => coverageData.downloadPerfReport()}
+                aria-label="Download performance report as JSON"
+              >
+                📥 Perf JSON
+              </Button>
+            )}
+            {isDev && (
+              <Button
+                size="condensed"
+                onClick={async () => { await coverageData.forceRefresh(); refresh(); }}
+                aria-label="Clear 24h cache and run a fresh assessment"
+              >
+                🗘 Force refresh
+              </Button>
+            )}
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
               Tenant: <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
               {stats && (
@@ -422,12 +428,10 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
           {/* Scale Tier banner — only renders when tier !== 'exact'. Tells the
               viewer that coverage values are sampled estimates and exposes a
               manual override toggle. Component is a no-op on small/medium
-              tenants, so this insertion is zero-impact for the existing UX.
-              In demo mode the banner ALWAYS renders, with magenta styling, so
-              it's never confused with a live sampled run. */}
-          {(scale || demoScenario) && (
+              tenants, so this insertion is zero-impact for the existing UX. */}
+          {scale && (
             <Flex style={{ padding: "0 16px", marginTop: 8, flexShrink: 0 }}>
-              <ScaleTierBanner scale={scale!} demoScenario={demoScenario} />
+              <ScaleTierBanner scale={scale} />
             </Flex>
           )}
           {/* Main content: chart left, cards right — stacks vertically on mobile */}
@@ -646,49 +650,6 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
         </Flex>
       )}
 
-      {/* Demo control bar — pinned to the bottom of the page so the
-          "Simulate xLarge tenant" button is reachable at every stage
-          (idle / loading / loaded / error). position:sticky keeps it visible
-          as the user scrolls the radar/cards area. zIndex sits above the
-          radar overlays but below modals.
-
-          ── Production gate ─────────────────────────────────────────
-          Rendered ONLY when isDev=true. In a customer tenant without
-          ?dev=1 / localStorage.cca.dev / an active demo, the entire
-          diagnostic surface is invisible — the customer sees just the
-          radar + cards + the auto-detected Scale Tier banner. SEs unlock
-          the controls by appending ?dev=1 to the URL or calling
-          __pulseDemo('<scenario>') in the console. */}
-      {demo && isDev && (
-        <Flex
-          style={{
-            position: "sticky",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            flexShrink: 0,
-            zIndex: 5,
-          }}
-        >
-          <DemoControlBar
-            catalog={demo.catalog}
-            activeScenario={demo.scenario}
-            setScenario={demo.setScenario}
-            liveHostCount={scale?.hostCount ?? null}
-            liveTenantName={tenant}
-            isMobile={isMobile}
-            onRunTest={refresh}
-            hasPerfReport={coverageData.perfEntries != null}
-            onDownloadPerfReport={coverageData.downloadPerfReport}
-            cacheStats={coverageData.lastRunMeta ? {
-              hits: coverageData.lastRunMeta.cacheHits,
-              misses: coverageData.lastRunMeta.cacheMisses,
-              bytesSaved: coverageData.lastRunMeta.cachedBytesSaved,
-            } : null}
-            onForceRefresh={coverageData.forceRefresh}
-          />
-        </Flex>
-      )}
     </Flex>
   );
 };
