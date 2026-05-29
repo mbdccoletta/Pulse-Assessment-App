@@ -1,46 +1,51 @@
-# Pulse Assessment — Project Memory
+# Pulse Assessment — Complete Project Memory
 
-> Complete reference for any developer picking this up cold. Covers the
-> intent, architecture, scoring math, every DQL pattern, the optimizations
-> stack, and the design decisions that aren't obvious from the code.
+> Everything the next developer needs to continue work on this app:
+> domain model, every DQL pattern, scoring algorithm, optimization
+> stack, all measured numbers, bug history, deployment journey,
+> validation runbook, debugging workflows.
 >
-> Read `HANDOFF.md` first for the executive summary and current state.
-> Read THIS file when you need to understand *why* something is the way
-> it is, or when you're modifying a non-trivial part of the system.
->
-> **Sensitive data removed:** specific tenant IDs replaced with
-> `<TENANT>` placeholders, OAuth tokens redacted, personal contact info
-> kept only where it's already public in the codebase.
+> The ONLY things omitted are tenant URLs/IDs and OAuth tokens.
+> Everything else — design decisions, measurements, evidence, math
+> — is here.
 
-Document version: 1.0 — written 2026-05-29 against app version 2.5.2.
+Document version: 2.0 — written 2026-05-29 against app version 2.5.2.
 
 ---
 
 ## Table of contents
 
 1. [What this app does](#1-what-this-app-does)
-2. [Domain model: capabilities, criteria, scoring](#2-domain-model)
+2. [Domain model](#2-domain-model)
 3. [Architecture overview](#3-architecture-overview)
-4. [The 110 criteria — full catalog with DQL](#4-the-110-criteria)
-5. [Scale Tier — sampling for large tenants](#5-scale-tier)
-6. [24h persistent cache](#6-24h-persistent-cache)
-7. [C3 smart-skip](#7-c3-smart-skip)
-8. [Demo Mode](#8-demo-mode)
-9. [Perf instrumentation & JSON report](#9-perf-instrumentation)
-10. [UI & presentation layer](#10-ui-presentation-layer)
-11. [DPS cost model](#11-dps-cost-model)
-12. [Snapshot persistence & Evolution Over Time](#12-snapshot-persistence)
-13. [Build, deploy, run](#13-build-deploy-run)
-14. [Design decisions journal](#14-design-decisions)
-15. [Known limitations and false-positive guidance](#15-known-limitations)
-16. [Glossary](#16-glossary)
+4. [Capabilities and the 111 criteria](#4-capabilities-and-the-111-criteria)
+5. [Complete DQL pattern reference](#5-complete-dql-pattern-reference)
+6. [Scale Tier sampling](#6-scale-tier-sampling)
+7. [24h persistent cache](#7-24h-persistent-cache)
+8. [C3 smart-skip](#8-c3-smart-skip)
+9. [Demo Mode](#9-demo-mode)
+10. [Perf instrumentation & JSON report](#10-perf-instrumentation-json-report)
+11. [UI and presentation layer](#11-ui-and-presentation-layer)
+12. [DPS cost model](#12-dps-cost-model)
+13. [Snapshot persistence](#13-snapshot-persistence)
+14. [Build, deploy, run](#14-build-deploy-run)
+15. [Design decisions journal](#15-design-decisions-journal)
+16. [The denominatorConstant migration](#16-the-denominatorconstant-migration)
+17. [AI Observability window fix — full forensics](#17-ai-observability-window-fix)
+18. [Concrete measurements from the test tenant](#18-concrete-measurements)
+19. [Bug history](#19-bug-history)
+20. [Validation runbook (MCP queries)](#20-validation-runbook)
+21. [Migration from v2.4.x](#21-migration-from-v24x)
+22. [Debugging workflows](#22-debugging-workflows)
+23. [Known limitations and false-positive guidance](#23-known-limitations)
+24. [Glossary](#24-glossary)
 
 ---
 
 ## 1. What this app does
 
 Pulse Assessment is a native Dynatrace App that scores **observability
-coverage and maturity** across 9 capability areas using ~110 DQL
+coverage and maturity** across 9 capability areas using ~111 DQL
 criteria. The output is a radar chart + capability cards + a maturity
 report card, optionally exported as a PDF.
 
@@ -54,7 +59,7 @@ owners who need to answer:
 
 The 9 capabilities map to Dynatrace's coverage taxonomy:
 
-| Capability | # criteria | Color | Examples of criteria |
+| Capability | # criteria | Color | Examples |
 |---|---:|---|---|
 | Infrastructure Observability | 22 | `#3B82F6` blue | Host CPU/memory/disk coverage, K8s cluster coverage, Davis problem coverage |
 | Application Observability | 13 | `#8B5CF6` purple | Service span coverage, distributed tracing %, root-span %, anomaly detection |
@@ -67,7 +72,8 @@ The 9 capabilities map to Dynatrace's coverage taxonomy:
 | Software Delivery | 10 | `#6366F1` indigo | Deployment event coverage, change failure rate, lead time |
 
 Total: **111 criteria** (count may drift ±2 across releases — current
-count is `113 unique DQL strings after `Set` dedup` in v2.5.2).
+count is `113 unique DQL strings after dedup` in v2.5.2; the dedup
+collapses identical queryB strings across criteria).
 
 ---
 
@@ -75,94 +81,108 @@ count is `113 unique DQL strings after `Set` dedup` in v2.5.2).
 
 ### 2.1 Type hierarchy
 
+Source: `ui/app/queries.ts`:
+
 ```ts
 interface Threshold {
-  min: number;            // value >= min ⇒ this threshold tier passes
+  min: number;
 }
 
 interface Criterion {
-  id: string;             // e.g. "i1", "ai3", "sd10"  — see §4 for the namespace map
-  label: string;          // shown on the capability card
-  description: string;    // sentence explaining intent
-  query: string;          // numerator DQL — returns one number
-  queryB?: string;        // OPTIONAL denominator DQL. result = query / queryB * 100
-  denominatorConstant?: number;  // OPTIONAL fixed denominator (alternative to queryB)
-                                 // MUTUALLY EXCLUSIVE with queryB — see §14.6
-  thresholds: Threshold[];       // sorted desc by `min` at render time
+  id: string;              // e.g. "i1", "ai3", "sd10" — stable ID
+  label: string;           // shown on the capability card
+  description: string;     // sentence explaining intent
+  query: string;           // numerator DQL — returns one number
+  queryB?: string;         // OPTIONAL denominator DQL.
+                           //   coverage = query / queryB * 100
+  denominatorConstant?: number;  // OPTIONAL fixed denominator,
+                                 //   MUTUALLY EXCLUSIVE with queryB
+                                 //   (added in v2.5.0 to eliminate
+                                 //   wasteful constant-return queries)
+  thresholds: Threshold[];       // value >= threshold.min ⇒ that
+                                 // tier passes; usually 2-3 tiers
 }
 
 interface CapabilityDef {
-  name: string;           // 9 hardcoded values, see §1
-  color: string;          // hex, used in radar segments
+  name: string;            // one of 9 hardcoded values
+  color: string;           // hex
   criteria: Criterion[];
 }
 
-const CAPABILITIES: CapabilityDef[];   // single source of truth, ui/app/queries.ts
+const CAPABILITIES: CapabilityDef[];   // single source of truth
 ```
 
-### 2.2 Scoring algorithm
+### 2.2 The scoring algorithm
 
-Computed in `ui/app/hooks/useCoverageData.ts` around lines 750–820.
+Implemented in `useCoverageData.runAssessment()` around lines 750–820.
+Per criterion:
 
-For each criterion:
-
-```
-1.  Resolve valueA  =  cache.get(query) ?? -1
-2.  If valueA == -1  →  value = 0,  error = true       (query failed)
+```text
+1.  valueA = cache.get(criterion.query) ?? -1
+2.  If valueA == -1:
+      value = 0; error = true                  (query failed)
     Else:
-3a. If queryB exists:
-        valueB = cache.get(queryB) ?? -1
-        If valueB <= 0  →  value = 0                   (no denominator data)
-        Else            →  value = min(round((valueA / valueB) * 1000) / 10, 100)
-3b. Else if denominatorConstant != null:
-        If constant <= 0  →  value = 0
-        Else              →  value = min(round((valueA / constant) * 1000) / 10, 100)
-3c. Else                  →  value = valueA            (single-source criterion)
-4.  passed  =  thresholds.some(t => value >= t.min)
+3a. If criterion.queryB:
+      valueB = cache.get(criterion.queryB) ?? -1
+      If valueB <= 0:
+        value = 0                              (no denominator data)
+      Else:
+        value = min( round((valueA / valueB) * 1000) / 10 , 100 )
+3b. Else if criterion.denominatorConstant != null:
+      const denom = criterion.denominatorConstant
+      If denom <= 0:
+        value = 0
+      Else:
+        value = min( round((valueA / denom) * 1000) / 10 , 100 )
+3c. Else:
+      value = valueA                           (single-source criterion)
+4.  passed = criterion.thresholds.some(t => value >= t.min)
+5.  points = passed ? 1 : 0
 ```
 
 Notes:
-- Value is **always a percentage 0–100**, even for single-source criteria
-  that return raw counts. Those are typically thresholded against absolute
-  counts (e.g. `min: 5` means "at least 5 spans").
-- `Math.min(..., 100)` caps weird overshoot when valueA somehow exceeds
-  valueB (rare, but happens with concurrent writes during the run).
-- `valueA / valueB` is at three-decimal precision, then truncated to one
-  decimal (1234 → 12.3). One decimal is what the UI renders.
+- Value is always a percentage 0–100, even for single-source criteria.
+- `Math.min(..., 100)` caps overshoot when valueA briefly exceeds valueB.
+- Three-decimal precision then truncate to one (1234 → 12.3).
 
 ### 2.3 Capability score
 
-`capScore = round(passedCount / cap.criteria.length * 100)`
+```
+capScore = round(passedCount / cap.criteria.length * 100)
+```
 
-Simple pass rate over the criteria. Failed criteria (error: true) count
-as not-passed. The cap score drives radar segment fill.
+Drives radar segment fill. Failed criteria (`error: true`) count as
+not-passed.
 
 ### 2.4 Capability maturity score
 
-Each criterion is mapped to a **tier**: `foundation`, `bestPractice`,
-or `excellence`. The map lives in `ui/app/data/criterionTiers.ts` —
-do NOT change without explicit product approval, the tiers are part
-of the assessment's published methodology.
+Each criterion is mapped to a tier in `ui/app/data/criterionTiers.ts`:
+
+```ts
+type CriterionTier = 'foundation' | 'bestPractice' | 'excellence';
+```
 
 Then:
 
-```
+```text
 fPct = foundation.passed / foundation.total
 bPct = bestPractice.passed / bestPractice.total
 ePct = excellence.passed / excellence.total
 
-# Gating: bestPractice only counts if foundation >= 80% complete,
-#         excellence only counts if bestPractice >= 60% complete
+# Progressive gating:
 effB = (fPct >= 0.8) ? bPct : 0
 effE = (effB >= 0.6) ? ePct : 0
+
+# Weighted score with hardcoded weights:
+const FOUNDATION_WEIGHT     = 60
+const BEST_PRACTICE_WEIGHT  = 25
+const EXCELLENCE_WEIGHT     = 15
 
 maturityScore = round(fPct * 60 + effB * 25 + effE * 15)
 ```
 
-Weights are constants in `useCoverageData.ts`:
-- `FOUNDATION_WEIGHT = 60`
-- `BEST_PRACTICE_WEIGHT = 25`
-- `EXCELLENCE_WEIGHT = 15`
+**Do not change these weights without product approval.** They're part
+of the published assessment methodology.
 
 Maturity level (visual badge):
 
@@ -173,7 +193,7 @@ Maturity level (visual badge):
 | 2 | Operational | fPct == 1 AND bPct >= 0.5 |
 | 3 | Optimized | fPct == 1 AND bPct == 1 AND ePct >= 0.5 |
 
-Maturity band (text descriptor):
+Maturity band:
 
 | Band | Range |
 |---|---:|
@@ -185,27 +205,27 @@ Maturity band (text descriptor):
 
 ### 2.5 Overall scores
 
-```
-totalScore        = round(mean of capabilities.score across all 9)
+```ts
+totalScore        = round(mean of capabilities.score)
 overallMaturityLv = round(mean of capabilities.effectiveMaturityScore)
 ```
 
-Both shown in the radar center and the PDF cover.
+Shown in radar center and PDF cover.
 
-### 2.6 Consolidation (deprecation candidate)
+### 2.6 Consolidation factor
 
-There's a "consolidation factor" (0–100 per capability) that the user can
-adjust to reflect "how much of the estate is in Dynatrace". E.g., 40%
-means the company is monitoring 40% of its real estate. The adjustment:
+User-adjustable per capability (slider in `ConsolidationPanel.tsx`,
+range 0–100). Represents "how much of the real estate is in Dynatrace":
 
+```ts
+adjScore     = round(rawScore * factor / 100)
+adjMaturity  = round(maturityScore * factor / 100)
 ```
-adjustedScore   = round(rawScore * factor / 100)
-adjustedMaturity = round(maturityScore * factor / 100)
-```
 
-Stored in `useCoverageData.consolidation: Record<string, number>`. UI
-slider in `ConsolidationPanel.tsx`. It's a UX feature, not a metric fix
-— if you remove it, also remove the slider and the PDF section.
+Stored in `useCoverageData.consolidation: Record<string, number>`.
+If product wants to remove this feature, also remove the slider in
+`ConsolidationPanel.tsx` and the section in
+`generateFirstDayReport.ts`.
 
 ---
 
@@ -216,7 +236,7 @@ slider in `ConsolidationPanel.tsx`. It's a UX feature, not a metric fix
 ```
                           ┌─────────────────┐
                           │   queries.ts    │ ← single source of truth
-                          │ 9 capabilities  │   for all DQL definitions
+                          │ 9 capabilities  │   for ALL DQL definitions
                           │ ~111 criteria   │
                           └────────┬────────┘
                                    │ CAPABILITIES
@@ -249,16 +269,16 @@ slider in `ConsolidationPanel.tsx`. It's a UX feature, not a metric fix
 
 | Hook | Returns | Owns |
 |---|---|---|
-| `useScaleTier(demoScenario)` | `{ tier, autoTier, override, hostCount, ... }` | Host-count detection, tier resolution, localStorage override |
-| `useDemoMode()` | `{ scenario, isDemo, setScenario, catalog }` | URL `?demo=` + localStorage `cca.demo.scenario`, console helper |
+| `useScaleTier(demoScenario)` | `{ tier, autoTier, override, hostCount, setOverride, refreshTier, detecting }` | Host-count detection, tier resolution, localStorage override |
+| `useDemoMode()` | `{ scenario, isDemo, setScenario, catalog }` | URL `?demo=` + localStorage `cca.demo.scenario` + `__pulseDemo()` console helper |
 | `useDevMode(demoActive)` | `{ isDev }` | URL `?dev=1` + localStorage `cca.dev`. `demoActive` forces true. |
 | `useCoverageData(tier, demoScenario, scaleMeta)` | The big `CoverageData` object | Two-phase Grail execution, scoring, perf entries, cache I/O, demo path |
-| `useAssessmentHistory()` | `{ snapshots, saveSnapshot, ... }` | Document Store snapshot persistence (separate from query cache) |
-| `usePreflight()` | `{ checks, running, allPassed, ... }` | OAuth scope preflight before first run; 7 cheap probe queries |
+| `useAssessmentHistory()` | `{ snapshots, saveSnapshot, removeSnapshot }` | Document Store snapshot persistence (separate from query cache) |
+| `usePreflight()` | `{ checks, running, allPassed, runPreflight }` | OAuth scope preflight before first run; 7 cheap probe queries |
 
-### 3.3 Module-level files (new in v2.5.x)
+### 3.3 File map — new in v2.5.x
 
-| File | Lines | What it does |
+| File | Lines | Purpose |
 |---|---:|---|
 | `ui/app/scale-tier.ts` | 162 | `scaleQuery(q, tier)`, `TIER_CONFIG`, `tierFromHostCount`, `isHotSource` |
 | `ui/app/hooks/useScaleTier.ts` | 180 | Detect host count + persist override |
@@ -271,12 +291,32 @@ slider in `ConsolidationPanel.tsx`. It's a UX feature, not a metric fix
 | `ui/app/perf/types.ts` | 267 | `PerfReport` shape, `classifySource` |
 | `ui/app/perf/buildReport.ts` | 226 | Build + download JSON |
 | `ui/app/perf/queryCache.ts` | 292 | Document Store cache |
+| `docs/PERFORMANCE-REPORT-80K-HOSTS.md` | 262 | Sizing study |
+| `docs/DEMO-MODE.md` | 192 | Operator guide |
+| `docs/HANDOFF.md` | 433 | Quick-pickup guide for next dev |
+| `docs/MEMORY.md` | this file | Full technical reference |
+
+### 3.4 File map — modified in v2.5.x
+
+| File | What changed |
+|---|---|
+| `ui/app/queries.ts` | Added `denominatorConstant?: number` to `Criterion`. 11 criteria converted (see §16). 16 substring swaps in the AI Obs block: `from:now()-2h` → `from:now()-72h` (see §17). |
+| `ui/app/hooks/useCoverageData.ts` | Two-phase execution, C3 skip set, cache integration, scaleQuery, perf entry capture, demo short-circuit. **The big diff** — read §15 before editing. |
+| `ui/app/pages/CoverageAssessment.tsx` | New props: `scale`, `demo`, `isDev`. Toolbar wires `DpsCostBadge`. Footer renders `DemoControlBar` (gated by `isDev`). Snapshot save guard for demo mode. |
+| `ui/app/App.tsx` | Mounts `useDemoMode`, `useScaleTier`, `useDevMode`. Threads everything into `CoverageAssessment`. |
+| `app.config.json` | Bumped to `2.5.2`. |
+| `ui/app/appVersion.ts` | `"2.5.2"`. |
+| `CHANGELOG.md` | v2.5.0 entry. v2.5.1 / v2.5.2 entries still pending. |
 
 ---
 
-## 4. The 111 criteria
+## 4. Capabilities and the 111 criteria
 
-Each criterion has an ID following the pattern `<prefix><number>`:
+### 4.1 ID namespace map
+
+ID pattern: `<prefix><number>`. IDs are stable contracts — they appear
+in PDF reports, snapshots, URL params, perf JSONs. **Never reuse a
+retired ID** for a different criterion.
 
 | Capability | Prefix | Range |
 |---|---|---|
@@ -290,32 +330,98 @@ Each criterion has an ID following the pattern `<prefix><number>`:
 | Business Observability | `b` | b1–b8 |
 | Software Delivery | `sd` | sd1–sd10 |
 
-The IDs are stable contracts — they show up in PDF reports, snapshots,
-URL params, perf JSONs. **Never reuse an ID** for a different criterion;
-either retire it or add a new one with the next number.
+### 4.2 Adding a criterion checklist
 
-### 4.1 DQL patterns by data source
+1. Pick the next sequential ID for the capability (e.g. `i23`).
+2. Add the criterion block in `queries.ts` inside the right capability.
+3. Pick the tier in `ui/app/data/criterionTiers.ts`
+   (`foundation` / `bestPractice` / `excellence`).
+4. Add `description`/remediation text in
+   `ui/app/data/criterionRemediation.ts` (optional — only if you want
+   the criterion to show actionable advice in the Executive view).
+5. Add an `importance` in `ui/app/data/criterionImportance.ts`
+   (`high` / `medium` / `low`) for the Executive view sorting.
+6. Run the numerator + denominator via MCP against a real tenant.
+   Confirm neither always returns 0 nor always returns 100.
+7. If `queryB` would be a literal constant (e.g. "expected 5 event
+   kinds"), use `denominatorConstant: 5` instead — see §16.
+8. Run a side-by-side capability score comparison to confirm no
+   regression.
+9. Bump the app version (`app.config.json` AND `appVersion.ts`).
+10. Add a CHANGELOG entry.
 
-The 111 criteria use 8 distinct data sources. Each has a typical pattern:
+### 4.3 Distribution of windows across criteria
 
-#### Entity counts (cheap, no Grail scan)
+```
+from:now()-2h         13 criteria   (spans, AI Obs pre-v2.5.1)
+from:now()-72h        27 criteria   (Davis problems, AI Obs post-fix)
+| filter timestamp > now() - 2h    56 criteria   (logs, events, bizevents)
+| filter timestamp > now() - 24h    7 criteria   (events 24h)
+| filter timestamp > now() - 72h    1 criterion  (events 72h)
+```
+
+### 4.4 Distribution by source
+
+For the unique post-dedup queries in v2.5.2:
+
+| Source | Unique queries | Typical scan @ test tenant |
+|---|---:|---:|
+| logs | 23 | 147 GB |
+| spans | 22 | 24 GB |
+| metrics (timeseries) | 19 | 0 GB (metadata) |
+| entity | 23 | 0 GB (metadata) |
+| events | 10 | 0.4 GB |
+| bizevents | 9 | 0.4 GB |
+| problems (Davis) | 7 | 0.5 GB |
+| **Total** | **113** | **173 GB** |
+
+This is the post-`denominatorConstant`-fix profile. Before the fix it
+was 123 unique queries / 220 GB. See §16 + §17.
+
+---
+
+## 5. Complete DQL pattern reference
+
+The 111 criteria use 8 distinct DQL sources. Each has a typical pattern.
+Use these as templates when adding new criteria.
+
+### 5.1 Entity counts (cheap, no Grail scan)
+
+Pattern: `fetch dt.entity.<class> | summarize count()`. Returns the
+count of entities in Smartscape. No data scan.
 
 ```dql
 fetch dt.entity.host | summarize count()
 fetch dt.entity.service | summarize count()
 fetch dt.entity.kubernetes_cluster | summarize count()
 fetch dt.entity.application | summarize count()
+fetch dt.entity.mobile_application | summarize count()
 fetch dt.entity.cloud_application_namespace | summarize count()
 fetch dt.entity.process_group | summarize count()
 fetch dt.entity.process_group_instance | summarize count()
-fetch dt.entity.disk | fieldsAdd belongs_to = belongs_to[dt.entity.host] | expand belongs_to | summarize count = countDistinct(belongs_to)
-fetch dt.entity.cloud_application | fieldsAdd ns = belongs_to[dt.entity.cloud_application_namespace] | expand ns | summarize count = countDistinct(ns)
+fetch dt.entity.disk | summarize count()
+fetch dt.entity.network_interface | summarize count()
 ```
 
-Used as denominators for many criteria. After v2.5.0 these run in
-**Phase 1** of the two-phase execution (see §7 C3 smart-skip).
+Used as denominators for many criteria. **Critical to C3 smart-skip** —
+these run in Phase 1 of the two-phase execution. See §8.
 
-#### Metric timeseries (cheap, metadata only)
+For traversal counts (e.g. "how many hosts have a network interface"):
+
+```dql
+fetch dt.entity.network_interface
+| fieldsAdd belongs_to = belongs_to[dt.entity.host]
+| expand belongs_to
+| summarize count = countDistinct(belongs_to)
+```
+
+Note the `countDistinct(belongs_to)` after expand — this counts the
+distinct hosts, not the total number of network interfaces.
+
+### 5.2 Metric timeseries (cheap, metadata)
+
+Pattern: aggregate by entity, dedup, count distinct entities seen with
+the metric.
 
 ```dql
 timeseries val=avg(dt.host.cpu.usage), by:{dt.entity.host}
@@ -324,28 +430,45 @@ timeseries val=avg(dt.host.cpu.usage), by:{dt.entity.host}
 | summarize c=count()
 ```
 
-Pattern: aggregate by entity, dedup, count distinct entities seen with
-the metric. Used for Infrastructure i1–i8 (host CPU/memory/disk/availability/network/process/k8s coverage).
+Used for i1–i8 (host CPU/memory/disk/availability/network/process/k8s
+coverage). Zero data scan because timeseries reads only the per-series
+metadata.
 
-#### Logs (heavy — `logs` is the biggest scan source)
-
-Window: `2h` by default for log criteria. Scale Tier narrows to 30m
-(Large) or 5m (xLarge) when activated.
+For per-namespace metrics:
 
 ```dql
-# Numerator pattern: count logs with property X
+timeseries val=avg(dt.kubernetes.container.cpu_usage), by:{k8s.cluster.name}
+| fields k8s.cluster.name
+| dedup k8s.cluster.name
+| summarize c=count()
+```
+
+### 5.3 Logs (the heaviest source)
+
+Window: `2h` by default. Scale Tier rewrites this in Large/xLarge.
+
+Numerator pattern — "count logs with property X":
+
+```dql
 fetch logs
 | filter timestamp > now() - 2h
 | filter isNotNull(<property>)
 | summarize count()
+```
 
-# Denominator pattern: total logs in the window
+Denominator pattern — "total logs in the window":
+
+```dql
 fetch logs
 | filter timestamp > now() - 2h
 | summarize count()
 ```
 
-Some criteria distinct-count entities seen in logs:
+(This denominator is used by 9 different criteria — the `Set` dedup
+in `executeAllUnique` collapses them to one execution per run.)
+
+Distinct entity count pattern:
+
 ```dql
 fetch logs
 | filter timestamp > now() - 2h
@@ -354,63 +477,84 @@ fetch logs
 | fields count
 ```
 
-#### Spans (medium — `spans` is the second biggest)
-
-Window: `2h` for non-AI criteria. **72h for AI Obs criteria** (ai1–ai9) —
-see §14.7.
+Distinct property values pattern:
 
 ```dql
-# Total span volume
+fetch logs
+| filter timestamp > now() - 2h
+| summarize countDistinct(log.source)
+
+fetch logs
+| filter timestamp > now() - 2h
+| summarize countDistinct(loglevel)
+```
+
+Per-host multi-source aggregation (l14 "multi-source host logging"):
+
+```dql
+fetch logs
+| filter timestamp > now() - 2h
+| filter isNotNull(dt.entity.host)
+| summarize sources = countDistinct(log.source), by:{dt.entity.host}
+| filter sources >= 2
+| summarize count()
+```
+
+Pattern-match filter (l12 "structured logging %"):
+
+```dql
+fetch logs
+| filter timestamp > now() - 2h
+| filter matchesPhrase(content, "{\\\"")
+| summarize count()
+```
+
+### 5.4 Spans
+
+Window: `2h` for non-AI criteria; **72h for AI Obs criteria** (see §17).
+
+Total span count:
+
+```dql
+fetch spans, from:now()-2h
+| summarize count()
+```
+
+Distinct services in spans:
+
+```dql
 fetch spans, from:now()-2h
 | summarize count = countDistinct(coalesce(dt.entity.service, service.name))
 | fields count
+```
 
-# Cross-service traces
+Root spans only:
+
+```dql
+fetch spans, from:now()-2h
+| filter request.is_root_span == true
+| summarize count = countDistinct(coalesce(dt.entity.service, service.name))
+| fields count
+```
+
+Cross-service trace detection (a10):
+
+```dql
 fetch spans, from:now()-2h
 | summarize services = countDistinct(dt.service.name), by:{trace.id}
 | filter services > 1
 | summarize count()
 ```
 
-#### Davis problems (already 72h, sparse)
+DB call detection (a13):
 
 ```dql
-fetch dt.davis.problems, from:now()-72h
-| filter not(dt.davis.is_duplicate)
-| summarize count()
+fetch spans, from:now()-2h
+| filter isNotNull(db.system)
+| summarize count = countDistinct(coalesce(dt.entity.service, service.name))
 ```
 
-Used by i9, t1, t2, t3, t9, t10, sd8. The 72h window is intentional
-— Davis problems are infrequent and dedup-heavy.
-
-#### Events
-
-Two windows in use: 2h and 24h. Events are continuous (the tenant
-always has SDLC_EVENT, SYNTHETIC_EVENT, DAVIS_EVENT, DAVIS_PROBLEM).
-Sparse-by-kind queries (e.g. SECURITY_EVENT) may legitimately
-return 0 if the tenant doesn't ingest that kind.
-
-```dql
-fetch events
-| filter timestamp > now() - 2h
-| summarize countDistinct(event.kind)
-```
-
-#### Bizevents
-
-Window: `2h`. Bizevents are typically continuous in tenants that
-ingest them.
-
-```dql
-fetch bizevents
-| filter timestamp > now() - 2h
-| filter isNotNull(dt.entity.service)
-| summarize count()
-```
-
-#### Generic AI provider filter (the AI Obs fingerprint)
-
-Every AI Obs criterion (ai1–ai9) starts with this filter:
+AI/LLM span fingerprint (the canonical AI detection pattern):
 
 ```dql
 fetch spans, from:now()-72h
@@ -420,583 +564,1021 @@ fetch spans, from:now()-72h
       or isNotNull(gen_ai.operation.name)
 ```
 
-This is the OTel-inclusive AI detection pattern. Don't change it
-without re-validating all 9 ai* criteria via MCP.
+Used as the prefix for all 9 AI Obs criteria.
 
-### 4.2 Complete criterion catalog
+### 5.5 Davis problems (sparse, 72h)
 
-> The single source of truth is `ui/app/queries.ts`. Reading the file
-> directly is faster than maintaining a parallel list here. Below is
-> a quick index by capability + ID + label. Open the file for the
-> actual DQL.
-
-The file structure is:
-
-```ts
-export const CAPABILITIES: CapabilityDef[] = [
-  // ─── 1. INFRASTRUCTURE OBSERVABILITY ───
-  {
-    name: "Infrastructure Observability",
-    color: "#3B82F6",
-    criteria: [
-      {
-        id: "i1", label: "Host CPU coverage (%)",
-        description: "Percentage of monitored hosts with active CPU usage metrics from any source (OneAgent, OTel, cloud integration).",
-        query: "timeseries val=avg(dt.host.cpu.usage), ...",
-        queryB: "fetch dt.entity.host | summarize count()",
-        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
-      },
-      // ... 21 more
-    ],
-  },
-  // ... 8 more capabilities
-];
+```dql
+fetch dt.davis.problems, from:now()-72h
+| filter not(dt.davis.is_duplicate)
+| summarize count()
 ```
 
-When adding a criterion:
+The `dt.davis.is_duplicate` filter is standard. Skipping it would
+inflate counts because Davis emits the same root cause as multiple
+problem entries during stabilisation.
 
-1. Pick the next ID (e.g. `i23`, never reuse retired IDs).
-2. Pick the right tier in `ui/app/data/criterionTiers.ts` (`foundation`,
-   `bestPractice`, or `excellence`).
-3. Add `description` for `ui/app/data/criterionRemediation.ts` if you
-   want the criterion to show a remediation hint in the Executive view.
-4. Add an `importance` in `ui/app/data/criterionImportance.ts` (high /
-   medium / low) for the Executive view sorting.
-5. Run the new query via MCP against a real tenant. Confirm it returns
-   a sensible number (not always 0, not always 100).
-6. If queryB would be a literal constant (`5`, `10`, etc.), use
-   `denominatorConstant` instead — see §14.6.
-7. Bump the app version and CHANGELOG.
+Affected-entity count (i9, t2):
+
+```dql
+fetch dt.davis.problems, from:now()-72h
+| filter not(dt.davis.is_duplicate)
+| fieldsAdd affected = affected_entity_ids
+| expand affected
+| filter startsWith(affected, "HOST-")
+| summarize count = countDistinct(affected)
+```
+
+Category diversity (t3):
+
+```dql
+fetch dt.davis.problems, from:now()-72h
+| filter not(dt.davis.is_duplicate)
+| summarize count = countDistinct(event.category)
+```
+
+Recurring entity detection (t9):
+
+```dql
+fetch dt.davis.problems, from:now()-72h
+| filter not(dt.davis.is_duplicate)
+| fieldsAdd affected = affected_entity_ids
+| expand affected
+| summarize problem_count = count(), by:{affected}
+| filter problem_count > 1
+| summarize count()
+```
+
+### 5.6 Events
+
+Two windows in use: `2h` and `24h`. Events are continuous (every tenant
+emits SYNTHETIC_EVENT, SDLC_EVENT, DAVIS_EVENT, DAVIS_PROBLEM).
+Sparse-by-kind queries (`SECURITY_EVENT`, `CUSTOM_DEPLOYMENT`) may
+return 0 if the tenant doesn't ingest that kind.
+
+Event kind diversity:
+
+```dql
+fetch events
+| filter timestamp > now() - 2h
+| summarize countDistinct(event.kind)
+```
+
+Filter by event.kind (s2/s3 "security events", sd2 "custom deployments"):
+
+```dql
+fetch events
+| filter event.kind == "SECURITY_EVENT"
+| filter timestamp > now() - 24h
+| summarize count = countDistinct(event.type)
+
+fetch events
+| filter event.kind == "CUSTOM_DEPLOYMENT"
+| filter timestamp > now() - 24h
+| summarize count()
+```
+
+Affected entity expansion (t11):
+
+```dql
+fetch events
+| filter timestamp > now() - 2h
+| filter isNotNull(affected_entity_ids)
+| summarize count()
+
+# Or with expand:
+fetch events
+| filter event.kind == "SECURITY_EVENT"
+| filter timestamp > now() - 24h
+| fieldsAdd affected = affected_entity_ids
+| expand affected
+| summarize count = countDistinct(affected)
+| fields count
+```
+
+### 5.7 Bizevents
+
+Window: `2h`. Bizevents are continuous in tenants that ingest them.
+
+```dql
+fetch bizevents
+| filter timestamp > now() - 2h
+| filter isNotNull(dt.entity.service)
+| summarize count()
+
+fetch bizevents
+| filter timestamp > now() - 2h
+| summarize count = countDistinct(event.type)
+
+fetch bizevents
+| filter timestamp > now() - 2h
+| summarize count = countDistinct(event.provider)
+```
+
+### 5.8 Security and threat patterns (mixed sources)
+
+Threat criteria mix events and logs:
+
+```dql
+# Error log threat coverage (t5)
+fetch logs
+| filter timestamp > now() - 2h
+| filter loglevel == "ERROR"
+| filter isNotNull(dt.entity.host)
+| summarize count = countDistinct(dt.entity.host)
+| fields count
+
+# Trace-correlated logs (t8)
+fetch logs
+| filter timestamp > now() - 2h
+| filter isNotNull(trace_id)
+| summarize count()
+
+# Log-based events (l15)
+fetch events
+| filter timestamp > now() - 24h
+| filter event.kind == "LOG"
+| summarize count()
+```
+
+### 5.9 Sentinel pattern — `data record(...)` (DQL constant literal)
+
+We tried `data record(x: 5)` as a zero-scan way to provide constant
+denominators. **The DQL parser rejected it** (`PARAMETER_MUST_NOT_BE_AN_AGGREGATION`).
+This is why we settled on the code-level `denominatorConstant` field
+in the `Criterion` type instead — see §16.
+
+If a future DQL release supports `data record` literals, the migration
+back is mechanical: replace `denominatorConstant: N` with
+`queryB: "data record(c: N)"`.
 
 ---
 
-## 5. Scale Tier
+## 6. Scale Tier sampling
 
-> Source: `ui/app/scale-tier.ts`, `ui/app/hooks/useScaleTier.ts`,
-> `ui/app/components/ScaleTierBanner.tsx`.
+Source: `ui/app/scale-tier.ts`, `ui/app/hooks/useScaleTier.ts`,
+`ui/app/components/ScaleTierBanner.tsx`. Full sizing study:
+`docs/PERFORMANCE-REPORT-80K-HOSTS.md`.
 
-### 5.1 Why it exists
+### 6.1 Why it exists
 
 The default DQL queries scan `now()-2h` of logs / spans / events /
-bizevents. On a small tenant that's ~12 GB; on an 80k-host tenant
-that's ~17 TB per log query, which:
-- Exceeds the Grail per-query timeout
-- Costs $1.8k for a single assessment
-- Hits the per-tenant concurrency cap
+bizevents. On a small tenant that's ~12 GB; on an 80k-host tenant that
+projects to ~17 TB per log query, which:
+- exceeds Grail's per-query timeout (default 60 s, max 600 s),
+- costs ~$1,800 per assessment at standard DPS pricing,
+- saturates the per-tenant concurrency cap.
 
-Scale Tier narrows the window + adds a `scanLimitGBytes` safety cap
-so the app remains runnable.
+Scale Tier narrows the window AND adds `scanLimitGBytes` so the app
+remains runnable on tenants of any size.
 
-### 5.2 The three tiers
+### 6.2 The three tiers
 
-| Tier | Trigger | Window | scanLimitGBytes | Sampled? |
+| Tier | Auto-trigger | Window | scanLimitGBytes | Sampled? |
 |---|---|---|---:|---|
-| `exact` | hosts ≤ 5 000 | 2h (verbatim) | none | No — ground truth |
-| `large` | 5 000 ≤ hosts < 50 000 | 30 min | 200 GB | Yes — minor drift on sparse signals |
-| `xlarge` | hosts ≥ 50 000 | 5 min | 50 GB | Yes — ±5–10% on typical workloads |
+| `exact` | hosts ≤ 5 000 | 2 h (verbatim) | none | No — ground truth |
+| `large` | 5 000 < hosts ≤ 50 000 | 30 min | 200 GB | Yes — minor drift on sparse signals |
+| `xlarge` | hosts > 50 000 | 5 min | 50 GB | Yes — ±5–10% on typical workloads |
 
-Auto-selected from `useScaleTier`'s host count detection
-(`fetch dt.entity.host | summarize count = count()`). User can override
-via the ScaleTierBanner buttons; override persists in
-`localStorage.cca.scaleTier.override`.
+Thresholds are hardcoded in `TIER_CONFIG.minHosts` / `maxHosts`. They
+were chosen to:
+- Keep small/medium customers in ground-truth mode (Exact).
+- Avoid Grail timeouts above ~10 GB scan per query.
+- Cap xLarge cost below $50/run regardless of tenant size.
 
-### 5.3 What `scaleQuery` does
+### 6.3 `scaleQuery(q, tier)` — the pure rewrite function
 
-Pure function. Input: query string + tier. Output: query string Grail
-will actually run.
+Input: query string + tier. Output: query string Grail will actually
+run. Same input ALWAYS produces same output — pure function, no
+network.
 
 ```ts
-scaleQuery(q, 'exact')  → q                              // verbatim
-scaleQuery(q, 'large')  → q rewritten with 30 min window + 200 GB cap
-scaleQuery(q, 'xlarge') → q rewritten with 5 min window + 50 GB cap
+scaleQuery(q, 'exact')  // q verbatim
+scaleQuery(q, 'large')  // q rewritten if isHotSource(q)
+scaleQuery(q, 'xlarge') // q rewritten if isHotSource(q)
 ```
 
-The rewrite ONLY applies to "hot sources":
+`isHotSource(q)` matches:
+
 ```ts
-isHotSource(q) iff q contains  fetch logs|fetch spans|fetch events|fetch bizevents
+function isHotSource(query: string): boolean {
+  return (
+    /\bfetch\s+logs\b/i.test(query) ||
+    /\bfetch\s+spans\b/i.test(query) ||
+    /\bfetch\s+events\b/i.test(query) ||
+    /\bfetch\s+bizevents\b/i.test(query)
+  );
+}
 ```
 
-For hot sources, the rewrite:
-1. Strips any `| filter timestamp > now() - Nh` stage
-2. Strips any `, from:now()-Nh` from the fetch clause
-3. Replaces with `fetch <src>, from: now()-WINDOWm, scanLimitGBytes: CAP`
+For a hot source, the rewrite:
+1. Strips any `| filter timestamp > now() - Nh` stage.
+2. Strips any `, from:now()-Nh` from the fetch clause.
+3. Replaces the fetch with
+   `fetch <src>, from: now()-<window>, scanLimitGBytes: <cap>`.
 
-**Critical**: `fetch dt.davis.problems` is NOT a hot source. AI Obs
-criteria use `fetch spans, from:now()-72h` — `scaleQuery` rewrites
-this to `5m` in xlarge tier. That's intentional (xlarge accepts the
-accuracy loss for cost), but it means **bursty AI workloads are
-invisible in xlarge tier**. Document this for customers.
+Concrete example for tier=`xlarge`:
 
-### 5.4 Cache key includes tier
+```dql
+# Original (criterion l1 numerator):
+fetch logs
+| filter timestamp > now() - 2h
+| filter isNotNull(dt.entity.host)
+| summarize count = countDistinct(dt.entity.host)
+| fields count
 
-Cached results are keyed by `tier.fnv32(originalQuery)`. A Large-tier
-value is never served to an Exact-tier caller, because the rewritten
-query produced different data. See §6.4.
+# After scaleQuery(q, 'xlarge'):
+fetch logs, from: now()-5m, scanLimitGBytes: 50
+| filter isNotNull(dt.entity.host)
+| summarize count = countDistinct(dt.entity.host)
+| fields count
+```
 
-### 5.5 UI surface
+### 6.4 Sources NOT rewritten
 
-The `ScaleTierBanner` renders:
-- **Hidden** when `tier === 'exact'` (zero-impact for small tenants)
-- **Yellow** for live `large` / `xlarge` (informational, not blocking)
-- **Magenta** when a demo scenario is active (different cue entirely)
+`scaleQuery` deliberately leaves these alone:
 
-Includes inline buttons to toggle between `exact` / `large` / `xlarge`
-manually. Override is persisted; clicking the tier matching the
-auto-detected one removes the override.
+- `fetch dt.davis.problems` — not a hot source; 72 h is intentional
+- `fetch dt.entity.*` — metadata, no scan
+- `timeseries` — metadata, no scan
+- Any query whose source the regex doesn't match
+
+If you add a new criterion using a new source that should NOT be
+narrowed (e.g. `fetch dt.security.events`), don't add it to
+`isHotSource`. Verify with `scaleQuery(q, 'xlarge')` that the rewrite
+is a no-op.
+
+### 6.5 Manual override
+
+User clicks Exact / Large / xLarge buttons on the `ScaleTierBanner`.
+Override persists in `localStorage.cca.scaleTier.override`. Clicking
+the auto-detected tier clears the override.
+
+Override is ignored when a demo scenario is active (the scenario's
+tier is hardcoded).
+
+### 6.6 Cache key MUST include tier
+
+The cache key is `${tier}.${fnv32(originalQuery)}`. This is critical:
+a Large-tier value is NEVER served to an Exact-tier caller, because
+the rewritten query produced different data. Get this wrong and users
+see wildly incorrect coverage.
+
+See `ui/app/perf/queryCache.ts:103`.
+
+### 6.7 Validation evidence
+
+On our test tenant (~54 hosts):
+
+| Query | Exact | Large | xLarge |
+|---|---:|---:|---:|
+| `fetch logs ... isNotNull(dt.entity.host) ... countDistinct(host)` | 11.90 GB / 31 hosts | 3.10 GB / 31 hosts | 0.42 GB / 24 hosts |
+| `fetch spans ... isNotNull(db.system)` | 0.11 GB / 827 traces | 0.04 GB / 388 traces | (cap) / |
+| `fetch events ... countDistinct(event.kind)` | 0.06 GB / 4 kinds | 0.01 GB / 4 kinds | / 4 kinds |
+
+Key findings:
+- Large tier on this tenant: same `countDistinct(host)` (31 = 31) —
+  all active hosts emit logs within any 30-min window.
+- xLarge tier: `countDistinct(host)` dropped from 31 to 24 — 7 hosts
+  emit logs less than once every 5 min. Real tenants at xlarge scale
+  with continuous ingest will see smaller drift.
+- `countDistinct(event.kind)` identical across tiers — small,
+  stable cardinality.
+
+### 6.8 ScaleTierBanner UI states
+
+| State | Background | Label | Buttons |
+|---|---|---|---|
+| `exact`, no demo | hidden entirely | — | — |
+| `large` / `xlarge`, no demo | yellow `Background.Container.Warning` | `Scale tier: Large` (host count + auto/override) | Exact, Large, xLarge tier-switch |
+| any tier, demo active | magenta `Background.Container.Primary` | `🎭 DEMO: <scenario>` (host count, tier, "0 DPS consumed") | (none — demo locks tier) |
+
+The yellow/magenta distinction is intentional — screenshots can be
+classified at a glance.
 
 ---
 
-## 6. 24h persistent cache
+## 7. 24h persistent cache
 
-> Source: `ui/app/perf/queryCache.ts`. Storage: Document Store.
+Source: `ui/app/perf/queryCache.ts`. Storage: Document Store.
 
-### 6.1 What's cached
+### 7.1 What's cached
 
-The numeric result of every DQL query the assessment runs. Same-day
-re-runs return the value at zero Grail cost.
+The numeric result of every DQL query the assessment runs, plus the
+scannedBytes/records at the time of caching (for "saved" stats).
+Same-day re-runs return values instantly with zero Grail cost.
 
-### 6.2 Document shape
+### 7.2 Document shape
 
-One document per tenant, ID `pulse-querycache`, type `pulse-querycache`.
+One document per tenant. Document ID `pulse-querycache`,
+type `pulse-querycache`.
 
 ```ts
 interface CacheDocument {
   schemaVersion: 1;
   tenantId: string;
-  entries: Record<string, CacheEntry>;  // key = makeKey(query, tier)
+  entries: Record<string, CacheEntry>;
 }
 
 interface CacheEntry {
-  v: number;        // the value returned by extractValue()
+  v: number;        // value returned by extractValue()
   ts: number;       // epoch ms when stored
-  bytes: number;    // scannedBytes at time of write (for "saved" stats)
-  records: number;  // scannedRecords at time of write
+  bytes: number;    // scannedBytes at write time
+  records: number;  // scannedRecords at write time
 }
 ```
 
-### 6.3 Lifecycle within a run
+For ~110 entries, the document is ~16 KB. Well below Document Store
+size limits (megabytes).
 
-```
-1. await persistentCache.load()         ← one Doc Store GET
-   - Reads the doc, prunes entries older than 24h, populates in-mem Map
+### 7.3 Lifecycle within a run
+
+```text
+1. await persistentCache.load()              # one Doc Store GET
+   - Parses doc, prunes entries > 24h old, populates in-mem Map
    - Captures docVersion for optimistic locking on write
 
-2. For each unique query the run will execute:
+2. For each unique query in this run:
      entry = persistentCache.get(query, tier)
      if entry:
-       value = entry.v          ← cache hit, zero scan
+       value = entry.v                        # cache hit, zero scan
+       perfEntry.cached = true
+       perfEntry.cacheAgeSec = (now - entry.ts) / 1000
+       continue
      else:
-       value = await executeDql(scaleQuery(query, tier))
-       persistentCache.set(query, tier, value, ...)
+       executedQ = scaleQuery(query, tier)
+       result = await executeDql(executedQ)
+       persistentCache.set(query, tier, result.value, result.bytes, result.records)
+       perfEntry.cached = false
 
-3. void persistentCache.flush()         ← fire-and-forget Doc Store PATCH/CREATE
+3. void persistentCache.flush()              # fire-and-forget Doc Store update
 ```
 
-### 6.4 Cache key
+### 7.4 Cache key shape
 
-`makeKey(query, tier)` returns `<tier>.<fnv32(query)>` where `fnv32` is
-a tiny 32-bit hash producing an 8-char hex string.
+```ts
+makeKey(query, tier) = `${tier}.${fnv32(query)}`
+```
 
-Rationale:
+Where `fnv32` is a tiny 32-bit FNV-1a hash producing an 8-char hex
+string. Rationale:
+
 - **Tier-segmented**: Large-tier value ≠ Exact-tier value, must not
   serve cross-tier.
 - **Hashed**: query strings can be hundreds of chars; the hash keeps
-  the document small (~16 KB for ~110 entries).
-- **Same hash family** as `mulberry32` PRNG seed in
-  `demo/scenarios.ts` — deliberate, easy to reuse.
+  the document small.
+- **Same family** as `mulberry32` PRNG used in demo scenarios.
 
-### 6.5 TTL
+### 7.5 TTL = 24h
 
-24 hours, enforced at load time. An expired entry is dropped from the
-in-memory map and (eventually) overwritten on flush.
+Enforced at load time. Entries with `now - ts > 24h * 60 * 60 * 1000`
+are dropped from the in-memory map and (eventually) overwritten on
+flush.
 
-Rationale: most assessment values change on a multi-hour scale. A 24h
-TTL means a customer who runs the assessment in the morning and again
-in the afternoon pays once. After day rollover, full cost again.
+Why 24h:
+- Most assessment values change on a multi-hour scale.
+- Same-day re-runs (morning + afternoon, before + after a meeting)
+  pay once.
+- After day rollover, full cost again — this is the right "fresh data"
+  cadence for an observability assessment.
 
 There's a deliberately-not-shipped option for tier-aware TTL (24h for
-fast signals, 7d for entity counts) — see `HANDOFF.md` §7.4 (option C7).
-Pros: even cheaper re-runs. Cons: drift in entity counts when topology
-changes mid-week.
+fast signals, 7d for entity counts). See §15.x or `HANDOFF.md` §7.4
+for the C7 roadmap discussion. Pros: even cheaper re-runs. Cons:
+drift in entity counts when topology changes mid-week.
 
-### 6.6 Failure modes
-
-All gracefully degrade. The app NEVER fails because of cache:
+### 7.6 Failure modes
 
 | Failure | Behavior |
 |---|---|
-| HTTP 404 on load | Treated as empty cache (first run for this tenant). All queries miss. |
-| HTTP 5xx on load | Logged warning, `loaded=false` set, every query misses. App runs as pre-v2.5. |
-| HTTP 409 on flush (optimistic locking) | Try createDocument fallback; if that also conflicts, drop this run's additions. Next run re-caches what it can. |
+| HTTP 404 on load | Treated as empty cache (first run for this tenant). All queries miss. App functions normally. |
+| HTTP 5xx on load | Logged warning, `loaded = false`, every query misses. App behaves exactly like pre-v2.5. |
+| HTTP 409 on flush (optimistic lock conflict) | Try createDocument fallback. If that also conflicts (409), drop this run's additions. Next run re-caches what it can. |
 | HTTP 5xx on flush | Logged warning, drops this run's additions. |
 | Invalid JSON in document | Treated as empty (schema mismatch). |
+| `loaded = false` at get-time | Returns null → cache miss → live query |
 
-### 6.7 Force-refresh
+**The app NEVER fails because of cache.** Every failure path degrades
+gracefully to "behave like pre-cache".
 
-Operator path: click 🗘 Force refresh in the DemoControlBar (gated by
-`?dev=1` — see §10.5). Calls `forceRefresh()` from `useCoverageData`
-which deletes the document on the server.
+### 7.7 Force-refresh
 
-Programmatic path: any flow that wants a fresh run can call
-`coverageData.forceRefresh()` before triggering `refresh()`.
+Operator path: click 🗘 Force refresh in the `DemoControlBar` (gated
+by `?dev=1`).
+
+Programmatic path:
+```ts
+await coverageData.forceRefresh();
+coverageData.refresh();  // optional — triggers a fresh run
+```
+
+`forceRefresh()` deletes the document on the server. It does NOT
+re-run the assessment — separated so callers can invalidate without
+re-running (e.g. before navigating away).
+
+### 7.8 Validation evidence
+
+On our test tenant, immediately after a cold run:
+
+| Metric | Cold run | Warm re-run | Δ |
+|---|---:|---:|---:|
+| Wall-time | 8 620 ms | 584 ms | **-93%** |
+| Total scanned | 173 GB | 0 GB | **-100%** |
+| DPS estimate | $1.05–$1.61 | $0–$0 | -100% |
+| Cache hits | 0/113 | 113/113 | hit rate 100% |
+| Cache bytes saved | — | 169 GB | — |
+
+Per-source on the warm run:
+- logs: n=23 scan=0 GB p50=1ms p95=1ms
+- spans: n=22 scan=0 GB p50=1ms p95=1ms
+- events: n=10 scan=0 GB p50=1ms p95=1ms
+- bizevents: n=9 scan=0 GB p50=1ms p95=1ms
+- metrics: n=19 scan=0 GB p50=1ms p95=1ms
+- entity: n=23 scan=0 GB p50=1ms p95=1ms
+- problems: n=7 scan=0 GB p50=1ms p95=1ms
+
+Cache age at the time of the warm run: 9–10 seconds (we ran them
+back-to-back).
 
 ---
 
-## 7. C3 smart-skip
+## 8. C3 smart-skip
 
-> Implementation: `useCoverageData.runAssessment` two-phase pass.
+Implementation: `useCoverageData.runAssessment` two-phase pass, added
+in v2.5.0.
 
-### 7.1 What it does
+### 8.1 What it does
 
 If a criterion's denominator is `fetch dt.entity.X | summarize count()`
-and that returns `0`, the numerator is mathematically guaranteed to
-produce coverage `0/0 = 0`. Executing it is pure waste. Skip it.
+and that returns 0, the numerator is mathematically guaranteed to
+produce coverage `valueA / 0 = 0`. Executing the (often heavy)
+numerator is pure waste. Skip it.
 
-### 7.2 The two phases
+### 8.2 The two phases
 
+```text
+Phase 1:
+  Execute only entity-count denominators.
+  isEntityCountQuery matches:
+    /^\s*fetch\s+dt\.entity\.[a-z_0-9]+\s*\|\s*summarize\s+count\(\)\s*$/
+
+Compute skip set:
+  For each criterion with queryB matching isEntityCountQuery:
+    If cache.get(queryB) is 0, -1, or null:
+      Add criterion.id to skippedCriteria
+      Add criterion.query to skippedNumerators
+
+Phase 2:
+  Execute the union of:
+    - Numerators of NOT-skipped criteria
+    - Denominators not already executed in Phase 1
+  Both phases share the same persistentCache, so Phase 2 hits cache on
+  any query Phase 1 already cached.
 ```
-Phase 1: execute only entity-count denominators
-         (isEntityCountQuery matches /^fetch dt.entity.[a-z_0-9]+ | summarize count()$/)
-         These are cheap — metadata, not data scan.
 
-Compute skip set: criteria whose phase-1 result is 0, -1, or null
-
-Phase 2: execute everything else EXCEPT the numerators of skipped
-         criteria. Persistent cache fed by both phases.
-```
-
-### 7.3 Why ONLY entity-count denominators
+### 8.3 Why ONLY entity-count denominators
 
 A denominator like `fetch logs | summarize count()` (total logs in 2h)
-might also return 0 if the tenant has no logs — but that's a data
-problem, not a topology zero. The "entity is absent" signal is unique
-to entity counts.
+might return 0 in a brand-new tenant with no logs ingested yet — but
+that's a data problem, not a topology zero. The "entity absent" signal
+is unique to entity counts; we know with certainty that all
+numerator queries depending on that entity will be ill-defined.
 
-### 7.4 What's surfaced in the perf JSON
+For other zero denominators, the scoring path's existing `valueB <= 0
+→ value = 0` handles them correctly. C3 just avoids the wasted query.
+
+### 8.4 What's surfaced in the perf JSON
 
 ```json
 {
   "run": {
     "skippedQueries": 17,
-    "skippedCriteria": ["i7", "i10", "i12", "d1", ..., "l8"]
+    "skippedCriteria": ["i7", "i10", "i12", "d1", "d2", ...]
   },
   "queries": [
     {
-      "originalQuery": "fetch logs ... | filter ... cluster ...",
+      "originalQuery": "fetch logs | filter ... cluster ...",
+      "executedQuery": "fetch logs | filter ... cluster ...",
+      "source": "logs",
+      "scannedBytes": 0,
+      "scannedRecords": 0,
+      "wallTimeMs": 0,
+      "resultValue": 0,
+      "ok": true,
       "skipped": true,
       "skipReason": "fetch dt.entity.kubernetes_cluster | summarize count()",
-      "scannedBytes": 0,
-      "resultValue": 0
-    }
+      "usedByCriteria": ["i7"]
+    },
+    ...
   ]
 }
 ```
 
-Each skipped numerator gets a synthetic `PerfQueryEntry` so the JSON
-shows exactly what was elided and why.
+Each skipped numerator gets a synthetic `PerfQueryEntry` with
+`skipped: true` and the queryB that triggered the skip. The analyzer
+can build a "tenant doesn't have X → saved Y MB" report.
 
-### 7.5 Demo simulation
+### 8.5 Demo simulation evidence
 
-The legacy-no-k8s demo scenario sets `k8sClusters: 0`,
-`cloud_application_namespace: 0`, `applications: 0` in its
-`entityCounts`. `zeroEntityCountQueriesFor(scenario)` builds the same
-skip set the live path would, and the demo run reports it in the JSON.
+The `legacy-no-k8s` demo scenario sets:
+- `applications: 0`
+- `mobileApps: 0`
+- `k8sClusters: 0`
+- `k8sNamespaces: 0`
+- `k8sNodes: 0`
 
-This is how SEs can demo C3 in action without finding a K8s-less
-production tenant.
+`zeroEntityCountQueriesFor(scenario)` builds the skip set the same way
+the live path would.
+
+Result from the demo run:
+
+```json
+{
+  "scenario": "legacy-no-k8s",
+  "tier": "large",
+  "hostCount": 12000,
+  "totalUniqueQueries": 113,
+  "skippedQueries": 17,
+  "skippedCriteria": [
+    "i7", "i10", "i12", "i19", "i20", "i21", "i22",
+    "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d11",
+    "l8"
+  ]
+}
+```
+
+Breakdown of why each was skipped:
+
+| Entity = 0 | queryB string | Criteria skipped |
+|---|---|---|
+| `kubernetes_cluster` | `fetch dt.entity.kubernetes_cluster \| summarize count()` | i7 |
+| `cloud_application_namespace` | `fetch dt.entity.cloud_application_namespace \| summarize count()` | i10, i12 |
+| `application` (RUM / AppMon) | `fetch dt.entity.application \| summarize count()` | i19, i20, i21, i22, d1, d2, d3, d4, d5, d6, d7, d8, d11, l8 |
+
+Total: 17 criteria skipped. Confirmed via JSON download.
+
+Capability scores in the demo:
+- Infrastructure Observability: 68% (-22% from k8s skips i7/i10/i12/i19–i22)
+- Application Observability: 100% (no app-dep)
+- Digital Experience: **18%** (RUM almost zeroed — 8 criteria skipped)
+- Log Analytics: 94% (only l8 skipped)
+- AppSec / Threat / BizObs / SD: 100% (high targets, no deps)
+- AI Obs: 67% (target 5 with spread 18, some pass)
+
+### 8.6 Live evidence on small tenants
+
+On our small test tenant, all 7 entity classes (host, service,
+application, k8sCluster, k8sNamespace, pg, pgi) returned positive counts:
+- host: 54
+- service: 87
+- application: 2
+- kubernetes_cluster: 7
+- cloud_application_namespace: 65
+- process_group: 397
+- process_group_instance: 731
+
+→ C3 reports `skippedQueries: 0`, no savings. This is the correct
+behavior — the tenant has all those entities.
+
+C3 is essentially dormant on full-stack tenants. The savings appear
+on tenants without K8s/RUM/applications.
 
 ---
 
-## 8. Demo Mode
+## 9. Demo Mode
 
-> Source: `ui/app/demo/scenarios.ts`, `ui/app/demo/useDemoMode.ts`,
-> `ui/app/components/DemoControlBar.tsx`. Full operator guide:
-> `docs/DEMO-MODE.md`.
+Source: `ui/app/demo/scenarios.ts`, `ui/app/demo/useDemoMode.ts`,
+`ui/app/components/DemoControlBar.tsx`. Full operator guide:
+`docs/DEMO-MODE.md`.
 
-### 8.1 Five scenarios
+### 9.1 The five scenarios
 
-| ID | Label | Hosts | Tier | Purpose |
-|---|---|---:|---|---|
-| `small-corp` | Acme Inc. (SaaS startup) | 240 | exact | "small healthy customer" |
-| `medium-bank` | Atlas Banco | 8 500 | large | "compliance-driven mid-size" |
-| `legacy-no-k8s` | Banco Itamaraty | 12 000 | large | **C3 demo** — zero K8s/RUM/applications |
-| `xlarge-telco` | GlobalCom | 80 000 | xlarge | "scale showcase" |
-| `xxlarge-cloud` | Nimbus Cloud | 250 000 | xlarge | "stress case" |
+| ID | Label | Hosts | Tier | Simulated wall | Simulated scan |
+|---|---|---:|---|---:|---:|
+| `small-corp` | Acme Inc. (SaaS startup) | 240 | exact | 1.5 s | 0.6 GB |
+| `medium-bank` | Atlas Banco | 8 500 | large | 3.5 s | 18 GB |
+| `legacy-no-k8s` | Banco Itamaraty | 12 000 | large | 4.2 s | 24 GB |
+| `xlarge-telco` | GlobalCom | 80 000 | xlarge | 5.5 s | 3 200 GB |
+| `xxlarge-cloud` | Nimbus Cloud | 250 000 | xlarge | 7.5 s | 9 800 GB |
 
-### 8.2 Activation
+Each scenario has:
+- `capabilityTargets: Record<capabilityName, 0–100>` — target score per
+  capability used by the value generator.
+- `criterionOverrides?: Record<criterionId, 0–100>` — optional per-id
+  forced values that beat capabilityTargets.
+- `entityCounts: EntityCounts` — used by C3 simulation and the entity
+  counts panel.
 
-Priority: URL param > localStorage > console helper.
+### 9.2 Activation
 
+Priority: URL param > localStorage > console.
+
+```text
+?demo=<id>                              URL (shareable)
+localStorage.cca.demo.scenario          sticky per browser
+__pulseDemo()                           list catalog
+__pulseDemo('<id>')                     activate, reloads
+__pulseDemo(null)                       clear, reloads
 ```
-?demo=xlarge-telco                       ← URL (shareable)
-localStorage.cca.demo.scenario           ← sticky (per browser)
-window.__pulseDemo('xlarge-telco')       ← DevTools console
-window.__pulseDemo()                     ← lists catalog
-window.__pulseDemo(null)                 ← clear + reload
-```
 
-### 8.3 What's faked vs real in demo runs
+### 9.3 What's faked vs real
 
 | Surface | Demo mode |
 |---|---|
 | DQL execution | **bypassed** — zero Grail calls, zero DPS |
-| Per-criterion values | synthesized deterministically (`mulberry32(hash32("<scenarioId>|<criterionId>"))`) |
+| Per-criterion values | synthesized deterministically (mulberry32) |
 | Capability scores | **real math** applied to synthesized values |
 | Entity counts panel | from `scenario.entityCounts` |
 | Tier | forced from `scenario.tier`; manual override IGNORED |
-| Wall-time | `setTimeout` mimicking real Grail latency (1.5s → 7.5s by scenario) |
+| Wall-time | `setTimeout` mimicking real Grail latency |
 | Live scan counter | climbs proportionally to `scenario.simulatedScanGB` |
 | Snapshot save | **disabled** — guard in CoverageAssessment |
 | PDF report | works normally with scenario data |
 
-### 8.4 Per-criterion value model
+### 9.4 Per-criterion value generation
 
 ```ts
 // For each criterion in a capability:
-value = scenario.criterionOverrides[id]    // if explicitly overridden
-     ?? drawAroundTarget(seededRng, scenario.capabilityTargets[capName], spread)
-     ?? 0    // if this criterion's queryB is in zeroEntityCountQueriesFor(scenario)
+isZeroDenom = criterion.queryB != null
+  && zeroEntityCountQueriesFor(scenario).has(criterion.queryB);
+
+value = isZeroDenom
+  ? 0                                      // C3 simulation forces 0
+  : override != null
+    ? Math.max(0, Math.min(100, override))
+    : drawAroundTarget(
+        mulberry32(hash32(scenario.id + '|' + criterion.id)),
+        capabilityTargets[capName] ?? 50,
+        spread
+      );
 ```
 
-`drawAroundTarget(rng, target, spread)` returns
-`clamp(target + (rng() * 2 - 1) * spread, 0, 100)` rounded to one
-decimal. `spread` defaults to 8 for `exact`, 12 for `large`, 18 for
-`xlarge` — bigger jitter at bigger scales to look realistic.
+`spread` defaults: 8 for `exact`, 12 for `large`, 18 for `xlarge`
+(bigger jitter at bigger scales to look realistic).
 
-### 8.5 Synthesized perf entries
-
-Each scenario also synthesises a `PerfQueryEntry` per unique query so
-the downloadable JSON looks roughly like a real run:
-
+`drawAroundTarget(rng, target, spread)`:
+```ts
+return clamp(target + (rng() * 2 - 1) * spread, 0, 100); // round to 1 decimal
 ```
-1. Each query: scannedBytes drawn from a per-source budget
-   (logs 95%, spans 3%, events/bizevents/problems 0.5% each)
-   with PRNG-determined jitter (factor in [0.3, 2.5] per query)
 
-2. Wall-time correlated with scan: floorMs + (scanGB / 12 GB/s)
+### 9.5 Synthetic perf entries
+
+For demo runs, `useCoverageData` also synthesises `PerfQueryEntry[]`:
+
+```text
+1. Per-source budget:
+     sourceWeight = { logs: 0.95, spans: 0.03, events: 0.005,
+                      bizevents: 0.005, problems: 0.005, ... }
+     sourceScan[source] = scenario.simulatedScanGB * sourceWeight[source]
+
+2. For each unique query, classify by source.
+3. Per-query scan factor: PRNG-determined jitter in [0.3, 2.5]
+   normalised so the factors sum to 1 within the source.
+   sourceScan[s] * factor[q] = q.scannedBytes
+4. Per-query wall: floorMs[source] + (scanGB / 12 GB/s) * 1000
+   * jitter[0.85, 1.15]
    This makes P95 diverge from P50 like a real Grail run.
-
-3. resultValue mapped from scenario.entityCounts when the query
-   is a known entity counter (so the JSON shows consistent numbers
-   to the reader).
+5. resultValue mapped from scenario.entityCounts when the query is a
+   known entity counter, so the JSON shows consistent numbers.
+6. cached / skipped / cacheAgeSec set per scenario rules
+   (skipped = true if queryB is in zeroEntityCountQueriesFor).
 ```
 
-### 8.6 Banner styling
+### 9.6 Banner / control bar
 
-`ScaleTierBanner` renders differently when a demo is active:
-- Background `Colors.Background.Container.Primary.Default` (magenta) vs
-  `Colors.Background.Container.Warning.Default` (yellow) for live tier
-- Label `🎭 DEMO: <scenario.label>` vs `Scale tier: <Tier>`
-- Tier-switch buttons HIDDEN (the demo's tier is hardcoded)
+`ScaleTierBanner` in magenta when `demoScenario != null`. `DemoControlBar`
+sticky at the bottom showing scenario chips + run + download +
+exit-demo, gated by `isDev`.
 
-Anyone glancing at a screenshot can tell demo from live by color.
+### 9.7 Adding a scenario
+
+1. Append to `DEMO_SCENARIOS` in `ui/app/demo/scenarios.ts`.
+2. Fill every field of `DemoScenario` (TypeScript will flag missing
+   ones — the interface is exhaustive on purpose).
+3. Keep `id` lowercase, kebab-case, stable. URLs depend on it.
+4. The id is also the PRNG seed prefix — renaming reseeds every value.
+5. Test by visiting `?demo=<your-new-id>`.
+6. If the scenario should demonstrate C3, set the relevant entity
+   counts to 0 in `entityCounts` and verify the perf JSON shows
+   `skippedQueries > 0`.
 
 ---
 
-## 9. Perf instrumentation
+## 10. Perf instrumentation & JSON report
 
-> Source: `ui/app/perf/types.ts`, `ui/app/perf/buildReport.ts`,
-> `useCoverageData` perfEntries capture.
+Source: `ui/app/perf/types.ts`, `ui/app/perf/buildReport.ts`, capture
+in `useCoverageData.executeAllUnique`.
 
-### 9.1 What's captured per query
+### 10.1 PerfQueryEntry shape
 
 ```ts
 interface PerfQueryEntry {
-  index: number;             // 0-based, after dedup
-  originalQuery: string;     // string in queries.ts
-  executedQuery: string;     // what scaleQuery produced
-  source: 'logs' | 'spans' | 'events' | 'bizevents'
-        | 'metrics' | 'entity' | 'problems' | 'security' | 'other';
+  index: number;              // 0-based after dedup, sorted by scan desc
+  originalQuery: string;      // as in queries.ts
+  executedQuery: string;      // post-scaleQuery
+  source:
+    | 'logs' | 'spans' | 'events' | 'bizevents'
+    | 'metrics' | 'entity' | 'problems' | 'security' | 'other';
   tier: ScaleTier;
-  wallTimeMs: number;        // client-side round-trip
-  scannedBytes: number;      // Grail-reported
+  wallTimeMs: number;         // client-side round-trip
+  scannedBytes: number;       // Grail-reported
   scannedRecords: number;
   scannedDataPoints: number;
-  resultValue: number;       // post-extractValue()
+  resultValue: number;        // post-extractValue()
   ok: boolean;
   errorMessage: string | null;
-  usedByCriteria: string[];  // criterion IDs that consumed this query
-  cached?: boolean;          // true if served from 24h cache
-  cacheAgeSec?: number;      // age at the time of the run
-  skipped?: boolean;         // true if C3 skip happened
-  skipReason?: string;       // entity queryB that triggered the skip
+  usedByCriteria: string[];   // criterion IDs that consumed this query
+  cached?: boolean;
+  cacheAgeSec?: number;
+  skipped?: boolean;
+  skipReason?: string;
 }
 ```
 
-### 9.2 PerfReport shape
-
-`buildReport()` assembles:
+### 10.2 PerfReport shape
 
 ```ts
 interface PerfReport {
   schemaVersion: 1;
   generated: string;          // ISO timestamp
-  app: { name, version };
-  environment: { tenant, date, demoActive, demoScenarioId, userAgent };
-  scale: { tier, autoTier, manualOverride, hostCount };
-  entityCounts: EntityCounts | null;
-  run: {
-    startedAt, finishedAt, wallTimeMs, concurrency,
-    totalUniqueQueries, totalScannedBytes, totalScannedRecords,
-    totalScannedDataPoints,
-    estimatedDpsUsdHigh, estimatedDpsUsdLow,
-    queriesFailed,
-    cacheHits, cacheMisses, cachedBytesSaved,
-    skippedQueries, skippedCriteria,
+  app: { name: 'Pulse Assessment', version: string };
+
+  environment: {
+    tenant: string;           // short tenant identifier (subdomain)
+    date: string;             // YYYY-MM-DD
+    demoActive: boolean;
+    demoScenarioId: string | null;
+    userAgent: string;
   };
+
+  scale: {
+    tier: ScaleTier;
+    autoTier: ScaleTier | null;
+    manualOverride: ScaleTier | null;
+    hostCount: number | null;
+  };
+
+  entityCounts: EntityCounts | null;
+
+  run: {
+    startedAt: string;
+    finishedAt: string;
+    wallTimeMs: number;
+    concurrency: number;      // 10 (CONCURRENCY constant)
+    totalUniqueQueries: number;
+    totalScannedBytes: number;
+    totalScannedRecords: number;
+    totalScannedDataPoints: number;
+    estimatedDpsUsdHigh: number;
+    estimatedDpsUsdLow: number;
+    queriesFailed: number;
+    cacheHits: number;
+    cacheMisses: number;
+    cachedBytesSaved: number;
+    skippedQueries: number;
+    skippedCriteria: string[];
+  };
+
   bySource: Record<source, {
-    count, scannedBytes, wallTimeMs,
-    wallTimeP50, wallTimeP95, wallTimeMax, failed,
+    count: number;
+    scannedBytes: number;
+    wallTimeMs: number;       // SUM across queries in this source
+    wallTimeP50: number;
+    wallTimeP95: number;
+    wallTimeMax: number;
+    failed: number;
   }>;
+
   topExpensiveQueries: Array<{
-    originalQuery, source, scannedBytes, wallTimeMs,
-    usedByCriteriaCount, scanBytesPerCriterion, rank,
+    originalQuery: string;
+    source: string;
+    scannedBytes: number;
+    wallTimeMs: number;
+    usedByCriteriaCount: number;
+    scanBytesPerCriterion: number;   // scannedBytes / max(1, usedByCriteriaCount)
+    rank: 'raw' | 'perCrit' | 'both';
   }>;
-  capabilities: PerfCapabilitySummary[];
-  queries: PerfQueryEntry[];  // sorted by scannedBytes desc
+
+  capabilities: Array<{
+    name: string;
+    color: string;
+    score: number;
+    maturityScore: number;
+    maturityLevel: 0 | 1 | 2 | 3;
+    criteriaCount: number;
+    criteriaPassed: number;
+    criteriaErrored: number;
+  }>;
+
+  queries: PerfQueryEntry[];   // sorted by scannedBytes desc
 }
 ```
 
-`topExpensiveQueries` mixes two rankings:
-- top-N/2 by raw `scannedBytes` (absolute cost outliers)
-- top-N/2 by `scanBytesPerCriterion` (one-off cost amortization failures)
+### 10.3 topExpensiveQueries — mixed ranking
 
-### 9.3 Filename pattern
+The first half is top-N/2 by raw `scannedBytes` (absolute cost outliers).
+The second half is top-N/2 by `scanBytesPerCriterion` (one-off cost
+amortisation failures — high-scan queries serving only 1 criterion).
+
+`rank` field:
+- `'raw'`: in the raw top
+- `'perCrit'`: in the perCrit top
+- `'both'`: in both rankings (most concerning)
+
+This dual ranking is why the v2.5.x perf-waste audit could spot the
+`fields always5 = 5` patterns: they had `scanBytesPerCriterion ≈ raw
+scannedBytes` (1 criterion served), high values, easy to flag.
+
+### 10.4 Filename convention
 
 ```
 pulse-perf-<tenant>-<tierSlug>-<isoTimestamp>.json
-                    ↑
-   For demo runs: tierSlug = `demo-<scenarioId>`
-   For live runs: tierSlug = `exact` / `large` / `xlarge`
 ```
 
-Sorted alphabetically in a directory becomes chronological per tenant.
+- `tenant`: short identifier (Pulse strips trailing `.apps.dynatrace.com`).
+- `tierSlug`:
+  - For demo runs: `demo-<scenarioId>`
+  - For live runs: `exact`, `large`, or `xlarge`
+- `isoTimestamp`: `.` and `:` replaced with `-` for filesystem safety.
 
-### 9.4 Pricing assumption
+Sorted alphabetically becomes chronological-by-tenant.
 
-`estimatedDpsUsdHigh = totalGB * 0.01`
-`estimatedDpsUsdLow  = totalGB * 0.0065`
+### 10.5 Build pipeline
 
-Published Dynatrace DPS pricing range for standard contracts. The UI
-shows the high bound (conservative), the JSON includes both so external
-analyzers can pick.
+```ts
+buildReport({
+  startedAt, finishedAt, wallTimeMs, concurrency,
+  tenant, date,
+  demoActive, demoScenarioId,
+  scale: { tier, autoTier, manualOverride, hostCount },
+  entityCounts,
+  capabilities,                    // CapabilityResult[]
+  queryConsumers,                  // Map<query, criterionIds[]>
+  entries: perfEntries,            // InFlightPerfEntry[] from the run
+  cacheHits, cacheMisses, cachedBytesSaved,
+  skippedQueries, skippedCriteria,
+}): PerfReport
+```
+
+Returns a complete report. Then:
+
+```ts
+downloadReport(report): string   // returns the filename used
+```
+
+Triggers a `Blob` download via an in-DOM `<a download>` click. The
+`<a>` is appended + removed; `URL.revokeObjectURL` runs on the next
+tick so the click has time to start the download (works around a
+Firefox edge case).
+
+### 10.6 Live capture during the run
+
+Per-query in the worker loop:
+
+```ts
+const t0 = performance.now();
+let result, ok = true, errorMessage = null;
+try {
+  result = await executeDql(executedQ);
+} catch (err) {
+  ok = false;
+  errorMessage = err.message || String(err);
+  result = { value: -1, scannedBytes: 0, ... };
+}
+const t1 = performance.now();
+// Sentinel check
+if (result.value === -1 && ok) {
+  ok = false;
+  errorMessage = 'executeDql returned -1 sentinel';
+}
+perfEntries.push({ ... });
+```
+
+The `-1` sentinel check catches "silent" failures where executeDql
+returned without throwing but the result is the failure value.
 
 ---
 
-## 10. UI & presentation layer
+## 11. UI and presentation layer
 
-> Source: `ui/app/pages/CoverageAssessment.tsx`, `ui/app/components/*`.
-
-### 10.1 The three views
-
-Toggled via `ToggleButtonGroup` in the toolbar:
-
-| View | What it shows |
-|---|---|
-| `coverage` | Radar (left) + capability cards (right) |
-| `maturity` | Maturity scorecard with foundation/bestPractice/excellence breakdown |
-| `recommendations` | Executive summary with prioritized improvement actions |
-
-### 10.2 Idle, loading, loaded, error states
-
-`CoverageAssessment.tsx` has four state branches:
+### 11.1 The four state branches in CoverageAssessment
 
 ```tsx
 {idle && !loading && (
-  <IdleLeftPanel + capability picker grid>  // pre-run state
+  // Pre-run: IdleLeftPanel + capability picker grid
 )}
 {loading && (
-  <Centered progress bar + "Querying X capabilities">
+  // Centered progress bar + "Querying X capabilities"
 )}
 {!idle && !loading && capabilities.length > 0 && (
-  <Toolbar + ScaleTierBanner + main view + How-to-Analyze footer>
+  // Toolbar + ScaleTierBanner + main view + How-to-Analyze footer
 )}
 {error && (
-  <Centered error message>
+  // Centered error message
+)}
+
+// And ALWAYS (sticky bottom, gated by isDev):
+{demo && isDev && (
+  <DemoControlBar ... />
 )}
 ```
 
-The DemoControlBar (when `isDev`) is OUTSIDE all four branches, pinned
-to the bottom via `position: sticky` so it's always reachable.
+### 11.2 The three views
 
-### 10.3 The toolbar (top, when results loaded)
+Toggled via `ToggleButtonGroup` in the toolbar:
+
+| View | Content |
+|---|---|
+| `coverage` | Radar (left) + capability cards (right) |
+| `maturity` | Maturity scorecard with foundation / bestPractice / excellence breakdown |
+| `recommendations` | Executive summary with prioritized actions per importance level |
+
+### 11.3 Toolbar (top, when results loaded)
 
 ```
-[← Back] [↻ Refresh] [View: Coverage|Maturity|Exec] [Evolution Over Time] [First Day Results ▼]
-                                                              Tenant: X · date · stats · DPS badge
+[← Back] [↻ Refresh] [View: Cov|Mat|Exec] [Evolution Over Time] [First Day Results ▼]
+                                                  Tenant: X · date · stats · DPS badge
 ```
 
-The DPS badge (`DpsCostBadge.tsx`) renders inline at the end of the
-right-aligned text. Customer-facing (no dev gate).
+The DPS badge is inline at the end of the right-aligned text. Customer
+visible (no dev gate).
 
-### 10.4 The chart area
+### 11.4 Sticky footer (bottom)
 
-`TechRadar.tsx` is the SVG radar. Receives `capabilities` directly,
-animates fill via `requestAnimationFrame`. Click a segment to focus
-that capability in the cards.
+Two stacked sections:
 
-`CapabilityCards.tsx` renders the right-side card stack. Click a card
-to drill into per-criterion detail. Click outside to collapse all.
-
-### 10.5 The footer (bottom, conditional)
-
-Two stacked sections, both gated:
-
-| Section | Gate | Renders |
+| Section | Gate | Content |
 |---|---|---|
-| `DemoControlBar` (magenta sticky) | `demo` prop AND `isDev` | scenario chips + Run + Download + Force-refresh |
+| `DemoControlBar` (magenta sticky) | `demo` AND `isDev` | scenario chips + Run + Download + Force-refresh |
 | `How to Analyze` collapsible | `viewMode === 'coverage' \|\| 'maturity'` | Legend + color scale |
 
-### 10.6 Theme
+### 11.5 Theme
 
 `useCurrentTheme()` from `@dynatrace/strato-components/core`. Derived
 `dk` (dark mode boolean) controls every `style` computation. The app
 intentionally mirrors the Dynatrace tenant theme — don't hardcode
 colors.
 
+### 11.6 Color scale (radar segments)
+
+```
+N/A      Colors.Charts.Status.Critical.Default        0–19%   Critical gaps
+Low      Colors.Charts.Categorical.Color14.Default   20–39%   Early adoption
+Moderate Colors.Charts.Status.Warning.Default        40–59%   Partial
+Good     Colors.Charts.Categorical.Color07.Default   60–79%   Strong
+Excellent Colors.Charts.Status.Ideal.Default         80–100%  Full
+```
+
+These are the published assessment color bands. Don't change without
+product approval.
+
 ---
 
-## 11. DPS cost model
+## 12. DPS cost model
 
-> Surfaces: `DpsCostBadge.tsx` in the toolbar, `PerfReport.run.estimatedDpsUsd*`
-> in the JSON, tooltip projections.
+Surfaces: `DpsCostBadge.tsx` in the toolbar, `PerfReport.run.estimatedDpsUsd*`
+in the JSON.
 
-### 11.1 Per-run estimate
+### 12.1 Per-run estimate
 
-```
+```ts
 scannedGB = run.scannedBytes / (1024 ** 3)
-costHigh  = scannedGB * $0.01
-costLow   = scannedGB * $0.0065
+costHigh  = scannedGB * 0.01    // upper-bound published DPS rate
+costLow   = scannedGB * 0.0065  // lower-bound
 ```
 
-### 11.2 Cadence projections (badge tooltip)
+The badge displays `costHigh` (conservative — customers on cheaper
+contracts see a number bigger than their actual cost).
 
-```
-coldRunUsd     = costHigh + (cached_bytes_saved * 0.01 / 1024^3)
-weeklyYearly   = coldRunUsd * 52
-dailyYearly    = coldRunUsd * 122   (assumes 24h cache absorbs ~67% of daily re-runs)
-dailyYearlyNoC = coldRunUsd * 365
-```
+### 12.2 Annual cadence projections (tooltip)
 
-The "122" comes from: if a customer runs 3×/day with a 24h cache, only
-1 of the 3 is a cold run. 365 cold runs/year → 122 cold runs/year (1/3).
+```ts
+savedGB    = lastRunMeta.cachedBytesSaved / 1024**3
+coldRunUsd = costHigh + savedGB * 0.01   // what we'd pay if everything was cold
 
-### 11.3 What the badge renders
-
-```
-· ≈ $1.61 DPS · 173 GB scanned                       ← cold run
-· ≈ <$0.01 DPS · 0 MB scanned · cache hit            ← warm run
-· ≈ $0.12 DPS · 13 GB scanned · saved $1.50          ← partial cache
-· ≈ $0.45 DPS · 48 GB scanned · (running…)           ← mid-run
+weeklyYear         = coldRunUsd * 52
+dailyYearWithCache = coldRunUsd * 122    // assumes 24h cache absorbs ~67% of daily re-runs
+dailyYearNoCache   = coldRunUsd * 365
 ```
 
-### 11.4 Tooltip (hover)
+The "122" comes from a customer running 3×/day with the 24h cache:
+1 cold + 2 warm per day = ~1/3 cold-equivalent runs = ~365/3 = 122
+cold runs/year.
 
-Multi-line text via the `title` attribute:
+### 12.3 Badge render
+
+```
+· ≈ $1.61 DPS · 173 GB scanned                       (cold run)
+· ≈ <$0.01 DPS · 0 MB scanned · cache hit            (warm run, fully cached)
+· ≈ $0.12 DPS · 13 GB scanned · saved $1.50          (partial cache)
+· ≈ $0.45 DPS · 48 GB scanned · (running…)           (mid-run live)
+```
+
+### 12.4 Tooltip (multi-line via title attribute)
 
 ```
 Current run scanned 173 GB of Grail data.
-Cost estimate at standard DPS pricing: $1.12-$1.61 per run.
+Cost estimate at standard DPS pricing: $1.12–$1.61 per run.
 
 Cache: 0/113 queries served from the 24h Document Store cache.
 
@@ -1008,20 +1590,37 @@ Annual cost projection at this scale (assuming similar runs):
 Numbers are upper-bound estimates at $0.01/GiB. Your contract may be cheaper.
 ```
 
+### 12.5 Projected per-tenant-scale cost table
+
+From the v2.5.x perf report, projected per-run cost AFTER all v2.5.x
+optimizations:
+
+| Tenant scale | Tier | Cold run | Warm run | Avg 3×/day | Annual @ daily |
+|---|---|---:|---:|---:|---:|
+| Small (~54 hosts) | exact | $1.12–$1.61 | $0 | $0.37–$0.54 | $135–$196 |
+| Medium (~5k hosts) | large | $1.30–$8 | $0 | $0.43–$2.67 | $158–$975 |
+| Large (~10k hosts) | large | $2.60–$16 | $0 | $0.87–$5.33 | $317–$1 950 |
+| xLarge (~80k hosts) | xlarge | $22–$34 | $0 | $7.33–$11.33 | $2 680–$4 140 |
+| xxLarge (~250k hosts) | xlarge | $68–$105 | $0 | $22.67–$35 | $8 280–$12 775 |
+
+Without Scale Tier (forcing Exact on xlarge): projected ~$1 800/run at
+80k hosts; multiple log queries would hit Grail timeout.
+
 ---
 
-## 12. Snapshot persistence
+## 13. Snapshot persistence
 
-> Source: `ui/app/hooks/useAssessmentHistory.ts`. Independent of query cache.
+Source: `ui/app/hooks/useAssessmentHistory.ts`. Independent of query
+cache.
 
-### 12.1 What's persisted
+### 13.1 What's persisted
 
 ```ts
 interface AssessmentSnapshot {
-  id: string;
-  timestamp: string;        // ISO
+  id: string;                // generated UUID
+  timestamp: string;         // ISO
   totalScore: number;
-  tenant: string;
+  tenant: string;            // tenant subdomain (short identifier)
   capabilities: Array<{
     name: string;
     color: string;
@@ -1038,59 +1637,61 @@ interface AssessmentSnapshot {
 }
 ```
 
-### 12.2 Storage layout
+### 13.2 Storage layout
 
 - localStorage key: `ppa-assessment-history` (cache for fast UI startup)
 - Document Store type: `ppa-snapshot`
 - Document ID: `cca-<snapshot.id>`
-- Retention: keep 15 days, deduplicate to one per calendar day, delete
-  older from Document Store.
+- Retention policy: keep all snapshots for 15 days in UI, but only
+  one per calendar day in Grail (latest survives, older same-day ones
+  get deleted from Doc Store).
 
-### 12.3 When a snapshot is saved
+### 13.3 When a snapshot is saved
 
 In `CoverageAssessment.tsx`'s save effect: whenever a real run transitions
-from loading=true → false AND `capabilities.length > 0` AND the
-capability score signature differs from the last saved one.
+`loading=true → false` AND `capabilities.length > 0` AND the capability
+score signature differs from the last saved one.
 
-**Demo runs do NOT save snapshots.** Guarded by `if (demoScenario) return`
-to prevent canned values from polluting Evolution Over Time history.
+**Demo runs do NOT save snapshots.** Guarded by `if (demoScenario) return`.
 
-### 12.4 Evolution Over Time view
+### 13.4 Evolution Over Time view
 
-`ComparisonPage.tsx`. Lets the user pick any two snapshots and see:
-- Side-by-side radar diff
+`ComparisonPage.tsx` lets the user pick any two snapshots and see:
+- Side-by-side radar diff (overlaid)
 - Per-criterion deltas
-- Tier movement (Foundation → Operational, etc.)
+- Tier movements (Foundation → Operational etc.)
+- Per-capability score change
 
 A "Save current run" CTA explicitly persists if the user wants to
 override the auto-save dedup.
 
 ---
 
-## 13. Build, deploy, run
+## 14. Build, deploy, run
 
-### 13.1 Prerequisites
+### 14.1 Prerequisites
 
-- Node.js 20+ (24 recommended per dt-app's warning)
+- Node.js 20+ (24 LTS recommended per dt-app's warning)
 - npm 10+
-- `npm ci` (NEVER `npm install` — package-lock pins required versions)
-- OAuth scopes (declared in `app.config.json`):
+- `npm ci` only — never `npm install` (package-lock pins required
+  versions, particularly Strato subpath imports)
+- OAuth scopes declared in `app.config.json` (11 scopes total):
   ```
   storage:logs:read, storage:events:read, storage:spans:read,
   storage:metrics:read, storage:entities:read, storage:bizevents:read,
   storage:buckets:read, storage:system:read,
-  document:documents:read, document:documents:write, document:documents:delete
+  document:documents:read, document:documents:write,
+  document:documents:delete
   ```
 
-### 13.2 Commands
+### 14.2 Commands
 
 ```sh
 # Local dev with hot reload
 node_modules/.bin/dt-app dev
-# → http://localhost:3000/ui (or 3001 if 3000 occupied)
-# → Embedded URL: https://<tenant>.apps.dynatrace.com/ui/apps/local-dev-server/?locationAppIds=...
+# Opens browser to OAuth on first run; prints embedded URL.
 
-# Typecheck only (fast)
+# Typecheck only (fast, ~5 s)
 npx tsc --noEmit -p ui/tsconfig.json
 
 # Full prod bundle
@@ -1100,214 +1701,984 @@ node_modules/.bin/dt-app build
 node_modules/.bin/dt-app deploy
 ```
 
-### 13.3 Version bump procedure
+### 14.3 Version bump procedure
 
-To deploy a new version, bump BOTH:
+Bump BOTH:
+- `app.config.json` → `"version": "X.Y.Z"`
+- `ui/app/appVersion.ts` → `export const APP_VERSION = "X.Y.Z"`
 
-```sh
-# 1. app.config.json
-"version": "2.5.2",  →  "2.5.3"
+If you skip either, the app catalog and the PDF report will disagree.
 
-# 2. ui/app/appVersion.ts
-export const APP_VERSION = "2.5.2";  →  "2.5.3"
-```
+### 14.4 Common deploy errors
 
-If you skip either, the app catalog and the PDF reports will disagree.
+| Error | Cause | Fix |
+|---|---|---|
+| HTTP 400 "same version already installed with different checksum" | Bumped code but not version, or vice versa | Bump version in BOTH files |
+| HTTP 403 Forbidden | OAuth user lacks `app-engine:apps:install` scope on target tenant | Use `dt-app dev` (no install needed). Request install rights from the tenant admin. |
+| Port 3000 already in use | Old `dt-app dev` zombie | `lsof -i :3000` → `kill <pid>`. Or accept port 3001 (dt-app picks automatically). |
+| Stale tokens, prompts browser | `.dt-app/.tokens.json` exp < now | Expected. Browser SSO completes the refresh. |
 
-### 13.4 Deploy gotchas
-
-| Error | Fix |
-|---|---|
-| HTTP 400 "same version already installed" | Bump version (both files above) |
-| HTTP 403 Forbidden | OAuth user lacks `app-engine:apps:install` on target. Use `dt-app dev` instead (no install needed). |
-| Port 3000 already in use | Old `dt-app dev` zombie. `lsof -i :3000` → `kill <pid>` |
-| Stale tokens, prompts browser | Expected if `.dt-app/.tokens.json` exp < now. Browser SSO completes refresh. |
-
-### 13.5 Where the OAuth tokens live
+### 14.5 OAuth token cache
 
 `.dt-app/.tokens.json` in the project root. Two tokens:
-- `toolkit_token` — for tooling (build, dev server). Wide scope. Tied to
-  the user's Dynatrace SSO identity.
+- `toolkit_token` — for tooling (build, dev server). Wide scope, tied
+  to user's SSO identity, includes the tenant URL.
 - `app_token` — for runtime API calls during local dev. Narrower scope
   matching `app.config.json#scopes`. Per-tenant.
 
-**Treat this file as sensitive.** Don't commit. Don't paste. Refresh
-fails (HTTP 401 from sso.dynatrace.com) require deleting the file and
-re-running `dt-app dev` to get fresh tokens via SSO.
+**Treat this file as sensitive.** Don't commit. Don't paste content.
+Refresh failures (HTTP 401 from sso.dynatrace.com) require deleting
+the file and re-running `dt-app dev` to get fresh tokens via SSO.
+
+### 14.6 Deployment lessons learned during v2.5.x
+
+- **First deploy after a feature batch should NOT skip version bump.**
+  We hit HTTP 400 "same version already installed" twice during v2.5.x;
+  bump to 2.5.1 / 2.5.2 fixed it. Easy mistake.
+- **Browser-cached bundle survives deploy.** After deploy, hard refresh
+  (Cmd+Shift+R) in the browser; otherwise users may see the old
+  bundle for up to several minutes.
+- **OAuth tokens auto-refresh on `dt-app dev`, but only if the refresh
+  token is still valid.** Refresh tokens expire on a ~weeks scale.
+  When that happens you'll see "UNSUCCESSFUL_OAUTH_REFRESH_TOKEN_VALIDATION_FAILED";
+  delete `.dt-app/.tokens.json` and re-authenticate.
 
 ---
 
-## 14. Design decisions
+## 15. Design decisions journal
 
-These are choices that look weird in code but are deliberate. Don't
-"fix" them without understanding why.
+These are deliberate choices that look weird in code but have a
+specific reason. Don't "fix" them without understanding why.
 
-### 14.1 The 24h cache is keyed by ORIGINAL query string, but executes the SCALED query
+### 15.1 The 24h cache is keyed by ORIGINAL query string
 
-The in-memory `cache: Map<string, number>` in `useCoverageData.executeAllUnique`
-uses the ORIGINAL query string as the key. The actual Grail call uses
-`scaleQuery(q, tier)`. This is intentional — downstream scoring looks up
-results by the original criterion.query field. Switching to scaled keys
-would require rewriting the entire scoring path.
+The in-memory `cache: Map<string, number>` in
+`useCoverageData.executeAllUnique` uses the ORIGINAL query string as
+the key. The actual Grail call uses `scaleQuery(q, tier)`. This is
+intentional — downstream scoring looks up results by the criterion's
+`query`/`queryB` fields. Switching to scaled keys would require
+rewriting the entire scoring path.
 
-### 14.2 Two-phase execution adds latency the first time
+### 15.2 Two-phase execution adds latency the first time
 
-Phase 1 (entity counts) adds ~100–500ms of wall time even when no skips
-happen. We measured this on our dev tenant — 620ms total instead of ~520ms.
-Worth it because: (a) entity counts hit the cache on day-2 anyway,
-(b) the savings on tenants WHERE skips happen are large.
+Phase 1 (entity counts) adds ~100–500 ms of wall time even when no
+skips happen. Measured on our test tenant: 620 ms total instead of
+~520 ms. Worth it because: (a) entity counts hit the cache on day-2
+anyway, (b) the savings on tenants WHERE skips happen are large
+(17 numerator queries pruned in legacy-no-k8s demo).
 
-### 14.3 Demo mode runs the full scoring pipeline against synthetic values
+### 15.3 Demo mode runs the full scoring pipeline against synthetic values
 
 `buildCoverageFromScenario` doesn't just return canned capability
-scores. It runs the actual maturity computation, threshold checks, tier
-counting, weighted score formulas — same code path the live run uses,
-just with synthesized criterion values. This exercises the scoring
-logic in CI-like situations even without Grail.
+scores. It runs the actual maturity computation, threshold checks,
+tier counting, weighted score formulas — same code path the live run
+uses. This exercises the scoring logic against scripted data.
 
-### 14.4 Demo entity-count synthesis ALSO drives C3
+### 15.4 Demo entity-count synthesis ALSO drives C3
 
 A scenario with `k8sClusters: 0` causes:
 - `buildCoverageFromScenario` to force value=0 on k8s-dependent criteria
 - The demo perf-entry synthesizer to mark those criteria as `skipped: true`
 
-Both go through `zeroEntityCountQueriesFor(scenario)`. If you add a new
-entity class as a scenario field, also map it in `ENTITY_KEY_TO_QUERY`
-in `demo/scenarios.ts`.
+Both go through `zeroEntityCountQueriesFor(scenario)`. If you add a
+new entity class as a scenario field, also add it to
+`ENTITY_KEY_TO_QUERY` in `demo/scenarios.ts`.
 
-### 14.5 `useCoverageData(tier, demoScenario, scaleMeta)` accepts an optional 3rd arg
+### 15.5 `useCoverageData(tier, demoScenario, scaleMeta)` accepts an optional 3rd arg
 
 `scaleMeta` exists ONLY so the perf JSON can record `autoTier` and
 `manualOverride` (the data lives in `useScaleTier`'s state, but the
 JSON builder is in `useCoverageData`). Don't promote `scaleMeta` to
-required — backward compatibility for any code that calls
-`useCoverageData(tier)` without it.
+required — backward compat for callers that use `useCoverageData(tier)`.
 
-### 14.6 `denominatorConstant` and `queryB` are mutually exclusive
+### 15.6 `denominatorConstant` and `queryB` are mutually exclusive
 
 Set ONE per criterion, never both. Scoring honors `queryB` first if
 both are set, which silently masks the constant. TypeScript can't
 catch this. The contract is the comment block in `queries.ts:22-30`
 and a code review rule.
 
-Eleven criteria currently use `denominatorConstant`. Their previous
-queryB strings scanned ~15 GB just to return a literal — see
-`docs/PERFORMANCE-REPORT-80K-HOSTS.md` §4 for the audit.
+### 15.7 AI Obs uses 72h; other span queries use 2h
 
-### 14.7 AI Obs uses 72h, other span queries use 2h
+Pre-v2.5.1 AI Obs used 2h to match the rest. On our test tenant, MCP
+confirmed the 2h window returned 0 gen_ai spans while 72h returned
+244 964 (workload is bursty: LLM batch jobs, async). Switched to 72h
+for ai1–ai9 only. Other span-based criteria (Application Observability)
+stay at 2h because their workloads are continuous (microservices,
+constant request traffic).
 
-Pre-v2.5.1 AI Obs used 2h to match the rest. On our dev tenant, MCP confirmed
-the 2h window returned 0 gen_ai spans while 72h returned 244 964
-(workload is bursty: LLM batch jobs, async). Switched to 72h for ai1–ai9
-only. Other span-based criteria (Application Observability) stay at 2h
-because their workloads are continuous.
+When adding a new span criterion, ask: is the signal continuous or
+bursty? Continuous → 2h. Bursty (queues, batch jobs, infrequent user
+actions) → 24h–72h.
 
-When adding a new span criterion, ask: is the signal you're measuring
-continuous or bursty? If continuous, 2h. If bursty (queues, batch jobs,
-infrequent user actions), 24h–72h.
+### 15.8 `scaleQuery` does NOT rewrite Davis problems queries
 
-### 14.8 `scaleQuery` does NOT rewrite Davis problems queries
+`isHotSource(q)` matches only `fetch logs|spans|events|bizevents`.
+Problem queries (`fetch dt.davis.problems`) stay verbatim across
+tiers because:
+- They already use 72h (sparse signal).
+- Narrowing to 5 min would zero them out.
+- Davis dedup keeps them small anyway.
 
-`isHotSource(q)` matches only `fetch logs|spans|events|bizevents`. Problem
-queries (`fetch dt.davis.problems`) stay verbatim across tiers, because:
-- They already use a 72h window (sparse signal)
-- Narrowing to 5min would zero them out
-- Davis dedup keeps them small anyway
+If you add a new criterion using `fetch dt.security.events` and want it
+narrowed in Large/xLarge, add `'security'` to the `isHotSource` regex.
+Otherwise it'll always run at the verbatim window.
 
-### 14.9 Strato banner colors are semantic, not aesthetic
+### 15.9 Strato banner colors are semantic, not aesthetic
 
-Yellow `Background.Container.Warning` = "live sampled, informational
-warning"
-Magenta `Background.Container.Primary` = "demo, completely different
-context"
+- Yellow `Background.Container.Warning` = "live sampled, informational"
+- Magenta `Background.Container.Primary` = "demo, completely different
+  context"
 
 These can't be swapped or made customizable. The whole point is that
-screenshots can be classified at a glance.
+screenshots can be classified at a glance — "is this a real measurement
+or a synthetic demo?".
 
-### 14.10 Dev mode auto-activates when a demo is loaded
+### 15.10 Dev mode auto-activates when a demo is loaded
 
 `useDevMode(demoActive)` returns `true` if `demoActive` is true,
-regardless of URL/localStorage. This is because a shareable demo
-link (`?demo=xlarge-telco`) would otherwise render the magenta banner
-without the tier-switch / exit-demo buttons — broken UX. Demo activation
-implies "we need the controls", so the gate opens.
+regardless of URL/localStorage flag. A shareable demo link
+(`?demo=xlarge-telco`) would otherwise render the magenta banner
+without the tier-switch / exit-demo buttons — broken UX. Demo
+activation implies "we need the controls", so the gate opens.
 
-### 14.11 `forceRefresh` is separated from `refresh`
+### 15.11 `forceRefresh` is separated from `refresh`
 
 `refresh` triggers a new assessment run (`setRunId(n+1)`). `forceRefresh`
-clears the cache but doesn't re-run. The DemoControlBar's Force-refresh
-button calls both in sequence — that's the common case. But callers
-that want to invalidate without re-running can call only `forceRefresh`.
+clears the cache but doesn't re-run. The Force-refresh button calls
+both in sequence — common case. But callers that want to invalidate
+without re-running can call only `forceRefresh` (e.g. before navigating
+away).
 
-### 14.12 Snapshot save guards on BOTH `demoScenario` AND `sampled`
+### 15.12 Snapshot save guards on BOTH `demoScenario` AND would-be `sampled`
 
-We could have guarded only on `demoScenario != null` (demo mode), but
-also added `sampled: boolean` to the CoverageData return. This was for
-a future "save with disclaimer" feature where Large/xLarge runs save
-snapshots tagged as "sampled". Currently `sampled` isn't read by the
-snapshot save — keeping the field for that future use.
+We could have guarded only on `demoScenario != null` (demo mode). But
+we also surface `sampled: boolean` on `CoverageData` for a future
+"save with disclaimer" feature where Large/xLarge runs would tag
+snapshots as "sampled". Currently `sampled` isn't read by the snapshot
+save logic — field is there for the future use.
 
 ---
 
-## 15. Known limitations and false-positive guidance
+## 16. The denominatorConstant migration
 
-### 15.1 Capabilities that score low because of missing data, not bugs
+### 16.1 The waste pattern
+
+Pre-v2.5.0, the codebase had **11 criteria** whose `queryB` ran a heavy
+Grail query and then DISCARDED the result, replacing it with a
+hardcoded literal:
+
+```dql
+# Example: l9 queryB
+fetch logs
+| filter timestamp > now() - 2h
+| summarize count = count()
+| fields always5 = 5
+
+# Example: s2 queryB
+fetch events
+| filter event.kind == "SECURITY_EVENT"
+| filter timestamp > now() - 24h
+| summarize count = countDistinct(event.type)
+| fields expected = 5
+
+# Example: t3 queryB
+fetch dt.davis.problems, from:now()-72h
+| filter not(dt.davis.is_duplicate)
+| summarize count = countDistinct(event.category)
+| fields expected = 4
+```
+
+The `fields <name> = N` directive replaces the output columns with a
+literal. The query scans 15 GB of logs JUST to return the constant 5.
+
+### 16.2 Discovery
+
+Found during the v2.5.x perf-waste audit by inspecting
+`topExpensiveQueries` in a real-tenant perf JSON. Three of the top-10
+queries had `usedByCriteriaCount = 1` AND output suspicious literal-
+like names (`always1`, `always2`, `always5`).
+
+Then `grep -E "fields always|fields expected" queries.ts` found 11
+total instances — 3 with `always{N}` (logs) and 8 with `expected = N`
+(events / spans / bizevents / problems).
+
+### 16.3 The fix
+
+Added `denominatorConstant?: number` to the `Criterion` type:
+
+```ts
+interface Criterion {
+  // ...
+  queryB?: string;
+  /** Hard-coded denominator when the expected value is a known constant
+   *  (e.g., "5 expected log levels"). Use this INSTEAD of queryB whenever
+   *  the denominator would be a query that just discards its result and
+   *  returns a literal — those queries waste ~15 GB of Grail scan each
+   *  for zero information gain.
+   *  Mutually exclusive with queryB; useCoverageData honors queryB first. */
+  denominatorConstant?: number;
+  thresholds: Threshold[];
+}
+```
+
+Scoring updated to handle the new field (see §2.2 step 3b).
+
+### 16.4 Complete migration list
+
+| Criterion | Capability | Old queryB (truncated) | New `denominatorConstant` |
+|---|---|---|---:|
+| l9 | Log Analytics | `fetch logs ... fields always5 = 5` | 5 |
+| l11 | Log Analytics | `fetch logs ... fields always2 = 2` | 2 |
+| l15 | Log Analytics | `fetch logs ... fields always1 = 1` | 1 |
+| s2 | App Security | `fetch events ... fields expected = 5` | 5 |
+| s7 | App Security | `fetch events ... fields expected = 5` | 5 |
+| t3 | Threat Obs | `fetch dt.davis.problems ... fields expected = 4` | 4 |
+| ai3 | AI Obs | `fetch spans ... fields expected = 5` | 5 |
+| b2 | Biz Obs | `fetch bizevents ... fields expected = 10` | 10 |
+| b4 | Biz Obs | `fetch bizevents ... fields expected = 5` | 5 |
+| sd3 | Software Delivery | `fetch events ... fields expected = 5` | 5 |
+| sd4 | Software Delivery | `fetch events ... fields expected = 10` | 10 |
+
+### 16.5 Math identity verification
+
+For criterion `t3` (Problem category coverage):
+- Before: `value = valueA / queryB_result × 100 = valueA / 4 × 100`
+- After:  `value = valueA / denominatorConstant × 100 = valueA / 4 × 100`
+
+Identical. The DQL just returned `4` after scanning 60 MB of problems.
+
+Verified by running side-by-side cold runs (pre-fix vs post-fix) and
+comparing all 9 capability scores: **all identical**.
+
+### 16.6 Measured savings
+
+On the test tenant:
+- Before fix: 123 unique queries, 220 GB scanned, $1.33–$2.05
+- After fix:  113 unique queries, **173 GB scanned**, $1.05–$1.61
+- **Reduction: -10 queries (-8%), -47 GB scan (-21.4%), -$0.44 (-21.5%)**
+
+Wall-time also dropped from 9.88 s → 8.62 s (-12.7%) because the 10
+extra queries took time even if they returned constants.
+
+The 11 → 10 query count comes from dedup: `s7` and `sd3` had IDENTICAL
+queryB strings, so the `Set` dedup collapsed them. Removing both
+saved only 1 unique-query execution.
+
+### 16.7 Caveats
+
+- The `Criterion` type allows BOTH `queryB` AND `denominatorConstant`
+  to be set. Scoring honors `queryB` first, silently ignoring the
+  constant. TypeScript can't enforce mutual exclusion. Code review rule.
+- If a future criterion legitimately needs to filter the denominator
+  query (e.g. "events of kind X out of distinct kinds Y in the same
+  window"), that's still a `queryB`, not a `denominatorConstant`.
+- When `Math.min(..., 100)` caps the value, the constant denominator
+  case behaves identically to the queryB case.
+
+---
+
+## 17. AI Observability window fix — full forensics
+
+### 17.1 The symptom
+
+On the deployed app pointing at our test tenant, the AI Observability
+capability consistently showed 0% / 0 criteria passed of 9, despite
+the tenant clearly running LLM workloads (visible in the Dynatrace
+tenant directly).
+
+### 17.2 The investigation via MCP
+
+Ran the canonical AI fingerprint at three windows:
+
+```dql
+fetch spans, from:now()-2h
+| filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name)
+      or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name)
+| summarize count(), distinct_providers = countDistinct(coalesce(gen_ai.system, gen_ai.provider.name))
+```
+
+| Window | gen_ai spans | distinct providers |
+|---:|---:|---:|
+| 2h | 0 | 0 |
+| 24h | 0 | 0 |
+| **72h** | **244 964** | **4** |
+
+→ The tenant has AI workloads, but they're bursty (batch jobs running
+once a day or less frequently). The 2h window the app used since
+v2.3.51 was too narrow to catch them.
+
+### 17.3 The historical context
+
+`CHANGELOG.md` shows v2.3.51 reduced AI Obs from 72h to 2h with
+"90% cost reduction" as the motivation. That was correct for the
+cost side, but introduced a hidden failure mode: tenants with
+sparse AI activity score 0%.
+
+### 17.4 The fix
+
+Reverted just the AI Obs criteria (ai1–ai9) back to 72h. Other span
+queries (Application Observability, the t-series log queries) kept
+their 2h windows.
+
+Mechanical sed replacement:
+```sh
+sed -i '' "${ai_block_start},${ai_block_end}s/from:now()-2h/from:now()-72h/g" queries.ts
+```
+
+16 substring swaps inside the AI Obs block (lines 684–755), 0
+occurrences elsewhere in the file. Verified by `grep -c`.
+
+### 17.5 Cost impact analysis
+
+Per AI Obs query at 72h: ~5 GB scanned on the test tenant. There are
+9 AI Obs criteria with related queries that dedup to ~5 unique queries
+(some share denominators). Net additional scan: ~25 GB per run on
+small tenants, OR ~$0.30 per run.
+
+For Large/xLarge tier: `scaleQuery` STILL rewrites these to 30 min /
+5 min windows because `fetch spans` is a hot source. So the cost
+impact only hits Exact tier. xLarge tenants accept the AI Obs
+sampling tradeoff (and may show 0% AI even if they have activity —
+documented in the Scale Tier banner).
+
+### 17.6 Post-fix verification
+
+Re-ran the canonical query with the new window via MCP:
+
+```dql
+fetch spans, from:now()-72h | filter ... gen_ai ...
+| summarize count = countDistinct(coalesce(dt.entity.service, service.name))
+```
+
+Returned `count = 2` (services with AI) — matches expectation.
+
+Provider diversity (ai3):
+
+```dql
+fetch spans, from:now()-72h | filter ... gen_ai ...
+| fieldsAdd provider = coalesce(gen_ai.system, gen_ai.provider.name)
+| summarize countDistinct(provider)
+```
+
+Returned `countDistinct(provider) = 4`. With `denominatorConstant: 5`
+(see §16), score = 80% — passes threshold.
+
+Expected final AI Obs capability score on this tenant: ~22% (3 of 9
+criteria passing). Up from 0%.
+
+### 17.7 Side effects to watch
+
+- The AI Obs scan budget per Exact-tier run increases by ~25 GB.
+- xLarge tenants STILL won't see AI activity if it's >5 min between
+  ingest events (Scale Tier rewrites the window). This is by design
+  but customers may complain. Mitigation: the Scale Tier banner says
+  "values are sampled estimates".
+- If a future tenant has even more bursty AI (only fires weekly), 72h
+  would also miss it. We'd need 7d for that, which raises the cost.
+  Currently no signal that this is a problem.
+
+---
+
+## 18. Concrete measurements from the test tenant
+
+These numbers are from real runs against our development tenant
+(~54 hosts / ~87 services / etc.). They're useful as calibration when
+adding new criteria or projecting cost at other scales.
+
+### 18.1 Tenant scale snapshot
+
+```
+hosts:                    54
+services:                 87
+serviceMethods:            6
+processGroups:           397
+processInstances:        731
+applications:              2
+mobileApps:                0
+k8sClusters:               7
+k8sNamespaces:            65
+k8sNodes:                 35
+syntheticTests:            4
+syntheticLocations:       96
+httpChecks:                7
+networkInterfaces:        54
+disks:                    54
+```
+
+### 18.2 Raw data volume in standard windows
+
+| Source | 2h | 24h | 72h |
+|---|---:|---:|---:|
+| logs | 9.4M records | ~110M | ~330M |
+| spans | 1.6M records | ~20M | ~62M |
+| events | 20.3K records | ~250K | ~730K |
+| bizevents | 78K records | ~970K | ~2.9M |
+| problems (Davis) | 110K records | n/a | 244K records |
+| security events | 0 records (none ingested) | 0 | 0 |
+
+### 18.3 Event kind distribution (72h)
+
+```
+SYNTHETIC_EVENT:  270 691  ← continuous, includes synthetic checks
+DAVIS_EVENT:      191 889  ← Davis insights, dedup-heavy
+SDLC_EVENT:        25 200  ← SDLC pipeline events (deploy + release)
+DAVIS_PROBLEM:      9 120  ← Davis problem entries
+SECURITY_EVENT:         0  ← TENANT DOES NOT INGEST
+CUSTOM_DEPLOYMENT:      0  ← TENANT DOES NOT INGEST
+LOG:                    0  ← TENANT DOES NOT INGEST
+```
+
+Implications for which criteria pass:
+- `s1`, `s2`, `s3` (App Security on SECURITY_EVENT) will always score 0
+  on this tenant. C3 doesn't catch this (the filter is on `event.kind`,
+  not entity).
+- `sd2` (Software Delivery on CUSTOM_DEPLOYMENT) will always score 0.
+- `l15` (Log-based events on `event.kind == "LOG"`) will always score 0.
+
+### 18.4 Bizevent metadata (72h)
+
+```
+total bizevents:                  4 373 738
+distinct event.type:                    963
+distinct event.provider:                 64
+```
+
+In 2h window:
+```
+total bizevents:                     70 135
+distinct event.type:                    143
+distinct event.provider:                 25
+```
+
+70K bizevents in 2h is enough for all `b1–b8` criteria to pass their
+thresholds. 143 distinct types far exceeds the `b2` threshold of 10.
+
+### 18.5 Per-source scan cost on cold run (Exact tier)
+
+After the v2.5.x optimizations:
+
+```
+logs:        23 queries  ⇒  147 GB scanned   p50=1035ms p95=2551ms max=2889ms
+spans:       22 queries  ⇒   24 GB           p50=565ms  p95=965ms  max=1876ms
+events:      10 queries  ⇒  0.4 GB           p50=543ms  p95=1615ms max=1615ms
+bizevents:    9 queries  ⇒  0.4 GB           p50=546ms  p95=605ms  max=605ms
+metrics:     19 queries  ⇒  0 GB             p50=588ms  p95=914ms  max=914ms
+entity:      23 queries  ⇒  0 GB             p50=538ms  p95=1014ms max=1107ms
+problems:     7 queries  ⇒  0.5 GB           p50=546ms  p95=673ms  max=673ms
+─────────────────────────────────────────────────────────────────
+TOTAL:      113 queries  ⇒  173 GB
+WALL-TIME (concurrent at CONCURRENCY=10):  8.62 s
+DPS estimate:  $1.05 – $1.61
+```
+
+### 18.6 Top-10 expensive queries on cold run (by scannedBytes)
+
+```
+1. fetch logs ... 24h ... countDistinct(log.source)   15.18 GB  1 criterion
+2. fetch logs ... 2h  ... countDistinct(log.source)   15.18 GB  3 criteria  (good dedup)
+3. fetch logs ... 2h  ... countDistinct(loglevel)     15.18 GB  1 criterion
+4. fetch logs scanLimitGBytes:-1 ... bucket           15.18 GB  1 criterion
+5. fetch logs ... 2h | summarize count()              15.19 GB  9 criteria  (BEST dedup)
+6. fetch logs ... isNotNull(dt.process_group.id)      15.18 GB  1 criterion
+7. fetch logs ... isNotNull(dt.entity.host) count     15.11 GB  1 criterion
+8. fetch logs ... isNotNull(dt.entity.host) distinct  15.11 GB  1 criterion
+9. fetch logs ... sources by host >= 2                15.10 GB  1 criterion
+10. fetch logs ... trace_id                           15.10 GB  2 criteria
+```
+
+Observation: 8 of the top 10 are log queries that scan the FULL 2h
+log corpus (~15 GB on this tenant) with different filters. They have
+the same scan cost because the filters happen AFTER the scan.
+
+The dedup-amortised cost (`scanBytesPerCriterion`) reveals where
+deduplication is working:
+- Query #5 (`summarize count()`): 15.19 GB / 9 criteria = **1.69 GB/criterion**
+- Query #1 (`countDistinct(log.source)` 24h): 15.18 GB / 1 = **15.18 GB/criterion**
+
+Query #5 is essentially the "tax" for log denominators across multiple
+criteria. Query #1 is a unique numerator that doesn't amortise.
+
+### 18.7 Demo scenarios projected scan/cost
+
+| Scenario | Hosts | Tier | Total scan (simulated) | DPS cost |
+|---|---:|---|---:|---:|
+| small-corp | 240 | exact | 0.6 GB | ~$0.006 |
+| medium-bank | 8 500 | large | 18 GB | ~$0.18 |
+| legacy-no-k8s | 12 000 | large | 24 GB | ~$0.24 |
+| xlarge-telco | 80 000 | xlarge | 3 200 GB | ~$32 |
+| xxlarge-cloud | 250 000 | xlarge | 9 800 GB | ~$98 |
+
+These were CALIBRATED to match what we'd expect at those scales
+WITHOUT Scale Tier sampling — the "Performance comparison" panel in
+demo mode then shows "without Scale Tier ≈ 176 TB / $1,800" to
+contrast.
+
+---
+
+## 19. Bug history
+
+Bugs found and fixed during the v2.5.x sprint, kept here so future
+debugging can reference known patterns.
+
+### 19.1 False positive: `dt.entity.service` after `expand`
+
+**Initial claim**: a criterion's queryB pattern
+`fetch dt.entity.service | fieldsAdd t = tags | expand t | summarize count = countDistinct(dt.entity.service)`
+returned `FIELD_DOES_NOT_EXIST` because after `expand t`, the row
+context drops `dt.entity.service`.
+
+**Reality**: the actual `queries.ts` source at the time used
+`countDistinct(id)` (correct) — the false positive was a transcription
+mistake while composing the test query for MCP.
+
+**Lesson**: when validating queries via MCP, copy the literal query
+string from queries.ts, don't retype.
+
+### 19.2 False positive: filter ordering optimization
+
+**Initial claim**: queries like
+`filter isNotNull(dt.entity.host) and isNotNull(X)` should reorder
+to `filter isNotNull(X) and isNotNull(dt.entity.host)` for a 50%
+scan reduction.
+
+**Reality**: the cost spread (1.57 GB vs 11.81 GB) is driven by
+which COLUMN the filter touches, not the order. Filter pushdown
+isn't sensitive to order in DQL. Re-audit of queries.ts showed
+all multi-filter queries already place the cheap column first.
+
+**Lesson**: column-loading is the dominant scan cost, not pipeline
+ordering. The Grail planner is smart enough about pipeline order.
+
+### 19.3 False positive: missing concurrency cap
+
+**Initial claim**: the assessment fires all queries via Promise.all,
+needing a CONCURRENCY cap.
+
+**Reality**: `useCoverageData.ts:222` already had `CONCURRENCY = 10`
+since pre-v2.5.
+
+**Lesson**: read the existing code before proposing fixes. Done.
+
+### 19.4 Real bug: AI Observability 0% on bursty tenants
+
+See §17 for the full forensics. The 2h window introduced in v2.3.51
+made AI Obs invisible on tenants with bursty AI workloads.
+
+### 19.5 Real bug: 11 wasteful constant-return queries
+
+See §16 for the full migration. Discovered via the topExpensiveQueries
+ranking with `usedByCriteriaCount = 1` filter.
+
+### 19.6 Real artifact: `scanLimitGBytes: -1`
+
+Criterion `l11` has a literal query with `scanLimitGBytes: -1`:
+
+```dql
+fetch logs, scanLimitGBytes:-1
+| filter timestamp > now() - 2h
+| summarize countDistinct(dt.system.bucket)
+```
+
+The `-1` value is suspicious — it likely means "no cap" in Grail (the
+query scanned 15 GB in the test, same as a no-cap query). The intent
+was probably either `scanLimitGBytes: 50` (a cap) OR omit the parameter.
+Functionally identical to omitting it. Left as-is during v2.5.x because
+it's not a correctness bug, just confusing syntax.
+
+### 19.7 Operational issue: MCP rate limit
+
+During investigation, the MCP gateway enforces a **5 calls per 20
+seconds** rate limit. Hit it twice during heavy validation. NOT a
+production app concern — the deployed app uses `@dynatrace-sdk/client-query`
+directly, not the MCP gateway. But anyone running validation queries
+manually needs to space them out.
+
+### 19.8 Operational issue: HTTP 400 same-version-install
+
+Hit this twice during v2.5.x deploys when forgetting to bump the
+version. The dt-app dev server is OK with same-version reloads but
+the cloud install endpoint requires monotonic versions. Always bump
+in both files (`app.config.json` AND `appVersion.ts`).
+
+### 19.9 Operational issue: HTTP 403 on demo tenant
+
+Tried to deploy to the public demo tenant. The OAuth user had toolkit
+access (build succeeded) but no `app-engine:apps:install` scope on
+that tenant (install failed with 403). Demo tenants are typically
+restricted to admin installs.
+
+Workaround: run `dt-app dev` locally pointing at demo. No install
+needed — the app runs from localhost and queries the demo's Grail
+in the user's SSO context.
+
+---
+
+## 20. Validation runbook (MCP queries)
+
+These are the MCP queries to run when validating a change, with
+expected outputs from our test tenant. Use them as regression checks.
+
+### 20.1 Tenant scale baseline
+
+```dql
+fetch dt.entity.host | summarize count()
+fetch dt.entity.service | summarize count()
+fetch dt.entity.process_group_instance | summarize processes = count()
+```
+
+Expected on test tenant: 54 / 87 / 731.
+
+### 20.2 Span volume (for App Obs queries)
+
+```dql
+fetch spans, from:now()-2h | summarize total = count()
+```
+
+Expected: ~1.6 million.
+
+### 20.3 AI workload detection
+
+```dql
+fetch spans, from:now()-72h
+| filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name)
+      or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name)
+| summarize ai_total = count(),
+            distinct_providers = countDistinct(coalesce(gen_ai.system, gen_ai.provider.name)),
+            distinct_services = countDistinct(coalesce(dt.entity.service, service.name))
+```
+
+Expected: ~244K spans, 4 providers, 2 services. If `ai_total = 0`
+even at 72h, the tenant genuinely has no AI workloads.
+
+### 20.4 Event kind distribution
+
+```dql
+fetch events, from:now()-72h
+| summarize cnt = count(), by:{event.kind}
+| sort cnt desc
+```
+
+Expected kinds: SYNTHETIC_EVENT, DAVIS_EVENT, SDLC_EVENT, DAVIS_PROBLEM.
+Look for SECURITY_EVENT and CUSTOM_DEPLOYMENT — if either is 0,
+related criteria will score 0 (not a bug, tenant truth).
+
+### 20.5 Bizevent diversity
+
+```dql
+fetch bizevents, from:now()-72h
+| summarize total = count(),
+            distinct_types = countDistinct(event.type),
+            distinct_providers = countDistinct(event.provider)
+```
+
+Expected: ~4.4M / ~960 types / ~64 providers.
+
+### 20.6 Davis problem categories (for t3)
+
+```dql
+fetch dt.davis.problems, from:now()-72h
+| filter not(dt.davis.is_duplicate)
+| summarize count = countDistinct(event.category)
+```
+
+Expected: 4 (matches `denominatorConstant: 4` for t3).
+
+### 20.7 Log volume + heaviness check
+
+```dql
+fetch logs
+| filter timestamp > now() - 2h
+| summarize total = count()
+```
+
+Expected: ~9.4 million on the test tenant.
+
+```dql
+fetch logs
+| filter timestamp > now() - 2h
+| filter isNotNull(dt.entity.host)
+| summarize count = countDistinct(dt.entity.host)
+```
+
+Expected: 31 hosts (the 23 hosts that don't emit logs in 2h are
+either idle or use a different log path).
+
+### 20.8 Verifying a new criterion you're adding
+
+For any criterion with `queryB`:
+
+```dql
+{numerator}
+{denominator queryB}
+```
+
+Run both. Compute `value = num / denom * 100`. Sanity check:
+- Is the value between 0 and 100 (after capping)?
+- Does it match what you'd expect for this tenant?
+- If 100% — is that actually achievable for any tenant?
+- If 0% — is the filter so restrictive that no realistic tenant
+  would pass?
+
+If the criterion uses `denominatorConstant`:
+- Run only the numerator.
+- Compute `value = num / constant * 100`.
+- Same sanity check.
+
+### 20.9 Verifying scaleQuery doesn't break a new criterion
+
+For a criterion `q`, run all three:
+
+```dql
+{q}                                 # = scaleQuery(q, 'exact')
+fetch <src>, from:now()-30m, scanLimitGBytes:200 | {rest of q}    # = scaleQuery(q, 'large')
+fetch <src>, from:now()-5m,  scanLimitGBytes:50  | {rest of q}    # = scaleQuery(q, 'xlarge')
+```
+
+Confirm:
+- All three succeed (no `PARAMETER_MUST_NOT_BE_AN_AGGREGATION` etc.).
+- Result schema (column names) is identical across tiers.
+- Numeric values follow the expected pattern (Large smaller than
+  Exact for continuous signals, possibly 0 in xLarge for bursty
+  signals).
+
+---
+
+## 21. Migration from v2.4.x
+
+### 21.1 Snapshot compatibility
+
+`AssessmentSnapshot` schema unchanged. v2.4.x snapshots load and
+display in v2.5.x's Evolution Over Time view.
+
+### 21.2 Default behavior preserved on small tenants
+
+For tenants with ≤5 000 hosts:
+- `useScaleTier` returns `tier === 'exact'` automatically.
+- `scaleQuery(q, 'exact')` returns `q` verbatim.
+- No banner appears.
+- No DemoControlBar appears (gated by `isDev`).
+- Cache works behind the scenes — same-day re-runs are fast, but
+  the user sees the same numbers.
+
+A v2.4.x user upgrading to v2.5.x sees:
+- The DPS badge in the toolbar (NEW — customer-facing).
+- Faster repeat runs (cache invisible but obvious by speed).
+- Otherwise identical UX.
+
+### 21.3 Large/xLarge tenants — opt-in banner
+
+If a tenant's host count crosses 5 000:
+- Scale Tier auto-detects, picks `large`, narrows windows.
+- Yellow banner appears at the top of the assessment.
+- Coverage values become sampled (typically <5% drift).
+
+This is a NEW behavior for v2.5.x. Customers running on large tenants
+who previously timed out or paid $1 800 per run now get fast bounded
+runs with a disclosure banner.
+
+### 21.4 OAuth scopes — unchanged
+
+The 11 scopes in `app.config.json` are identical to v2.4.x. No
+re-consent prompt for upgrading customers.
+
+### 21.5 Customer-facing diff summary
+
+| What | v2.4.x | v2.5.x |
+|---|---|---|
+| Radar / cards / PDF | unchanged | unchanged |
+| Snapshot save / EOT | unchanged | unchanged |
+| Re-run within same day | full DPS | cache hit, ~$0 |
+| Run on >5k host tenant | full Exact (timeouts possible) | auto Large with banner |
+| Run on >50k host tenant | full Exact (timeouts very likely) | auto xLarge with banner |
+| Run on tenant without K8s/RUM | full scan including impossible criteria | C3 skips them silently |
+| AI Obs on bursty tenants | 0% (bug) | actual scores |
+| Toolbar | tenant + records | tenant + records + DPS badge |
+| Footer (customer) | How to Analyze | unchanged |
+| Footer (`?dev=1`) | none | DemoControlBar |
+
+### 21.6 SE/dev diff summary
+
+| What | v2.4.x | v2.5.x |
+|---|---|---|
+| Demo for big tenants | manual fake tenant access | 5 canned scenarios, zero DPS |
+| Perf observability | none | per-run JSON download |
+| Force-refresh | reload page (still ran cold) | dedicated button, clears Doc Store cache |
+
+---
+
+## 22. Debugging workflows
+
+### 22.1 "Customer reports 0% on capability X"
+
+```
+1. Is the tenant in xLarge tier?
+   → Banner visible, coverage is sampled estimate.
+   → Try forcing Exact tier to confirm — if value > 0, it's sampling.
+
+2. Run an MCP query for the numerator of one criterion in that capability.
+   → If 0: data isn't present (tenant truth, not a bug).
+   → If > 0 but app shows 0: bug, investigate further.
+
+3. Check if the queryB is an entity-count denominator that's 0.
+   → If yes, C3 is correctly skipping → expected 0.
+
+4. Check if the criterion has denominatorConstant set.
+   → If yes, verify the value isn't 0 or negative.
+
+5. Check the perf JSON for `cached: true` on those queries.
+   → If yes, the value is stale from before the data change.
+   → Force-refresh.
+```
+
+### 22.2 "App is too expensive on tenant Y"
+
+```
+1. Download the perf JSON.
+2. Sort by scannedBytes desc — look at topExpensiveQueries.
+3. Group by source — is logs > 95% of cost? (Expected.)
+4. Look at scanBytesPerCriterion — high values flag one-off queries.
+5. Check the tier — is it auto-detected correctly for this tenant?
+6. If tier is exact but the tenant is large: prompt for manual tier
+   switch or wait for next host-count detection.
+```
+
+### 22.3 "Run is slow"
+
+```
+1. Check the perf JSON's bySource wallTimeP95.
+   → If > 5s on logs: legitimate cold cost.
+   → If logs are < 1s p95: cache is hitting.
+2. Check `cacheHits / totalUniqueQueries`.
+   → < 50%: mostly cold, expected for first run of day.
+   → > 90%: cache is mostly hitting but something else is slow.
+3. Check `bySource.entity.wallTimeP95`. Should be < 1s.
+   → If > 1s: Smartscape query slow (Dynatrace internal issue).
+```
+
+### 22.4 "Demo scenario shows wrong score"
+
+```
+1. The scenario's `capabilityTargets[capName]` is the mean target.
+2. Per-criterion values are jittered around the target by `spread`
+   (8 for exact, 12 for large, 18 for xlarge).
+3. Capability score = passedCount / totalCount * 100.
+4. To force a specific value on a specific criterion, add it to
+   scenario.criterionOverrides.
+5. To force 0 on entity-dependent criteria, set the relevant
+   entityCounts to 0 (drives C3 simulation).
+```
+
+### 22.5 "Score changed between Exact and Large/xLarge"
+
+This is expected. The Scale Tier mechanism narrows the window in
+Large/xLarge tiers to bound cost. Values become sampled estimates,
+typically drifting <5% from ground truth. The banner discloses this.
+
+If you need to confirm a specific value:
+1. Force Exact tier via the banner buttons.
+2. Click Refresh.
+3. Compare — Exact is the source of truth.
+
+### 22.6 "Cache hit rate is lower than expected"
+
+```
+1. Check cache document age via Doc Store API.
+2. Are entries from > 24h ago? They should auto-prune.
+3. Did the tier change since last run? Cache keys include tier,
+   so a tier switch invalidates all entries.
+4. Did the version bump trigger cache invalidation? (No — cache
+   docs survive deploys. They only expire by TTL.)
+```
+
+### 22.7 "Snapshot is wrong"
+
+```
+1. Demo runs do NOT save snapshots. Confirm `demoActive: false`
+   in the latest perf JSON.
+2. Was the assessment in Large/xLarge tier? Snapshots tagged sampled
+   (currently no UI indicator, future work).
+3. The snapshot signature dedup means runs with identical capability
+   scores are NOT re-saved. To force a new snapshot, change one
+   criterion's value (impossible without changing data).
+```
+
+---
+
+## 23. Known limitations and false-positive guidance
+
+### 23.1 Capabilities that score low because of missing data, not bugs
 
 | Capability | Common low-score cause | How to confirm |
 |---|---|---|
-| Application Security | Tenant doesn't ingest `event.kind == "SECURITY_EVENT"` | MCP: `fetch events, from:now()-72h \| filter event.kind == "SECURITY_EVENT" \| summarize count()` returns 0 |
-| Business Observability | Specific bizevent providers absent | MCP: `fetch bizevents, from:now()-72h \| summarize countDistinct(event.provider)` then check the criterion's filter against the list |
-| Threat Observability (t4) | Same as AppSec (security events) | Same query |
-| Software Delivery (sd2) | Tenant doesn't emit `event.kind == "CUSTOM_DEPLOYMENT"` | MCP: `fetch events, from:now()-72h \| filter event.kind == "CUSTOM_DEPLOYMENT" \| summarize count()` |
+| Application Security ~70–80% | Tenant doesn't ingest `event.kind == "SECURITY_EVENT"` | MCP: `fetch events, from:now()-72h \| filter event.kind == "SECURITY_EVENT" \| summarize count()` returns 0 |
+| Business Observability ~60–70% | Specific bizevent providers absent | MCP: `fetch bizevents \| summarize countDistinct(event.provider)` then check filter against the list |
+| Threat Observability (t4) | Same as AppSec | Same query |
+| Software Delivery (sd2) | Tenant doesn't emit `event.kind == "CUSTOM_DEPLOYMENT"` | MCP: `fetch events \| filter event.kind == "CUSTOM_DEPLOYMENT" \| summarize count()` |
+| Log Analytics (l15) | Tenant doesn't emit `event.kind == "LOG"` | Same pattern |
 
-These are tenant truth. C3 smart-skip doesn't catch them because the
-filter is on `event.kind` not on entity count.
+These are tenant truth, not query bugs. C3 doesn't catch them
+because the filter is on `event.kind` not on entity count.
 
-### 15.2 Sampling-related differences are NOT bugs
+### 23.2 Sampling-related differences are NOT bugs
 
 Large / xLarge tier runs produce sampled estimates. Coverage values
-will differ from Exact-tier ground truth. The ScaleTierBanner discloses
-this. If a customer asks "why does my coverage drop after auto-switching
-to Large", the answer is "the window was narrowed for cost; sampled
-estimate".
+will differ from Exact-tier ground truth (typically <10% drift). The
+ScaleTierBanner discloses this. If a customer asks "why does my
+coverage drop after auto-switching to Large", the answer is "window
+was narrowed for cost; sampled estimate".
 
-### 15.3 Cache staleness is intentional
+### 23.3 Cache staleness is intentional
 
-A criterion's value can be up to 24h old when served from cache. If a
-customer fixes a coverage gap and re-runs an hour later, they see the
-old number. Two paths forward:
+A value can be up to 24h old when served. If a customer fixes a
+coverage gap and re-runs an hour later, they see the old number.
+Paths forward:
 - Click 🗘 Force refresh (dev mode only)
-- Wait for the 24h TTL to expire
+- Wait for 24h TTL expiration
 
-Don't shorten the TTL to "1h" or whatever — defeats the cache's purpose
-on iteratively-tuning teams.
+Don't shorten the TTL to "1h" — defeats the purpose for iterative
+remediation teams.
 
-### 15.4 Concurrency cap = 10
+### 23.4 Concurrency cap = 10
 
-`useCoverageData.CONCURRENCY = 10`. This is a per-run concurrency cap on
-worker Promises. It's been tested up to 20 (no improvement) and down
-to 4 (slower without freeing tenant concurrency). Don't change without
-benchmarking on a multi-thousand-host tenant.
+`CONCURRENCY = 10` worker promises. Tested up to 20 (no improvement,
+Grail concurrency cap limits throughput) and down to 4 (slower
+without freeing tenant capacity). Don't change without benchmarking
+on a multi-thousand-host tenant.
 
-### 15.5 `extractValue` is forgiving
+### 23.5 `extractValue` is forgiving
 
 `useCoverageData.extractValue(record)` iterates `Object.values(record)`
 and returns the first numeric. For result objects like `{count: 42}`,
 `{c: 42}`, `{always5: 5}`, it just works. If a future query returns
 multiple numerics in one row and we care about a specific column,
-add a field name argument.
+add a field-name parameter.
 
-### 15.6 The Document Store cache document grows
+### 23.6 The Document Store cache document grows during the day
 
-Cache entries are pruned at load time (24h TTL). But within a single
-day, every unique query the assessment encounters becomes an entry.
-Max bound: ~130 entries × 100 bytes ≈ 13 KB per tenant per day. Document
-Store handles megabytes per doc; we're four orders of magnitude below
-any limit.
+Cache entries are pruned at load time (24h TTL). Within a single day,
+every unique query becomes an entry. Upper bound: ~130 entries
+× ~100 bytes ≈ 13 KB per tenant per day. Document Store handles
+megabytes per doc; we're orders of magnitude below limits.
+
+### 23.7 The dev tenant doesn't have a Workflow runner installed
+
+Some criteria measure things only visible to a properly-installed
+workflow runner. On a tenant without it, those criteria default to
+the lower threshold tier or fail. Future enhancement: detect Workflow
+runner presence and gate the affected criteria.
+
+### 23.8 The `?demo=` URL param is stronger than the user's localStorage
+
+If a user has `cca.demo.scenario = "xlarge-telco"` in localStorage AND
+visits `?demo=legacy-no-k8s`, the URL wins. The user sees legacy-no-k8s
+and exiting demo via `__pulseDemo(null)` clears localStorage. This is
+intentional — shared links must work reliably regardless of recipient's
+local state.
 
 ---
 
-## 16. Glossary
+## 24. Glossary
 
 | Term | Meaning |
 |---|---|
@@ -1315,27 +2686,50 @@ any limit.
 | Criterion | One of ~111 fine-grained measurements, identified by `<prefix><number>` (e.g. `ai3`, `sd10`) |
 | Threshold | Numeric cutoff a criterion's value must meet to pass at a given tier |
 | Coverage | The criterion-pass-rate-based score (0–100%). Mean across capabilities = `totalScore`. |
-| Maturity | The progressively-weighted score (Foundation 60% / Best Practice 25% / Excellence 15%) with gating |
-| Foundation tier | The basic-must-have criteria for a capability |
-| Best Practice tier | Mature operating criteria, only counted if Foundation ≥ 80% |
-| Excellence tier | Stretch goals, only counted if Best Practice ≥ 60% |
-| Scale Tier | The execution mode (exact / large / xlarge) that determines window + scan cap |
-| C3 smart-skip | The two-phase optimization that skips numerators when entity-count denominators are 0 |
-| denominatorConstant | A code-level number replacing a queryB that would have returned a literal |
+| Maturity | Weighted score (Foundation 60% / Best Practice 25% / Excellence 15%) with progressive gating |
+| Foundation tier | Basic-must-have criteria for a capability |
+| Best Practice tier | Mature operating criteria, counted only if Foundation ≥ 80% |
+| Excellence tier | Stretch goals, counted only if Best Practice ≥ 60% |
+| Scale Tier | Execution mode (exact / large / xlarge) determining window + scan cap |
+| C3 smart-skip | Two-phase optimization skipping numerators when entity-count denominators are 0 |
+| denominatorConstant | Code-level numeric replacing a queryB that would have returned a literal |
 | Cold run | First assessment of the day for a tenant; pays full DPS cost |
 | Warm run | Re-run within 24h; serves results from cache, ~zero cost |
-| Hot source | A DQL data source that scales linearly with ingest (logs / spans / events / bizevents). Subject to `scaleQuery` rewriting. |
-| Bursty workload | A signal that fires intermittently (LLM batch jobs, deploys). Needs a wider window to be visible. |
-| Demo Mode | The synthesized-scenario path for SE-led previews. Zero DPS. Activated by URL/localStorage/console. |
-| Dev Mode | The flag that exposes diagnostic UI (DemoControlBar, perf JSON download) to SEs. Hidden from customers. |
-| PerfReport | The downloadable JSON containing per-query timing, scan, cache, skip data |
+| Hot source | DQL data source that scales linearly with ingest (logs / spans / events / bizevents). Subject to `scaleQuery` rewriting. |
+| Bursty workload | Signal that fires intermittently (LLM batch jobs, deploys). Needs wider window to be visible. |
+| Demo Mode | Synthesized-scenario path for SE-led previews. Zero DPS. URL/localStorage/console activation. |
+| Dev Mode | Flag exposing diagnostic UI (DemoControlBar, perf JSON download) to SEs. Hidden from customers. |
+| PerfReport | Downloadable JSON with per-query timing, scan, cache, skip data |
 | DPS | Davis Pipeline Storage — Dynatrace's per-GiB-scanned billing metric |
-| MCP | Model Context Protocol — used during development to run DQL directly against the tenant for validation |
-| Grail | Dynatrace's query engine — the thing `executeDql` calls |
+| MCP | Model Context Protocol — used during development to run DQL directly for validation |
+| Grail | Dynatrace's query engine — what `executeDql` calls |
 | Strato | Dynatrace's design system — UI components and tokens we use |
+| `useCoverageData` | The main hook — runs the assessment and exposes results |
+| `executeAllUnique` | Inner function — runs the worker pool with cache + scaleQuery + perf capture |
+| `runAssessment` | Outer callback — orchestrates the two phases of execution |
+| `extractValue` | Numeric coercion from a Grail result record |
+| `extractNumeric` | Helper inside `extractValue` for arrays, bigints, etc. |
+| `scaleQuery` | Pure function that rewrites hot-source queries per tier |
+| `isHotSource` | Predicate selecting which queries `scaleQuery` rewrites |
+| `tierFromHostCount` | Auto-selection from observed host count |
+| `buildCoverageFromScenario` | Pure function turning a demo scenario into a full result |
+| `mulberry32` | Tiny seeded PRNG used by demo synthesis |
+| `fnv32` | Tiny hash used as cache key suffix |
+| `classifySource` | Maps a DQL query string to the source enum |
+| `buildReport` | Pure function turning in-flight perf entries into a PerfReport |
+| `downloadReport` | DOM helper that triggers the JSON file download |
+| `useScaleTier` | Hook for detecting and persisting tier |
+| `useDemoMode` | Hook for activating canned scenarios |
+| `useDevMode` | Hook for exposing diagnostic UI |
+| `useAssessmentHistory` | Hook for snapshot persistence |
+| `usePreflight` | Hook for OAuth scope probe |
+| `CONCURRENCY` | The worker pool size constant (= 10) |
+| `TIER_CONFIG` | Per-tier configuration object (window, cap, label) |
+| `DEMO_SCENARIOS` | Catalog of canned scenarios |
+| `CAPABILITIES` | The single source of truth — exported from `queries.ts` |
 
 ---
 
 End of memory file. Combined with `HANDOFF.md`, `PERFORMANCE-REPORT-80K-HOSTS.md`,
 `DEMO-MODE.md`, `CHANGELOG.md`, and the inline code comments, this should
-be everything a new dev needs to understand the app in depth.
+be everything a new developer needs to understand the app in depth.
