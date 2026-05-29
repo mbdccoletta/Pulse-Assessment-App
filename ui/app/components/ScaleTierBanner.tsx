@@ -30,58 +30,16 @@ import { Button } from '@dynatrace/strato-components/buttons';
 import Colors from '@dynatrace/strato-design-tokens/colors';
 import { TIER_CONFIG, type ScaleTier } from '../scale-tier';
 import type { UseScaleTierResult } from '../hooks/useScaleTier';
-import type { DemoScenario } from '../demo/scenarios';
 
 interface ScaleTierBannerProps {
   scale: UseScaleTierResult;
-  /** When non-null, the banner switches to "demo mode" styling and surfaces
-   *  the scenario narrative. Tier-switch buttons are disabled because the
-   *  scenario's coverage values are pre-baked for a specific tier. */
-  demoScenario?: DemoScenario | null;
   /** Optional className passthrough for the host page layout. */
   className?: string;
 }
 
 const TIER_ORDER: ScaleTier[] = ['exact', 'large', 'xlarge'];
 
-export const ScaleTierBanner: React.FC<ScaleTierBannerProps> = ({ scale, demoScenario, className }) => {
-  // Demo mode takes precedence: it always renders, even at 'exact' tier, so the
-  // operator (and any customer in the room) can see clearly that the figures
-  // on screen are scripted rather than measured.
-  if (demoScenario) {
-    return (
-      <Surface
-        className={className}
-        style={{
-          // Magenta/purple is intentionally distinct from the Warning yellow
-          // used for the real Scale Tier banner. Operators glancing at a
-          // screenshot should never confuse a demo with a real run.
-          background: Colors.Background.Container.Primary.Default,
-          borderLeft: `4px solid ${Colors.Border.Primary.Accent}`,
-          padding: 12,
-          marginBottom: 16,
-          width: '100%',
-        }}
-        aria-label="Demo mode active"
-      >
-        <Flex flexDirection="column" gap={6}>
-          <Flex justifyContent="space-between" alignItems="center" gap={12} flexWrap="wrap">
-            <Flex gap={8} alignItems="baseline">
-              <Strong>🎭 DEMO: {demoScenario.label}</Strong>
-              <Text textStyle="small">
-                {demoScenario.hostCount.toLocaleString()} hosts · tier {TIER_CONFIG[demoScenario.tier].label} · 0 DPS consumed
-              </Text>
-            </Flex>
-          </Flex>
-          <Text textStyle="small">{demoScenario.narrative}</Text>
-          <Text textStyle="small" style={{ opacity: 0.7 }}>
-            Coverage values are scripted for this scenario. Exit demo by clearing the URL <Strong>?demo=</Strong> param or running <Strong>__pulseDemo(null)</Strong> in the console.
-          </Text>
-        </Flex>
-      </Surface>
-    );
-  }
-
+export const ScaleTierBanner: React.FC<ScaleTierBannerProps> = ({ scale, className }) => {
   // Default tier is invisible — the goal is zero presentation impact for the
   // common case (small/medium tenants). Above-threshold tenants get the disclosure.
   if (scale.tier === 'exact') return null;

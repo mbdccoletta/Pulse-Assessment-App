@@ -28,7 +28,6 @@ import {
   tierFromHostCount,
   type ScaleTier,
 } from '../scale-tier';
-import type { DemoScenario } from '../demo/scenarios';
 
 const STORAGE_KEY = 'cca.scaleTier.override';
 const QUERY_TIMEOUT_MS = 15_000;
@@ -101,13 +100,7 @@ async function detectHostCount(): Promise<number> {
   }
 }
 
-/**
- * @param demoScenario  When non-null, the hook bypasses the host-count
- *                      detection query entirely and returns the scenario's
- *                      tier + hostCount. This is what makes the demo cost
- *                      ZERO DPS at mount time.
- */
-export function useScaleTier(demoScenario: DemoScenario | null = null): UseScaleTierResult {
+export function useScaleTier(): UseScaleTierResult {
   const [hostCount, setHostCount] = useState<number | null>(null);
   const [override, setOverrideState] = useState<ScaleTier | null>(() => readOverride());
   const [detecting, setDetecting] = useState(true);
@@ -123,21 +116,12 @@ export function useScaleTier(demoScenario: DemoScenario | null = null): UseScale
   }, []);
 
   useEffect(() => {
-    // Demo mode short-circuit: the scenario carries a synthetic host count, so
-    // we never need to hit Grail. Surface the synthetic count immediately so
-    // the banner and entityCounts panel render with realistic numbers.
-    if (demoScenario) {
-      cancelRef.current++; // cancel any in-flight live detection
-      setHostCount(demoScenario.hostCount);
-      setDetecting(false);
-      return;
-    }
     void runDetection();
     return () => {
       // Mark in-flight detections as stale so their results are dropped.
       cancelRef.current++;
     };
-  }, [runDetection, demoScenario]);
+  }, [runDetection]);
 
   const setOverride = useCallback((tier: ScaleTier | null) => {
     setOverrideState(tier);
@@ -152,10 +136,7 @@ export function useScaleTier(demoScenario: DemoScenario | null = null): UseScale
   // assume 'exact' — never enable sampling without confirmed host count.
   const safeCount = hostCount != null && hostCount > 0 ? hostCount : 0;
   const autoTier: ScaleTier = tierFromHostCount(safeCount);
-  // In demo mode the scenario dictates the tier, and the manual override is
-  // ignored — switching tiers manually inside a canned demo would just produce
-  // confusing results since the data is hard-coded for one tier.
-  const tier: ScaleTier = demoScenario ? demoScenario.tier : override ?? autoTier;
+  const tier: ScaleTier = override ?? autoTier;
 
   // Sanity check at runtime — bounds should always be consistent with TIER_CONFIG.
   // If a config refactor breaks this, fail loudly in dev rather than silently

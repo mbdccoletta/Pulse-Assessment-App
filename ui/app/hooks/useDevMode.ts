@@ -52,23 +52,13 @@ function readStorageFlag(): boolean {
 }
 
 export interface UseDevModeResult {
-  /** True when demo / diagnostic controls should be visible. */
+  /** True when diagnostic controls should be visible. */
   isDev: boolean;
 }
 
-/**
- * @param demoActive  When the parent already knows a demo scenario is
- *                    active, pass true so the dev flag is forced on
- *                    regardless of URL/localStorage. Otherwise the
- *                    "shared demo link" workflow would render a broken
- *                    UI (banner visible but no tier-switch controls).
- */
-export function useDevMode(demoActive = false): UseDevModeResult {
+export function useDevMode(): UseDevModeResult {
   // Resolved once on mount. The flag is sticky for the session lifetime
   // because dev controls aren't worth re-rendering everything for.
-  const [isDev] = useState<boolean>(() => {
-    if (demoActive) return true;
-    return readUrlFlag() || readStorageFlag();
-  });
+  const [isDev] = useState<boolean>(() => readUrlFlag() || readStorageFlag());
   return { isDev };
 }
