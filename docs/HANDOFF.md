@@ -1,12 +1,10 @@
 # Pulse Assessment — Developer Handoff
 
-> Pick-up document for the next developer. Captures the state of v2.5.2,
+> Pick-up document for the next developer. Captures the state of v2.5.3,
 > what was done during the v2.5.x perf pass, validation evidence, and
 > what's still open. Read this before opening `useCoverageData.ts` cold.
 
-Date written: 2026-05-29
-Author: Marcelo Coletta — `marcelo.coletta@dynatrace.com`
-Current version: **v2.5.2** (deployed to `bwm98081`)
+Current version: **v2.5.3**
 
 ---
 
@@ -16,68 +14,72 @@ Current version: **v2.5.2** (deployed to `bwm98081`)
 
 | Item | Value |
 |---|---|
-| Deployed tenant | `bwm98081.apps.dynatrace.com` |
-| Deployed URL | https://bwm98081.apps.dynatrace.com/ui/apps/my.pulse.assessment |
-| Version installed | **2.5.2** |
+| Deployed tenant | the team's development tenant on apps.dynatrace.com |
+| Version installed | **2.5.3** |
 | App id | `my.pulse.assessment` |
+
+The exact tenant URL is configured in `app.config.json#environmentUrl`
+and is not reproduced here. Read that file for the current target.
 
 ### Git
 
 | Item | Value |
 |---|---|
-| Repo | `git@github.com:mbdccoletta/Pulse-Assessment-App.git` |
+| Repo | personal fork on GitHub |
 | Working branch | `feat/v2.5.0-perf-optimizations` |
-| State | All 5 commits pushed; local in sync with `origin/feat/v2.5.0-perf-optimizations` |
+| State | All commits pushed; local in sync with `origin/feat/v2.5.0-perf-optimizations` |
 | Base for next branch | `feat/v2.5.0-perf-optimizations` (until PR is merged into `main`) |
-| PR | Not yet opened. URL: `https://github.com/mbdccoletta/Pulse-Assessment-App/pull/new/feat/v2.5.0-perf-optimizations` |
+| PR | Not yet opened. |
 
-### Commit history of v2.5.x
+### Commit history of v2.5.x (most recent first)
 
 ```
-21b6f76  feat: customer-facing DPS cost badge in toolbar (v2.5.2)
-83fb2ec  chore: bump version 2.5.0 → 2.5.1 (AI Obs window fix)
-74a1543  fix(ai-obs): restore 72h window for AI Observability criteria
-901b203  chore: gate demo + diagnostic UI behind dev flag for production
-b35eece  feat: v2.5.0 — Scale Tier sampling, Demo Mode, Cache, C3 smart-skip
+feat: remove demo scenarios + simplify diagnostic surface (v2.5.3)
+docs: rewrite MEMORY.md as complete project reference (2735 lines)
+docs: add HANDOFF.md + MEMORY.md for developer continuity
+feat: customer-facing DPS cost badge in toolbar (v2.5.2)
+chore: bump version 2.5.0 → 2.5.1 (AI Obs window fix)
+fix(ai-obs): restore 72h window for AI Observability criteria
+chore: gate demo + diagnostic UI behind dev flag for production
+feat: v2.5.0 — Scale Tier sampling, Cache, C3 smart-skip
 ```
 
-### Other tenants the OAuth tokens have toolkit access to
+### OAuth tokens (cached in `.dt-app/.tokens.json`)
 
-| Tenant | Access type | Notes |
-|---|---|---|
-| `bwm98081` | full (app token + toolkit) | dev environment, install rights |
-| `demo.apps.dynatrace.com` | **toolkit only** | install attempts return HTTP 403. Local `dt-app dev` works but `dt-app deploy` does not. |
+The team has install rights on the development tenant and toolkit-only
+access to the shared demo tenant on apps.dynatrace.com. Install attempts
+on the shared demo tenant return HTTP 403 — use `dt-app dev` locally
+when you need to query its Grail.
 
 ---
 
 ## 2. What v2.5.x added
 
-Six tracks of performance and UX work, all reachable from the same branch:
+Six tracks of performance and UX work, all reachable from the same branch.
+Numbers measured on the development tenant unless noted.
 
-| Track | Where to look | Impact (measured on bwm98081) |
+| Track | Where to look | Impact |
 |---|---|---|
 | **denominatorConstant** — eliminate queryB scans that returned a literal | `ui/app/queries.ts` (the `Criterion` type + 11 criteria), `ui/app/hooks/useCoverageData.ts` (scoring path) | **-21% scan** per run (220 GB → 173 GB) |
 | **Scale Tier** auto-sampling (exact / large / xlarge) | `ui/app/scale-tier.ts` + `ui/app/hooks/useScaleTier.ts` + `ui/app/components/ScaleTierBanner.tsx` | **-98% projected scan @ 80k hosts** ($1,800/run → $32/run) |
 | **24h persistent result cache** | `ui/app/perf/queryCache.ts` + integration in `useCoverageData.ts` | **-100% on same-day re-runs** (173 GB → 0 GB) |
 | **C3 smart-skip** — skip numerators when entity-count denominator is 0 | Two-phase loop in `useCoverageData.runAssessment` | -15 to -30% on tenants without K8s/RUM/etc |
 | **Per-query perf instrumentation + JSON download** | `ui/app/perf/types.ts`, `ui/app/perf/buildReport.ts` | Observability surface, not a perf fix |
-| **Demo Mode** (5 canned scenarios) | `ui/app/demo/scenarios.ts` + `ui/app/demo/useDemoMode.ts` + `ui/app/components/DemoControlBar.tsx` | Zero DPS, lets SEs preview at scales we don't have |
 | **AI Obs window 2h → 72h** | `ui/app/queries.ts` (criteria ai1–ai9 only) | Fixed a hidden zero-data bug on bursty AI workloads |
 | **Customer-facing DPS cost badge** | `ui/app/components/DpsCostBadge.tsx` + toolbar in `CoverageAssessment.tsx` | UX — surfaces estimated DPS in the toolbar |
 
-Full prose in `docs/PERFORMANCE-REPORT-80K-HOSTS.md` and `docs/DEMO-MODE.md`.
+> Earlier v2.5.0–v2.5.2 also shipped a Demo Mode (5 canned scenarios +
+> magenta footer bar) for SE-led previews at tenant scales the team
+> didn't have. v2.5.3 removed it entirely — see §7.3.
 
-### Production posture (since `901b203`)
+Full prose in `docs/PERFORMANCE-REPORT-80K-HOSTS.md`.
 
-The diagnostic surfaces (DemoControlBar, scenario chips, Force-refresh,
-Download-perf-JSON) are **hidden by default**. A customer tenant sees only
-the radar + cards + the auto-detected Scale Tier banner. SEs unlock the
-controls via:
+### Production posture
 
-- URL param `?dev=1`
-- `localStorage.cca.dev = '1'`
-- Any active demo scenario (`?demo=xlarge-telco` forces dev on)
-- Console: `__pulseDemo('<scenario-id>')` then reload
+The diagnostic surfaces (Force-refresh, Download-perf-JSON) are **hidden
+by default** behind `?dev=1` or `localStorage.cca.dev = '1'`. A customer
+tenant sees only the radar + cards + the auto-detected Scale Tier banner.
+SEs unlock the controls via the URL flag or the localStorage flag.
 
 Gate lives in `ui/app/hooks/useDevMode.ts`.
 
@@ -86,16 +88,11 @@ Gate lives in `ui/app/hooks/useDevMode.ts`.
 ## 3. Architecture: how the new modules connect
 
 ```
-                                   ┌─────────────────────────┐
-                                   │  useDemoMode (URL/LS)   │
-                                   └────────────┬────────────┘
-                                                │ scenario | null
-                                                ▼
 ┌─────────────────┐    tier      ┌─────────────────────────┐
 │  useScaleTier   │─────────────▶│       App.tsx           │
-│ (host count)    │              │  resolves tier + demo + │
-└─────────────────┘              │  isDev, threads them    │
-                                 │  into useCoverageData   │
+│ (host count)    │              │  resolves tier + isDev, │
+└─────────────────┘              │  threads them into      │
+                                 │  useCoverageData        │
                                  └────────────┬────────────┘
                                               │
                                               ▼
@@ -135,20 +132,17 @@ Gate lives in `ui/app/hooks/useDevMode.ts`.
                     └──────────────────┘
 ```
 
-### File map (new in v2.5.x)
+### File map (current — v2.5.3)
 
 | File | Lines | Purpose |
 |---|---:|---|
 | `ui/app/scale-tier.ts` | 162 | Pure module: `scaleQuery(q, tier)`, `TIER_CONFIG`, `tierFromHostCount()` |
-| `ui/app/hooks/useScaleTier.ts` | 180 | Detects host count → picks tier; persists manual override |
-| `ui/app/hooks/useDevMode.ts` | ~80 | Reads `?dev=1` / `localStorage.cca.dev` |
-| `ui/app/components/ScaleTierBanner.tsx` | 138 | Yellow banner for Large/xLarge; magenta variant for demo |
-| `ui/app/components/DemoControlBar.tsx` | 396 | Footer bar with scenario chips, Run, Download, Force-refresh |
+| `ui/app/hooks/useScaleTier.ts` | ~170 | Detects host count → picks tier; persists manual override |
+| `ui/app/hooks/useDevMode.ts` | ~70 | Reads `?dev=1` / `localStorage.cca.dev` |
+| `ui/app/components/ScaleTierBanner.tsx` | ~95 | Yellow banner for Large/xLarge; hidden in Exact tier |
 | `ui/app/components/DpsCostBadge.tsx` | 165 | Customer-facing toolbar badge (USD/GB scanned + tooltip projections) |
-| `ui/app/demo/scenarios.ts` | 496 | 5 canned tenants + deterministic value generator (mulberry32) |
-| `ui/app/demo/useDemoMode.ts` | 130 | URL/localStorage activation + `__pulseDemo()` console helper |
-| `ui/app/perf/types.ts` | 267 | `PerfReport` schema + `PerfQueryEntry` + `classifySource` |
-| `ui/app/perf/buildReport.ts` | 226 | Assembles `PerfReport` from in-flight entries + downloads as JSON |
+| `ui/app/perf/types.ts` | ~280 | `PerfReport` schema + `PerfQueryEntry` + `classifySource` |
+| `ui/app/perf/buildReport.ts` | ~240 | Assembles `PerfReport` from in-flight entries + downloads as JSON |
 | `ui/app/perf/queryCache.ts` | 292 | 24h Document Store cache with TTL prune, optimistic locking |
 
 ### File map (modified in v2.5.x)
@@ -156,12 +150,12 @@ Gate lives in `ui/app/hooks/useDevMode.ts`.
 | File | What changed |
 |---|---|
 | `ui/app/queries.ts` | Added `denominatorConstant?: number` to `Criterion`. 11 criteria converted. 16 substring swaps in the AI Obs block (`from:now()-2h` → `from:now()-72h`). |
-| `ui/app/hooks/useCoverageData.ts` | Two-phase execution, C3 skip set, cache integration, scaleQuery, perf entry capture, demo short-circuit. **The big diff.** Read carefully before editing. |
-| `ui/app/pages/CoverageAssessment.tsx` | New props: `scale`, `demo`, `isDev`. Toolbar wires `DpsCostBadge`. Footer renders `DemoControlBar` (gated by `isDev`). Snapshot save guard for demo mode. |
-| `ui/app/App.tsx` | Mounts `useDemoMode`, `useScaleTier`, `useDevMode`. Threads everything into `CoverageAssessment`. |
-| `app.config.json` | Bumped to `2.5.2`. **`environmentUrl` defaults to `bwm98081`** — change before deploying to a different tenant. |
-| `ui/app/appVersion.ts` | `"2.5.2"`. |
-| `CHANGELOG.md` | v2.5.0 entry. (v2.5.1 / v2.5.2 entries are pending — see §7.) |
+| `ui/app/hooks/useCoverageData.ts` | Two-phase execution, C3 skip set, cache integration, scaleQuery, perf entry capture. **The big diff.** Read carefully before editing. |
+| `ui/app/pages/CoverageAssessment.tsx` | Props: `scale`, `isDev`. Toolbar wires `DpsCostBadge` + (gated by `isDev`) `📥 Perf JSON` and `🗘 Force refresh` buttons. |
+| `ui/app/App.tsx` | Mounts `useScaleTier`, `useDevMode`. Threads them into `CoverageAssessment`. |
+| `app.config.json` | Bumped to `2.5.3`. `environmentUrl` points to the dev tenant — change before deploying elsewhere. |
+| `ui/app/appVersion.ts` | `"2.5.3"`. |
+| `CHANGELOG.md` | v2.5.0 entry. (v2.5.1 / v2.5.2 / v2.5.3 entries are pending — see §7.) |
 
 ---
 
@@ -172,19 +166,17 @@ v2.5.x dev pass. The relevant ones (paths from my Downloads at the time):
 
 | Filename | Run type | Key result |
 |---|---|---|
-| `pulse-perf-bwm98081-exact-2026-05-23T13-26-02-325Z.json` | pre-`denominatorConstant` cold | 123 unique queries, 220 GB scanned, $2.05 |
-| `pulse-perf-bwm98081-exact-2026-05-23T13-37-37-162Z.json` | post-`denominatorConstant` cold | 113 unique queries, **173 GB** scanned, $1.61 (**-21.4%**) |
-| `pulse-perf-bwm98081-exact-2026-05-23T13-53-02-860Z.json` | cache hit (immediate re-run) | 113/113 cached, **0 GB**, $0 |
-| `pulse-perf-bwm98081-demo-legacy-no-k8s-…json` | C3 smart-skip demo | `skippedQueries: 17`, `skippedCriteria` lists d1-d8, d11, i7, i10, i12, i19-i22, l8 |
-| `pulse-perf-bwm98081-demo-xxlarge-cloud-…json` | xLarge tier projection | 10.5 TB simulated scan, $63-$98 |
+| pre-`denominatorConstant` cold run | from real dev tenant | 123 unique queries, 220 GB scanned, $2.05 |
+| post-`denominatorConstant` cold run | same dev tenant | 113 unique queries, **173 GB** scanned, $1.61 (**-21.4%**) |
+| cache hit (immediate re-run) | same dev tenant | 113/113 cached, **0 GB**, $0 |
 
 **Capability scores comparison** (pre vs post `denominatorConstant`):
 9 of 9 capabilities returned identical scores. Run the same comparison
 on every future query change.
 
-**MCP-confirmed AI Obs fix** (this is in the conversation log, not a file):
+**MCP-confirmed AI Obs fix:**
 
-| Window | gen_ai spans @ bwm98081 |
+| Window | gen_ai spans on dev tenant |
 |---:|---:|
 | 2h | 0 |
 | 24h | 0 |
@@ -358,9 +350,9 @@ usage).
 
 Don't waste time re-investigating these — they're tenant-truth:
 
-| Capability | Why low on bwm98081 |
+| Capability | Why low on the dev tenant |
 |---|---|
-| Application Security ~73% | `bwm98081` doesn't ingest `event.kind == "SECURITY_EVENT"`. Confirmed via MCP — zero records in 72h. |
+| Application Security ~73% | the dev tenant doesn't ingest `event.kind == "SECURITY_EVENT"`. Confirmed via MCP — zero records in 72h. |
 | Business Observability ~63% | Specific bizevent providers (Shopify, Stripe, etc.) aren't present. Tenant has 25 distinct providers but not these particular ones. |
 
 If the user reports "low score on AppSec — is there a bug?", point them
@@ -387,7 +379,7 @@ filters are on `event.kind` not on an entity-count denominator.
 4. **Don't ship a deploy with `app.config.json` `environmentUrl`
    pointing at someone else's tenant.** Lasts as long as the dev
    forgets to revert. The default in main should always be the
-   project's dev tenant (`bwm98081`).
+   project's configured dev tenant.
 
 5. **Don't add a new `Criterion` with both `queryB` AND
    `denominatorConstant` set.** TypeScript doesn't catch this. Pick
@@ -406,28 +398,27 @@ filters are on `event.kind` not on an entity-count denominator.
 | Location | What's there |
 |---|---|
 | `docs/PERFORMANCE-REPORT-80K-HOSTS.md` | The sizing study that justified Scale Tier. Reads like a research note. |
-| `docs/DEMO-MODE.md` | Operator guide for SEs using demo mode. |
-| `docs/DPS-WASTE-AUDIT.md` | Not written — was on the v2.5.x roadmap. |
-| `CHANGELOG.md` | Project history. v2.5.0 only — needs 2.5.1/2.5.2 added. |
+| `docs/MEMORY.md` | Full technical reference — every DQL pattern, scoring math, design decisions, bug history, debugging workflows. Read when you need depth. |
+| `CHANGELOG.md` | Project history. v2.5.0 only — needs 2.5.1 / 2.5.2 / 2.5.3 added. |
 | `README.md` | The main project README. Not touched in v2.5.x. |
 | `CONTRIBUTING.md` | App contribution guide (within this repo). |
-| `app.config.json.bwm-backup` | Local backup of the bwm tenant config. Safe to delete after onboarding. |
 
 ---
 
 ## 10. First-week checklist for the next dev
 
 - [ ] Read this doc end-to-end.
-- [ ] Clone, `npm ci`, `dt-app dev`. Confirm the embedded URL on bwm98081 renders the radar.
+- [ ] Clone, `npm ci`, `dt-app dev`. Confirm the embedded URL renders the
+      radar against the configured tenant.
 - [ ] Run an assessment. Confirm the DPS badge appears in the toolbar.
 - [ ] Re-run immediately. Confirm cache hit (`≈ <$0.01 DPS · cache hit`).
-- [ ] Append `?dev=1` and confirm the magenta footer appears.
-- [ ] Try `?demo=legacy-no-k8s`. Confirm the radar zeroes out RUM / K8s criteria.
+- [ ] Append `?dev=1` and confirm the diagnostic buttons appear in the
+      toolbar (`📥 Perf JSON`, `🗘 Force refresh`).
 - [ ] Download a perf JSON. Open it. Confirm `cacheHits`, `skippedQueries`,
       `bySource.wallTimeP95` are populated.
 - [ ] Open the PR (§7.1) so review can start.
-- [ ] Add the `[2.5.1]` and `[2.5.2]` entries to `CHANGELOG.md` (§7.2).
-- [ ] Decide whether to pursue C1/C4/C7/C8 (§7.4) based on production
-      observability data after 2 weeks of usage.
+- [ ] Add the `[2.5.1]` / `[2.5.2]` / `[2.5.3]` entries to `CHANGELOG.md`.
+- [ ] Decide whether to pursue C1 / C4 / C7 / C8 (§7.4) based on
+      production observability data after 2 weeks of usage.
 
 Welcome aboard.
