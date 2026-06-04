@@ -16,12 +16,18 @@ import { maturity } from "./TechRadar";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
 import { CAP_SUMMARIES } from "../data/capSummaries";
+import { DavisInsightSection } from "./DavisInsightSection";
+import type { DavisRecommendationMap } from "../hooks/useDavisRecommendations";
 
 interface Props {
   capabilities: CapabilityResult[];
   anim: number;
   activeIdx: number | null;
   onSelect: (idx: number | null) => void;
+  /** Optional map of Davis CoPilot recommendations keyed by capability
+   *  name. When provided, an "AI Insight" section renders under each
+   *  expanded card. Gated by useDavisRecommendations({enabled}) upstream. */
+  davisRecommendations?: DavisRecommendationMap;
 }
 
 const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: boolean }> = ({ cr, dk }) => {
@@ -122,7 +128,7 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
   );
 };
 
-export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect }) => {
+export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations }) => {
   const dk = useCurrentTheme() === "dark";
 
   return (
@@ -195,6 +201,12 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                 {cap.criteriaResults.map((cr) => (
                   <CriterionRow key={cr.id} cr={cr} dk={dk} />
                 ))}
+                {davisRecommendations && (
+                  <DavisInsightSection
+                    state={davisRecommendations[cap.name]}
+                    capabilityName={cap.name}
+                  />
+                )}
               </Flex>
             )}
           </Flex>

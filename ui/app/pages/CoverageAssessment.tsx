@@ -18,6 +18,7 @@ import { ExpandableChartModal, ExpandChartButton } from "../components/Expandabl
 import { ScaleTierBanner } from "../components/ScaleTierBanner";
 import { DpsCostBadge } from "../components/DpsCostBadge";
 import type { UseScaleTierResult } from "../hooks/useScaleTier";
+import { useDavisRecommendations } from "../hooks/useDavisRecommendations";
 import { CAPABILITIES } from "../queries";
 import { CAP_SUMMARIES } from "../data/capSummaries";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
@@ -112,6 +113,12 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   const wasLoadingRef = useRef(false);
   const [excludedCaps, setExcludedCaps] = useState<Set<string>>(new Set());
   const [showGuide, setShowGuide] = useState(false);
+
+  // Davis CoPilot dynamic recommendations — gated behind ?dev=1 while we
+  // validate response quality. Hook is idempotent on capabilities identity:
+  // re-renders without data changes are free; data changes fan out one
+  // request per failing capability, cached 24h in the Document Store.
+  const davisRecommendations = useDavisRecommendations(capabilities, { enabled: !!isDev });
 
   const toggleCap = useCallback((name: string) => {
     setExcludedCaps(prev => {
@@ -499,7 +506,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? "50vh" : undefined,
             }}>
-              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} />
+              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={isDev ? davisRecommendations : undefined} />
             </Flex>
           </>) : viewMode === "maturity" ? (
             <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} isMobile={isMobile} />
