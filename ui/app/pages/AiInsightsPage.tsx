@@ -41,7 +41,9 @@ import { ScaleTierBanner } from "../components/ScaleTierBanner";
 interface Props {
   coverageData: CoverageData;
   scale: UseScaleTierResult;
-  isDev: boolean;
+  /** Kept for parity with other routes but unused now that the page is
+   *  customer-facing. Davis call failures degrade gracefully per-card. */
+  isDev?: boolean;
 }
 
 /** Map maturity level number → human label + accent token. */
@@ -54,15 +56,14 @@ function levelMeta(level: 0 | 1 | 2 | 3): { label: string; color: string } {
   }
 }
 
-export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale, isDev }) => {
+export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
   const navigate = useNavigate();
   const dk = useCurrentTheme() === "dark";
   const { capabilities, tenant, date, loading, refresh } = coverageData;
 
-  // Hook is gated by isDev to match the rest of the app. If a customer
-  // somehow lands on /ai-insights without dev mode, they see the empty
-  // state instead of triggering Davis calls.
-  const recommendations = useDavisRecommendations(capabilities, { enabled: isDev });
+  // Customer-facing — fires Davis calls whenever capabilities are present.
+  // Cache + signature dedup keep cost bounded; failures degrade gracefully.
+  const recommendations = useDavisRecommendations(capabilities, { enabled: true });
 
   // Sort capabilities by score ascending so the worst-performing (most
   // actionable) capability lands at the top. We rebuild this on every
@@ -105,29 +106,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale, isDev }) 
   const border = Colors.Border.Neutral.Default;
   const accent = Colors.Text.Primary.Default;
 
-  // ── Empty / disabled state ──
-  if (!isDev) {
-    return (
-      <Flex flexDirection="column" alignItems="center" justifyContent="center"
-        style={{ height: "100vh", padding: 32, background: bg, color: text }}>
-        <Text style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
-          AI Insights are SE-only
-        </Text>
-        <Text style={{ fontSize: 13, color: textSec, marginBottom: 16, textAlign: "center", maxWidth: 480 }}>
-          This page is gated behind dev mode while we validate Davis CoPilot response quality.
-          Enable it via the URL <code>?dev=1</code> or run{" "}
-          <code style={{ background: surface, padding: "2px 6px", borderRadius: 3 }}>
-            localStorage.setItem('cca.dev', '1')
-          </code>{" "}
-          in the console, then reload.
-        </Text>
-        <Button onClick={() => navigate("/")} variant="default">
-          ← Back to Assessment
-        </Button>
-      </Flex>
-    );
-  }
-
+  // ── Empty state ──
   if (capabilities.length === 0) {
     return (
       <Flex flexDirection="column" alignItems="center" justifyContent="center"

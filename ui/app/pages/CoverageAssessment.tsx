@@ -114,11 +114,12 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   const [excludedCaps, setExcludedCaps] = useState<Set<string>>(new Set());
   const [showGuide, setShowGuide] = useState(false);
 
-  // Davis CoPilot dynamic recommendations — gated behind ?dev=1 while we
-  // validate response quality. Hook is idempotent on capabilities identity:
-  // re-renders without data changes are free; data changes fan out one
-  // request per failing capability, cached 24h in the Document Store.
-  const davisRecommendations = useDavisRecommendations(capabilities, { enabled: !!isDev });
+  // Davis CoPilot dynamic recommendations — customer-facing.
+  // The hook fans out at most one request per failing capability, cached
+  // 24h in the Document Store. On tenants without the davis-copilot scope
+  // provisioned, calls fail silently and the UI shows a "Davis unavailable"
+  // notice; the assessment itself is unaffected.
+  const davisRecommendations = useDavisRecommendations(capabilities, { enabled: true });
 
   const toggleCap = useCallback((name: string) => {
     setExcludedCaps(prev => {
@@ -407,15 +408,18 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 🗘 Force refresh
               </Button>
             )}
-            {isDev && (
-              <Button
-                size="condensed"
-                onClick={() => navigate("/ai-insights")}
-                aria-label="Open dedicated AI Insights page (all capabilities at once)"
-              >
-                🤖 AI Insights
-              </Button>
-            )}
+            {/* AI Insights is now customer-facing — visible without dev gate.
+                If Davis CoPilot is not provisioned on the tenant, the page
+                still loads and individual cards show a graceful "unavailable"
+                notice. No SDK quota is spent until the user actually opens
+                the page. */}
+            <Button
+              size="condensed"
+              onClick={() => navigate("/ai-insights")}
+              aria-label="Open dedicated AI Insights page (all capabilities at once)"
+            >
+              🤖 AI Insights
+            </Button>
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
               Tenant: <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
               {stats && (
@@ -515,7 +519,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? "50vh" : undefined,
             }}>
-              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={isDev ? davisRecommendations : undefined} />
+              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={davisRecommendations} />
             </Flex>
           </>) : viewMode === "maturity" ? (
             <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} isMobile={isMobile} />
