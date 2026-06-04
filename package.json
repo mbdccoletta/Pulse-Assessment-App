@@ -9,6 +9,7 @@
     "uninstall": "npx dt-app uninstall"
   },
   "dependencies": {
+    "@dynatrace-sdk/client-davis-copilot": "^1.0.0",
     "@dynatrace-sdk/client-document": "^1.30.0",
     "@dynatrace-sdk/client-query": "^1.17.0",
     "@dynatrace/strato-components": "~1.18.0",
