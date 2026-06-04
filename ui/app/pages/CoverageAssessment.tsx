@@ -407,6 +407,15 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 🗘 Force refresh
               </Button>
             )}
+            {isDev && (
+              <Button
+                size="condensed"
+                onClick={() => navigate("/ai-insights")}
+                aria-label="Open dedicated AI Insights page (all capabilities at once)"
+              >
+                🤖 AI Insights
+              </Button>
+            )}
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
               Tenant: <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
               {stats && (
