@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import { ExternalLink } from "@dynatrace/strato-components/typography";
@@ -137,19 +137,11 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
 export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations, onSendFollowUp, onRequestInsight }) => {
   const dk = useCurrentTheme() === "dark";
 
-  // When a capability is expanded (user clicked the card), fire the Davis
-  // insight request for it. The hook is idempotent — repeated calls for
-  // a capability already loaded/loading become no-ops, so this is safe to
-  // run on every activeIdx change.
-  useEffect(() => {
-    if (activeIdx == null || !onRequestInsight || !davisRecommendations) return;
-    const cap = capabilities[activeIdx];
-    if (!cap) return;
-    const s = davisRecommendations[cap.name];
-    if (s && s.status === "idle") {
-      void onRequestInsight(cap.name);
-    }
-  }, [activeIdx, capabilities, onRequestInsight, davisRecommendations]);
+  // NB: NO auto-fire on expand. The user explicitly opted out of implicit
+  // Davis calls — every insight must originate from a click on the
+  // "Generate insight" button rendered by DavisInsightSection when the
+  // capability is in the "idle" state. This is the only path that spends
+  // Davis CoPilot quota for this capability.
 
   return (
     <Flex flexDirection="column" gap={6}>
@@ -216,7 +208,7 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                     const aiText = aiState.status === "loading" ? "AI…"
                                  : aiState.status === "error"   ? "AI !"
                                  : aiState.status === "success" ? (act ? "AI ✓" : "AI ready")
-                                 : "Click for AI";
+                                 : "AI available";
                     const aiColor = aiState.status === "error"
                       ? Colors.Text.Critical.Default
                       : Colors.Text.Primary.Default;
