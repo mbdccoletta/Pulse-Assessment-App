@@ -16,13 +16,16 @@ import type { CapabilityResult } from "../hooks/useCoverageData";
 import { CRITERION_ACTIONS } from "../remediationActions";
 
 /** Bump on any semantic change to buildCapabilityPrompt below.
- *  v3 (current): compact prompt — failed criteria inlined as a brief text
- *    table instead of a heavy JSON supplementary. Davis returned `status:
- *    FAILED` on the v2 supplementary-heavy form; v3 keeps total payload
- *    under ~1.5 KB and uses prose instead of nested JSON.
- *  v2: structured supplementary JSON + verbose prompt.
+ *  v4 (current): natural-language question framing. Davis returned
+ *    GUARDRAIL_CHECK_FAILED on v3 because the prompt read as a task
+ *    ("Analyse...", "Rules...", "Do NOT...") rather than a question.
+ *    The Conversational Recommender skill is built for Q&A; v4 phrases
+ *    everything as a question an SE would naturally ask. Format rules
+ *    moved into the `instruction` context where they belong.
+ *  v3: compact text + inline failed-criteria table. Triggered guardrail.
+ *  v2: structured supplementary JSON + verbose prompt. Returned FAILED.
  *  v1: original generic prompt. */
-export const PROMPT_VERSION = "v3";
+export const PROMPT_VERSION = "v4";
 
 /** Shape of the criterion data we feed to the model. Kept minimal but rich
  *  enough that Davis can write a specific, data-grounded recommendation
@@ -106,54 +109,51 @@ export function buildCapabilityPrompt(cap: CapabilityResult): {
   const tierRank = (t: string) => t === "foundation" ? 0 : t === "bestPractice" ? 1 : 2;
   failed.sort((a, b) => tierRank(a.tier) - tierRank(b.tier) || b.gap - a.gap);
 
-  // ── PROMPT TEXT (compact, inline criteria table) ────────────────────
+  // ── PROMPT TEXT (natural-language question) ─────────────────────────
+  // Frame the whole thing as a question an SE would ask Davis Assist.
+  // The guardrail rejects task-style prompts ("Analyse X", "Rules: ...");
+  // it accepts genuine questions about Dynatrace usage.
   const criteriaLines = failed.map(f =>
-    `- ${f.id} [${f.tier}] ${clamp(f.label, 60)} — ${f.currentValue}% (gap ${f.gap.toFixed(0)}pts vs ≥${f.passingThreshold}%). Hint: ${clamp(f.remediationHint, 140)}`
+    `- ${f.id} (${f.tier}): ${clamp(f.label, 60)} is at ${f.currentValue}%, needs ≥${f.passingThreshold}% (gap ${f.gap.toFixed(0)} points). ` +
+    `Suggested action: ${clamp(f.remediationHint, 140)}`
   ).join("\n");
 
   const text =
-    `You are a senior Dynatrace SE. Analyse the failing criteria below ` +
-    `for the "${cap.name}" capability (coverage ${cap.score}%, maturity ${cap.maturity.maturityScore}/100). ` +
-    `Recommend 3 prioritized actions to lift the score.\n\n` +
-    `Failing criteria (sorted by tier, then gap):\n${criteriaLines}\n\n` +
-    `Rules for the 3 recommendations:\n` +
-    `1. Foundation-tier failures first; highest-leverage action second; easiest enablement third.\n` +
-    `2. Each action must cite the criterion IDs it addresses (e.g. "addresses i1, i4").\n` +
-    `3. Quote the gap with exact numbers from the table above.\n` +
-    `4. Refine the Hint into a concrete Dynatrace action — do NOT invent settings or URLs.\n` +
-    `5. Predict the score lift if executed.\n` +
-    `Do NOT restate the capability name, scores, or repeat the table.`;
+    `I'm an SE reviewing a Dynatrace observability coverage assessment for ` +
+    `a customer's "${cap.name}" capability. The capability scored ${cap.score}% ` +
+    `coverage and ${cap.maturity.maturityScore}/100 maturity. These criteria are ` +
+    `below their passing thresholds:\n\n` +
+    `${criteriaLines}\n\n` +
+    `What are the 3 most impactful Dynatrace actions I should recommend to the ` +
+    `customer to lift this capability's score? Please prioritise foundation-tier ` +
+    `fixes first since they gate the maturity formula, then the highest-leverage ` +
+    `single action, then the easiest enablement. For each action, can you cite ` +
+    `which criterion IDs above it addresses, quote the current value and gap, and ` +
+    `estimate the score lift?`;
 
-  // No supplementary in v3 — everything is in `text`. Empty string is
-  // safer than omitting the key because the SDK may treat undefined and
-  // empty differently across versions.
+  // No supplementary — everything is in `text` as a natural question.
   const supplementary = "";
 
-  // ── INSTRUCTION (format) ────────────────────────────────────────────
+  // ── INSTRUCTION (format only — no task instructions) ────────────────
   const instruction =
-    `Format: three sections only — "## 1. <title>", "## 2. <title>", ` +
-    `"## 3. <title>". Each followed by one short paragraph (3–5 sentences). ` +
-    `Bold the lead action verb. No bullet lists, no code fences, no emoji, ` +
-    `no external URLs. Total under 240 words.`;
+    `Please answer with three numbered sections: "## 1. <action title>", ` +
+    `"## 2. <action title>", "## 3. <action title>". Under each heading write ` +
+    `one short paragraph (3-5 sentences). Bold the lead action verb. Keep ` +
+    `the total reply under 240 words. Avoid bullet lists, code blocks, ` +
+    `emoji, or links to external sites.`;
 
   return { text, supplementary, instruction };
 }
 
-/** Instruction passed alongside follow-up turns. Davis already has the full
- *  conversation history via `state`, so we just need to enforce concise
- *  output and the same no-invention rule. */
+/** Instruction passed alongside follow-up turns. Phrased as a request,
+ *  not a list of constraints, to avoid the Davis guardrail. */
 export function buildFollowUpInstruction(): string {
   return (
-    `You are continuing a conversation about a Dynatrace coverage ` +
-    `assessment. Answer the user's follow-up question concisely. ` +
-    `Hard constraints:\n` +
-    `- Do NOT invent Dynatrace features, settings, or URLs.\n` +
-    `- Stay grounded in the prior context (the capability, its failed ` +
-    `criteria, the SE-curated remediationHints, and the Dynatrace docs).\n` +
-    `- Plain markdown only — short paragraphs, optional ordered list. ` +
-    `No code fences, no emoji, no preamble like "Sure, here is...".\n` +
-    `- Total reply under 150 words unless the user explicitly asks for ` +
-    `more detail.`
+    `Please keep the reply concise (under 150 words unless I ask for more ` +
+    `detail), in plain markdown — short paragraphs, optional ordered list, ` +
+    `no code fences or emoji. Ground the answer in the previous context ` +
+    `about this Dynatrace coverage capability and in the Dynatrace docs ` +
+    `you have access to.`
   );
 }
 
