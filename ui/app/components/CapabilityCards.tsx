@@ -26,8 +26,12 @@ interface Props {
   onSelect: (idx: number | null) => void;
   /** Optional map of Davis CoPilot recommendations keyed by capability
    *  name. When provided, an "AI Insight" section renders under each
-   *  expanded card. Gated by useDavisRecommendations({enabled}) upstream. */
+   *  expanded card. */
   davisRecommendations?: DavisRecommendationMap;
+  /** Optional follow-up sender from the useDavisRecommendations hook.
+   *  When provided, each card's AI section gains an "Ask follow-up" input
+   *  so the SE/customer can continue the conversation. */
+  onSendFollowUp?: (capabilityName: string, text: string) => Promise<void>;
 }
 
 const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: boolean }> = ({ cr, dk }) => {
@@ -128,7 +132,7 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
   );
 };
 
-export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations }) => {
+export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations, onSendFollowUp }) => {
   const dk = useCurrentTheme() === "dark";
 
   return (
@@ -231,6 +235,7 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                   <DavisInsightSection
                     state={davisRecommendations[cap.name]}
                     capabilityName={cap.name}
+                    onSendFollowUp={onSendFollowUp}
                   />
                 )}
                 {cap.criteriaResults.map((cr) => (
