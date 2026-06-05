@@ -66,15 +66,19 @@ export function buildReportPrompt(ctx: ReportContext, userPrompt: string): Repor
 
   const cleanUserPrompt = clamp(userPrompt.trim(), 800);
 
+  // v2 framing: put the user's question FIRST so Davis sees it as the
+  // primary input, then offer the assessment data as supporting context.
+  // The previous v1 wrapped the user prompt in quotes ("can you help me
+  // with the following request: '...'") which tripped GUARDRAIL_CHECK
+  // because Davis read it as a meta-task. Direct question works.
   const text =
-    `I'm an SE who just ran a Dynatrace observability coverage assessment ` +
-    `for a customer (tenant: ${ctx.tenant}, date: ${ctx.date}). The overall ` +
-    `coverage score is ${ctx.overallCoverage}% and the overall maturity is ` +
-    `${ctx.overallMaturity}/100. The 9 capabilities scored as follows:\n\n` +
-    `${capLines}\n\n` +
-    `Based on this assessment data and the Dynatrace documentation you have ` +
-    `access to, can you help me with the following request:\n\n` +
-    `"${cleanUserPrompt}"`;
+    `${cleanUserPrompt}\n\n` +
+    `Context: I just ran a Dynatrace coverage assessment for a customer ` +
+    `(tenant ${ctx.tenant}). Overall coverage is ${ctx.overallCoverage}% ` +
+    `and overall maturity is ${ctx.overallMaturity}/100. The 9 capability ` +
+    `scores are:\n${capLines}\n\n` +
+    `Please ground your answer in this assessment data and in the Dynatrace ` +
+    `documentation.`;
 
   // No supplementary — everything in the question. Empty string ⇒ omitted
   // from the SDK context array by the caller.
