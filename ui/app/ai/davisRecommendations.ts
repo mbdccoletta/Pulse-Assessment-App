@@ -281,14 +281,20 @@ export async function getRecommendation(
   const { text: promptText, supplementary, instruction } = buildCapabilityPrompt(cap);
 
   try {
+    // Build context array — only include supplementary if non-empty. v3
+    // omits it entirely; older versions populated it.
+    const context: { type: "supplementary" | "document-retrieval" | "instruction"; value: string }[] = [
+      { type: "instruction", value: instruction },
+      { type: "document-retrieval", value: "dynatrace" },
+    ];
+    if (supplementary) {
+      context.unshift({ type: "supplementary", value: supplementary });
+    }
+
     const resp = await publicClient.recommenderConversation({
       body: {
         text: promptText,
-        context: [
-          { type: "instruction", value: instruction },
-          { type: "supplementary", value: supplementary },
-          { type: "document-retrieval", value: "dynatrace" },
-        ],
+        context,
         annotations: {
           origin_app: "my.pulse.assessment",
           prompt_version: PROMPT_VERSION,
@@ -302,9 +308,28 @@ export async function getRecommendation(
       return { ok: false, err: { status: 0, message: "Unexpected event-stream response", hint: "Davis returned a streaming response when JSON was expected." } };
     }
     if (!resp || resp.status === "FAILED" || !resp.text) {
+      // Dump everything we got — metadata often contains the actual cause.
       // eslint-disable-next-line no-console
-      console.warn("[Davis] FAILED status or empty text", resp?.status);
-      return { ok: false, err: { status: 0, message: `Response status: ${resp?.status ?? "empty"}`, hint: "Davis returned a failed or empty response. Try again in a moment." } };
+      console.warn("[Davis] FAILED or empty response. Full payload:", {
+        status: resp?.status,
+        text: resp?.text,
+        messageToken: resp?.messageToken,
+        metadata: resp?.metadata,
+        promptLen: promptText.length,
+        instructionLen: instruction.length,
+        suppLen: supplementary.length,
+      });
+      const metaSummary = resp?.metadata
+        ? ` Metadata: ${JSON.stringify(resp.metadata).slice(0, 200)}`
+        : "";
+      return {
+        ok: false,
+        err: {
+          status: 0,
+          message: `Response status: ${resp?.status ?? "empty"}.${metaSummary}`,
+          hint: "Davis processed the request but produced no usable answer. Common causes: prompt complexity, content-filter trigger, or transient service issue. Try the Force refresh button to re-issue with the latest prompt template.",
+        },
+      };
     }
 
     const entry: CacheEntry = {

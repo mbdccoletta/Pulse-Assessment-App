@@ -15,8 +15,14 @@
 import type { CapabilityResult } from "../hooks/useCoverageData";
 import { CRITERION_ACTIONS } from "../remediationActions";
 
-/** Bump on any semantic change to buildCapabilityPrompt below. */
-export const PROMPT_VERSION = "v2";
+/** Bump on any semantic change to buildCapabilityPrompt below.
+ *  v3 (current): compact prompt — failed criteria inlined as a brief text
+ *    table instead of a heavy JSON supplementary. Davis returned `status:
+ *    FAILED` on the v2 supplementary-heavy form; v3 keeps total payload
+ *    under ~1.5 KB and uses prose instead of nested JSON.
+ *  v2: structured supplementary JSON + verbose prompt.
+ *  v1: original generic prompt. */
+export const PROMPT_VERSION = "v3";
 
 /** Shape of the criterion data we feed to the model. Kept minimal but rich
  *  enough that Davis can write a specific, data-grounded recommendation
@@ -59,11 +65,17 @@ function lowestThreshold(thresholds: string): number {
   return Math.min(...nums);
 }
 
+/** Truncate long strings so the prompt body stays compact. */
+function clamp(s: string, n: number): string {
+  if (!s) return "";
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
 /** Top-level prompt builder for a single capability.
  *
- *  Output: text + supplementary + instruction. The text is the question;
- *  the supplementary is the structured JSON Davis reasons over; the
- *  instruction shapes the response format. */
+ *  v3 design: inline the failed-criteria table directly into the text body,
+ *  no supplementary JSON. Smaller payload, simpler structure — Davis was
+ *  returning status:FAILED on the heavier v2 form. */
 export function buildCapabilityPrompt(cap: CapabilityResult): {
   text: string;
   supplementary: string;
@@ -84,94 +96,45 @@ export function buildCapabilityPrompt(cap: CapabilityResult): {
         passingThreshold,
         gap,
         tier: cr.tier,
-        remediationHint: rem?.action ?? "(no static remediation registered for this criterion)",
+        remediationHint: rem?.action ?? "(no static remediation registered)",
         docUrl: rem?.docUrl ?? "",
       };
     });
 
-  // Compute aggregates Davis should use to scope effort.
-  const foundationFailing = failed.filter(f => f.tier === "foundation").length;
-  const bpFailing = failed.filter(f => f.tier === "bestPractice").length;
-  const excellenceFailing = failed.filter(f => f.tier === "excellence").length;
-  const biggestGap = failed.reduce((max, f) => f.gap > max ? f.gap : max, 0);
+  // Sort: foundation first, then by gap descending (worst gap first within
+  // each tier). Davis is asked to follow this ordering for the response.
+  const tierRank = (t: string) => t === "foundation" ? 0 : t === "bestPractice" ? 1 : 2;
+  failed.sort((a, b) => tierRank(a.tier) - tierRank(b.tier) || b.gap - a.gap);
 
-  // ── PROMPT TEXT ─────────────────────────────────────────────────────
-  // The text is what the model "reads first". Keep it focused on the
-  // analytical task. The structured data lives in `supplementary` so the
-  // model can quote exact numbers from it.
+  // ── PROMPT TEXT (compact, inline criteria table) ────────────────────
+  const criteriaLines = failed.map(f =>
+    `- ${f.id} [${f.tier}] ${clamp(f.label, 60)} — ${f.currentValue}% (gap ${f.gap.toFixed(0)}pts vs ≥${f.passingThreshold}%). Hint: ${clamp(f.remediationHint, 140)}`
+  ).join("\n");
+
   const text =
-    `You are a senior Dynatrace Solutions Engineer reviewing an observability ` +
-    `coverage assessment for a customer. Analyse the deficiencies in the ` +
-    `"${cap.name}" capability and recommend the next 3 concrete actions to ` +
-    `lift this score, ordered by impact.\n\n` +
+    `You are a senior Dynatrace SE. Analyse the failing criteria below ` +
+    `for the "${cap.name}" capability (coverage ${cap.score}%, maturity ${cap.maturity.maturityScore}/100). ` +
+    `Recommend 3 prioritized actions to lift the score.\n\n` +
+    `Failing criteria (sorted by tier, then gap):\n${criteriaLines}\n\n` +
+    `Rules for the 3 recommendations:\n` +
+    `1. Foundation-tier failures first; highest-leverage action second; easiest enablement third.\n` +
+    `2. Each action must cite the criterion IDs it addresses (e.g. "addresses i1, i4").\n` +
+    `3. Quote the gap with exact numbers from the table above.\n` +
+    `4. Refine the Hint into a concrete Dynatrace action — do NOT invent settings or URLs.\n` +
+    `5. Predict the score lift if executed.\n` +
+    `Do NOT restate the capability name, scores, or repeat the table.`;
 
-    `Current state:\n` +
-    `- Coverage score: ${cap.score}/100 (band ${cap.maturity.maturityBand})\n` +
-    `- Maturity score: ${cap.maturity.maturityScore}/100 (level ${cap.maturity.levelLabel})\n` +
-    `- Failed criteria: ${failed.length} of ${cap.criteriaResults.length}\n` +
-    `  • Foundation tier: ${foundationFailing} failing\n` +
-    `  • Best Practice tier: ${bpFailing} failing\n` +
-    `  • Excellence tier: ${excellenceFailing} failing\n` +
-    `- Largest single-criterion gap: ${biggestGap.toFixed(1)} points below passing threshold\n\n` +
-
-    `Failed criteria with observed gaps are in the supplementary JSON. ` +
-    `Each entry has: id, label, description, currentValue (%), passingThreshold (%), ` +
-    `gap (points below threshold), tier, and a static remediationHint that the SE ` +
-    `team curated as the baseline action.\n\n` +
-
-    `Your task:\n` +
-    `For each of the 3 recommendations:\n` +
-    `1. Cite the specific criterion IDs it addresses (e.g. "i1, i4, i7").\n` +
-    `2. Quote the observed gap with exact numbers from the data ` +
-    `("Host CPU coverage is 32% against a 50% threshold — gap of 18 points").\n` +
-    `3. Name the precise Dynatrace feature, integration, or setting to enable ` +
-    `(use the remediationHint as your starting point and refine it for the ` +
-    `customer's situation).\n` +
-    `4. Predict the score lift IF executed (e.g. "would lift coverage by ` +
-    `roughly +13 points").\n\n` +
-
-    `Ordering rules (strict):\n` +
-    `1. Foundation-tier failures FIRST — they gate Best Practice and Excellence ` +
-    `in the Maturity formula. Even one Foundation failure caps Maturity at L1.\n` +
-    `2. Highest-leverage action SECOND — prefer one action that unblocks ` +
-    `multiple criteria over one that fixes only one.\n` +
-    `3. Easiest enablement THIRD — toggle in UI > deploy OneAgent > multi-step ` +
-    `cloud integration. Smaller effort = faster win for the customer.\n\n` +
-
-    `Hard constraints:\n` +
-    `- Do NOT invent Dynatrace features, settings, or URLs. If unsure, use the ` +
-    `remediationHint as-is.\n` +
-    `- Do NOT restate the capability name or scores in your reply — the user ` +
-    `already sees them.\n` +
-    `- Do NOT add a preamble or a closing summary.\n` +
-    `- Total response under 280 words.`;
-
-  // ── SUPPLEMENTARY (structured) ──────────────────────────────────────
-  const supplementary = JSON.stringify({
-    capability: cap.name,
-    coverageScore: cap.score,
-    maturityScore: cap.maturity.maturityScore,
-    maturityBand: cap.maturity.maturityBand,
-    maturityLevel: cap.maturity.level,
-    maturityLevelLabel: cap.maturity.levelLabel,
-    tierBreakdown: {
-      foundation:   { passed: cap.maturity.foundation.passed,   total: cap.maturity.foundation.total },
-      bestPractice: { passed: cap.maturity.bestPractice.passed, total: cap.maturity.bestPractice.total },
-      excellence:   { passed: cap.maturity.excellence.passed,   total: cap.maturity.excellence.total },
-    },
-    failedCriteria: failed,
-  }, null, 2);
+  // No supplementary in v3 — everything is in `text`. Empty string is
+  // safer than omitting the key because the SDK may treat undefined and
+  // empty differently across versions.
+  const supplementary = "";
 
   // ── INSTRUCTION (format) ────────────────────────────────────────────
   const instruction =
-    `Output format (strict):\n` +
-    `Three sections only. Each starts with a numbered markdown heading ` +
-    `("## 1. <title>", "## 2. <title>", "## 3. <title>"). ` +
-    `Under each heading, write ONE short paragraph (3–5 sentences) covering ` +
-    `the action, the criterion IDs addressed, the observed gap, and the ` +
-    `expected score lift. ` +
-    `Use **bold** for the action verb at the start of each paragraph. ` +
-    `Do NOT use bullet lists, code fences, emoji, or external URLs.`;
+    `Format: three sections only — "## 1. <title>", "## 2. <title>", ` +
+    `"## 3. <title>". Each followed by one short paragraph (3–5 sentences). ` +
+    `Bold the lead action verb. No bullet lists, no code fences, no emoji, ` +
+    `no external URLs. Total under 240 words.`;
 
   return { text, supplementary, instruction };
 }
