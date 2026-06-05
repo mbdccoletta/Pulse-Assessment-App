@@ -33,28 +33,86 @@ interface Props {
 /** Pre-filled templates the SE can pick. They translate to natural-language
  *  questions, not commands — same as the per-capability prompt strategy
  *  that gets past the Davis guardrail. */
-// SE-grade question templates. Each is a focused, professional question
-// that maps to a real Pulse Assessment use case. Phrased to ask Davis for
-// INFORMATION (its strength), not document generation (which trips the
-// guardrail). All start with "What" / "How" / "Which" — pure Q&A shape.
-const TEMPLATES: { title: string; body: string }[] = [
+// SE-grade question templates grouped by analytical angle. All in pure
+// Q&A shape (What/How/Which/Where) so the Davis guardrail accepts them.
+// Each asks Davis for INFORMATION the SE then uses to compose deliverables.
+interface TemplateGroup {
+  category: string;
+  templates: { title: string; body: string }[];
+}
+
+const TEMPLATE_GROUPS: TemplateGroup[] = [
   {
-    title: "What should I prioritize?",
-    body: "Given the current state of this assessment, what are the top 3 actions I should prioritize to maximise impact for the customer? Please order by impact-to-effort ratio. For each action: cite the specific capability and criterion IDs it addresses, quote the current values and gaps from the data, estimate the resulting score lift, and note whether it's a Foundation-tier fix (which gates the Maturity formula) or a Best Practice / Excellence improvement. Explain the reasoning behind the ordering so I can defend it to the customer.",
+    category: "Tactical",
+    templates: [
+      {
+        title: "What should I prioritize?",
+        body: "Given the current state of this assessment, what are the top 3 actions I should prioritize to maximise impact? Please order by impact-to-effort ratio. For each action: cite the specific capability and criterion IDs it addresses, quote the current values and gaps from the data, estimate the resulting score lift, and note whether it's a Foundation-tier fix (which gates the Maturity formula) or a Best Practice / Excellence improvement. Explain the reasoning behind the ordering so I can defend it to the customer.",
+      },
+      {
+        title: "What are the points of attention?",
+        body: "What are the most important warning signs and risk areas in this data? Please highlight in order of severity: (a) Foundation-tier failures that cap Maturity at L1, (b) criteria at exactly 0% that suggest disabled or missing integrations, (c) capabilities with several Excellence wins but failing Foundation — these flatter the score but mask structural gaps, (d) any capability below 50% coverage. Do not suggest fixes yet — just call out what deserves attention and why.",
+      },
+    ],
   },
   {
-    title: "How do I increase coverage?",
-    body: "Looking specifically at coverage scores across the 9 capabilities, what are the 5 fastest actions I can take to lift the overall coverage average? Identify the failing criteria with the smallest gap to passing threshold (quick wins) and the capabilities most likely to move with a single configuration change. Please order by points-of-coverage gained per unit of effort, and group actions that share the same underlying integration (e.g. cloud platform setup) so we can sequence them efficiently.",
+    category: "Technical deep-dive",
+    templates: [
+      {
+        title: "Root cause & blind spots",
+        body: "For each failing criterion in this assessment, what is the most likely root cause in the customer's Dynatrace configuration? Please identify the missing or misconfigured component (e.g. OneAgent flag, cloud integration, OpenPipeline rule, OpenTelemetry instrumentation, Davis AI setting). Then map each root cause to the type of incident the customer would NOT detect today — i.e. what blind spots does this assessment reveal? Be specific about which signals, alerts, or problem types are at risk.",
+      },
+      {
+        title: "Architecture maturity review",
+        body: "Looking at the pattern of failures across all 9 capabilities, what does it tell me about the customer's observability architecture maturity? Identify any architectural anti-patterns visible in the data — for example: cloud monitoring enabled but no log enrichment, OneAgent broadly deployed but Kubernetes clusters disconnected, RUM active without synthetic monitoring, or AI Observability without Davis problem coverage. Propose architectural-level improvements that would unlock multiple criteria at once before recommending tactical fixes.",
+      },
+      {
+        title: "Feature adoption roadmap",
+        body: "What is the optimal sequence of Dynatrace feature enablement to take this customer from their current overall coverage to 90%+? Please structure the answer as 3 phases (0-3 months, 3-6 months, 6-12 months). For each phase: list the specific features to enable, the criterion IDs that get unlocked, the prerequisites that must be satisfied first, and the expected lift in overall coverage and overall maturity at the end of the phase.",
+      },
+    ],
   },
   {
-    title: "What are the points of attention?",
-    body: "What are the most important warning signs and risk areas in this assessment data? Please highlight, in order of severity: (a) Foundation-tier failures that cap Maturity progression at L1 regardless of how well Best Practice and Excellence score, (b) criteria sitting at exactly 0% that suggest disabled or missing integrations, (c) capabilities that have several Excellence wins but failing Foundation — these flatter the score but mask structural gaps, and (d) any capability whose coverage is below 50%. Do not suggest fixes yet — just call out what deserves immediate attention and why.",
+    category: "Strategy",
+    templates: [
+      {
+        title: "How do I increase coverage?",
+        body: "Looking specifically at coverage scores, what are the 5 fastest actions to lift the overall coverage average? Identify failing criteria with the smallest gap to threshold (quick wins) and capabilities likely to move with a single configuration change. Order by points-of-coverage gained per unit of effort, and group actions that share the same underlying integration (e.g. one cloud platform setup that unblocks several cloud-enrichment criteria) so we can sequence them efficiently.",
+      },
+      {
+        title: "How do I increase maturity?",
+        body: "How can I improve Maturity scores across the 9 capabilities? Remember the progressive formula: Foundation 60% weight, Best Practice 25% counts only if Foundation reaches 80%, Excellence 15% counts only if BP reaches 60%. Given each capability's current Maturity Level (L0-L3) and per-tier breakdown, what is the optimal sequence of actions to advance each capability one level? Foundation-tier failures first across all capabilities — they unlock the whole formula. For each capability, name the specific tier-gate to clear next and the action to clear it.",
+      },
+      {
+        title: "12-month maturity roadmap",
+        body: "Please build a 12-month roadmap to advance this customer's maturity. Break it into quarterly milestones. For each quarter: which capabilities are the focus, which actions get executed (cite criterion IDs), expected capability-level outcomes at end of quarter (L1→L2→L3), and resource implications (SE hours, customer effort, integration touchpoints). Account for the Foundation→BP→Excellence gating throughout. End with the expected overall coverage and overall maturity targets at month 12.",
+      },
+    ],
   },
   {
-    title: "How do I increase maturity?",
-    body: "How can I improve Maturity scores across the 9 capabilities? Remember the progressive formula: Foundation tier weight 60%, Best Practice 25% counts only if Foundation reaches 80%, Excellence 15% counts only if Best Practice reaches 60%. Given each capability's current Maturity Level (L0/L1/L2/L3) and per-tier breakdown, what is the optimal sequence of actions to advance each capability one level? Focus on Foundation-tier failures first across all capabilities — they unlock the whole formula. For each capability, name the specific tier-gate that needs to be cleared next and the action to clear it.",
+    category: "Business",
+    templates: [
+      {
+        title: "ROI & business case",
+        body: "What is the business case for the customer closing the top 5 gaps in this assessment? For each gap: estimated cost of an undetected incident in that area (downtime / revenue / brand), expected MTTR reduction once the gap is closed, FTE hours saved per quarter through better observability, and any compliance or regulatory exposure (SOC2, PCI, HIPAA, ISO 27001) the gap may create. Frame the answer in language suitable for a CTO-level budget discussion — concrete numbers where reasonable, ranges where uncertain.",
+      },
+      {
+        title: "Executive narrative",
+        body: "What story does this assessment tell about the customer's observability maturity, and how should I frame it for a CIO/CTO conversation? Cover: how does this posture compare to typical enterprise Dynatrace adoption, which capabilities indicate technological investment vs. underinvestment, what untapped value exists in the existing licence footprint, and what are 3 board-level talking points the customer can take to their leadership? Avoid jargon — the audience is business leadership.",
+      },
+      {
+        title: "Licence optimization",
+        body: "Based on the failing criteria patterns, where is the customer likely under-utilizing Dynatrace capabilities they already own? Identify features that are paid for but inactive (signals: criteria at 0% in capabilities with active foundations). Conversely, identify gaps that justify a capability upgrade or expansion (e.g. Log Management add-on, RUM, AppSec, Davis CoPilot). Give me a balanced view: optimize current spend AND surface expansion opportunities the SE can have a conversation about.",
+      },
+    ],
   },
 ];
+
+// Flat view used by character counters / iteration.
+const TEMPLATES = TEMPLATE_GROUPS.flatMap(g => g.templates);
+// Suppress unused-var lint by re-exporting if needed; current code path
+// only uses TEMPLATE_GROUPS for rendering.
+void TEMPLATES;
 
 // ── Minimal markdown renderer (same safe subset used by DavisInsightSection) ──
 function renderMarkdown(md: string, textColor: string, accentColor: string): React.ReactNode {
@@ -204,17 +262,31 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
           a tailored response. Pick a template below or write your own.
         </Text>
 
-        {/* Templates */}
-        <Flex flexDirection="row" gap={6} flexWrap="wrap">
-          {TEMPLATES.map(t => (
-            <Button
-              key={t.title}
-              size="condensed"
-              onClick={() => setDraft(t.body)}
-              disabled={status === "loading"}
-            >
-              {t.title}
-            </Button>
+        {/* Templates — grouped by analytical angle (Tactical / Technical /
+            Strategy / Business). Each category renders a small label above
+            its chip row so the SE can see the analytical range available. */}
+        <Flex flexDirection="column" gap={6}>
+          {TEMPLATE_GROUPS.map(group => (
+            <Flex key={group.category} flexDirection="column" gap={4}>
+              <Text style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                textTransform: "uppercase", color: subColor,
+              }}>
+                {group.category}
+              </Text>
+              <Flex flexDirection="row" gap={6} flexWrap="wrap">
+                {group.templates.map(t => (
+                  <Button
+                    key={t.title}
+                    size="condensed"
+                    onClick={() => setDraft(t.body)}
+                    disabled={status === "loading"}
+                  >
+                    {t.title}
+                  </Button>
+                ))}
+              </Flex>
+            </Flex>
           ))}
         </Flex>
 
