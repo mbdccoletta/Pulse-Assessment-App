@@ -187,6 +187,32 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                   fontSize: 11, padding: "2px 8px", borderRadius: 6,
                   background: ml.color + (dk ? "25" : "18"), color: ml.color, fontWeight: 600,
                 }}>{ml.label}</Text>
+                {/* AI Insight indicator — visible on collapsed cards too so the
+                    SE/customer knows AI tips are available without expanding.
+                    Click on the card already toggles expansion. */}
+                {davisRecommendations?.[cap.name] && davisRecommendations[cap.name]!.status !== "skipped" && (
+                  (() => {
+                    const aiState = davisRecommendations[cap.name]!;
+                    const aiText = aiState.status === "loading" ? "AI…"
+                                 : aiState.status === "error"   ? "AI !"
+                                 : aiState.status === "success" ? (act ? "AI ✓" : "AI tip")
+                                 : "AI";
+                    const aiColor = aiState.status === "error"
+                      ? Colors.Text.Critical.Default
+                      : Colors.Text.Primary.Default;
+                    return (
+                      <Text style={{
+                        fontSize: 10, fontWeight: 700,
+                        padding: "2px 8px", borderRadius: 6,
+                        background: aiColor + (dk ? "20" : "15"),
+                        color: aiColor,
+                        border: `1px solid ${aiColor}${dk ? "40" : "30"}`,
+                      }} aria-label={`AI insight ${aiState.status}`}>
+                        {aiText}
+                      </Text>
+                    );
+                  })()
+                )}
               </Flex>
             </Flex>
             <Flex flexDirection="column" style={{ height: 4, borderRadius: 3, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", overflow: "hidden" }}>
@@ -198,15 +224,18 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
             </Flex>
             {act && (
               <Flex flexDirection="column" style={{ marginTop: 6 }}>
-                {cap.criteriaResults.map((cr) => (
-                  <CriterionRow key={cr.id} cr={cr} dk={dk} />
-                ))}
+                {/* Davis insight first — it's the highest-leverage
+                    information when the SE/customer opens a card to
+                    understand a gap. Detailed per-criterion list follows. */}
                 {davisRecommendations && (
                   <DavisInsightSection
                     state={davisRecommendations[cap.name]}
                     capabilityName={cap.name}
                   />
                 )}
+                {cap.criteriaResults.map((cr) => (
+                  <CriterionRow key={cr.id} cr={cr} dk={dk} />
+                ))}
               </Flex>
             )}
           </Flex>
