@@ -117,11 +117,12 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   /** AI Report modal — replaces the old First Day Results language picker. */
   const [showReportModal, setShowReportModal] = useState(false);
 
-  // Davis CoPilot dynamic recommendations — customer-facing.
-  // Returns { byCapability, sendFollowUp }. byCapability is the map of
-  // per-capability conversation state used by the cards; sendFollowUp
-  // lets the user continue the conversation from inside the card.
-  const davisHandle = useDavisRecommendations(capabilities, { enabled: true });
+  // Davis CoPilot dynamic recommendations — DEV ONLY. The Davis surface
+  // (AI Insights, Generate Report, in-card AI section, /ai-insights page)
+  // is hidden from customer tenants and exposed only when ?dev=1 or
+  // localStorage.cca.dev is set. enabled=isDev keeps the hook idle so no
+  // SDK calls fire from the production tenant.
+  const davisHandle = useDavisRecommendations(capabilities, { enabled: !!isDev });
 
   const toggleCap = useCallback((name: string) => {
     setExcludedCaps(prev => {
@@ -378,15 +379,34 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 </Button.Suffix>
               )}
             </Button>
-            <Button
-              size="condensed"
-              variant="emphasized"
-              color="primary"
-              onClick={() => setShowReportModal(true)}
-              aria-label="Generate a custom report from this assessment using Davis CoPilot"
-            >
-              Generate Report
-            </Button>
+            {/* Production: original First Day Results — static PDF in EN/PT/ES.
+                The customer tenant never sees Davis-powered surfaces. */}
+            {!isDev && (
+              <Menu>
+                <Menu.Trigger>
+                  <Button loading={exporting} size="condensed">
+                    First Day Results
+                  </Button>
+                </Menu.Trigger>
+                <Menu.Content>
+                  <Menu.Item onSelect={() => generateClientReport("en")}>Download English (EN)</Menu.Item>
+                  <Menu.Item onSelect={() => generateClientReport("pt")}>Download Portugues (PT)</Menu.Item>
+                  <Menu.Item onSelect={() => generateClientReport("es")}>Download Espanol (ES)</Menu.Item>
+                </Menu.Content>
+              </Menu>
+            )}
+            {/* Dev only: Davis-powered Generate Report. */}
+            {isDev && (
+              <Button
+                size="condensed"
+                variant="emphasized"
+                color="primary"
+                onClick={() => setShowReportModal(true)}
+                aria-label="Generate a custom report from this assessment using Davis CoPilot"
+              >
+                Generate Report
+              </Button>
+            )}
             {/* Diagnostic controls — gated by isDev (?dev=1 or
                 localStorage.cca.dev). Hidden from customer view. */}
             {isDev && coverageData.perfEntries != null && (
@@ -407,20 +427,19 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 Force refresh
               </Button>
             )}
-            {/* AI Insights is now customer-facing — visible without dev gate.
-                If Davis CoPilot is not provisioned on the tenant, the page
-                still loads and individual cards show a graceful "unavailable"
-                notice. No SDK quota is spent until the user actually opens
-                the page. */}
-            <Button
-              size="condensed"
-              variant="emphasized"
-              color="primary"
-              onClick={() => navigate("/ai-insights")}
-              aria-label="Open dedicated AI Insights page (all capabilities at once)"
-            >
-              AI Insights
-            </Button>
+            {/* Dev only: dedicated AI Insights page. Hidden from customer
+                tenants — the entire Davis surface is dev-gated. */}
+            {isDev && (
+              <Button
+                size="condensed"
+                variant="emphasized"
+                color="primary"
+                onClick={() => navigate("/ai-insights")}
+                aria-label="Open dedicated AI Insights page (all capabilities at once)"
+              >
+                AI Insights
+              </Button>
+            )}
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
               Tenant: <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
               {stats && (
@@ -520,7 +539,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? "50vh" : undefined,
             }}>
-              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} />
+              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={isDev ? davisHandle.byCapability : undefined} onSendFollowUp={isDev ? davisHandle.sendFollowUp : undefined} onRequestInsight={isDev ? davisHandle.requestInsight : undefined} />
             </Flex>
           </>) : viewMode === "maturity" ? (
             <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} isMobile={isMobile} />
@@ -671,19 +690,20 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
         </Flex>
       )}
 
-      {/* AI Report Modal — opens from the toolbar "Generate Report" button.
-          Always mounted so the open animation works, gated by `show`. */}
-      <AiReportModal
-        show={showReportModal}
-        onDismiss={() => setShowReportModal(false)}
-        ctx={{
-          tenant: tenant ?? "(unknown)",
-          date: date ?? "",
-          overallCoverage: totalScore,
-          overallMaturity: overallMaturityLevel,
-          capabilities,
-        }}
-      />
+      {/* AI Report Modal — dev only. Not mounted in production. */}
+      {isDev && (
+        <AiReportModal
+          show={showReportModal}
+          onDismiss={() => setShowReportModal(false)}
+          ctx={{
+            tenant: tenant ?? "(unknown)",
+            date: date ?? "",
+            overallCoverage: totalScore,
+            overallMaturity: overallMaturityLevel,
+            capabilities,
+          }}
+        />
+      )}
 
     </Flex>
   );
