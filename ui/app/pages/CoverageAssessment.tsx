@@ -115,11 +115,10 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   const [showGuide, setShowGuide] = useState(false);
 
   // Davis CoPilot dynamic recommendations — customer-facing.
-  // The hook fans out at most one request per failing capability, cached
-  // 24h in the Document Store. On tenants without the davis-copilot scope
-  // provisioned, calls fail silently and the UI shows a "Davis unavailable"
-  // notice; the assessment itself is unaffected.
-  const davisRecommendations = useDavisRecommendations(capabilities, { enabled: true });
+  // Returns { byCapability, sendFollowUp }. byCapability is the map of
+  // per-capability conversation state used by the cards; sendFollowUp
+  // lets the user continue the conversation from inside the card.
+  const davisHandle = useDavisRecommendations(capabilities, { enabled: true });
 
   const toggleCap = useCallback((name: string) => {
     setExcludedCaps(prev => {
@@ -521,7 +520,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? "50vh" : undefined,
             }}>
-              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={davisRecommendations} />
+              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} />
             </Flex>
           </>) : viewMode === "maturity" ? (
             <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} isMobile={isMobile} />

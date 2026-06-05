@@ -63,7 +63,9 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
 
   // Customer-facing — fires Davis calls whenever capabilities are present.
   // Cache + signature dedup keep cost bounded; failures degrade gracefully.
-  const recommendations = useDavisRecommendations(capabilities, { enabled: true });
+  const davisHandle = useDavisRecommendations(capabilities, { enabled: true });
+  const recommendations = davisHandle.byCapability;
+  const sendFollowUp = davisHandle.sendFollowUp;
 
   // Sort capabilities by score ascending so the worst-performing (most
   // actionable) capability lands at the top. We rebuild this on every
@@ -245,7 +247,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
                   All criteria passed — no recommendation needed.
                 </Text>
               ) : (
-                <DavisInsightSection state={state} capabilityName={cap.name} />
+                <DavisInsightSection state={state} capabilityName={cap.name} onSendFollowUp={sendFollowUp} />
               )}
             </Container>
           );

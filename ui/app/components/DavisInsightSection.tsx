@@ -18,9 +18,10 @@
 // inline code, line breaks). No raw HTML, no link execution surprises.
 // Strato's <Text> and <Flex> handle theme adaptation automatically.
 
-import React from "react";
+import React, { useState } from "react";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
+import { Button } from "@dynatrace/strato-components/buttons";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Text, Strong } from "@dynatrace/strato-components/typography";
 import { Skeleton, SkeletonText } from "@dynatrace/strato-components/content";
@@ -29,6 +30,11 @@ import type { DavisRecommendationState } from "../hooks/useDavisRecommendations"
 interface Props {
   state: DavisRecommendationState | undefined;
   capabilityName: string;
+  /** Optional follow-up sender from the useDavisRecommendations hook. When
+   *  provided, the component renders an input box so the user can ask
+   *  Davis clarifying questions. When omitted, only the initial response
+   *  shows (used for snapshot views or read-only contexts). */
+  onSendFollowUp?: (capabilityName: string, text: string) => Promise<void>;
 }
 
 /** Tiny markdown renderer — handles `**bold**`, `` `code` ``, `# heading`,
@@ -154,8 +160,9 @@ function renderInline(text: string, textColor: string, accentColor: string): Rea
   return parts;
 }
 
-export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName }) => {
+export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, onSendFollowUp }) => {
   const dk = useCurrentTheme() === "dark";
+  const [draft, setDraft] = useState("");
 
   if (!state || state.status === "skipped") return null;
 
@@ -190,34 +197,126 @@ export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName }) 
     }}>
       {Header}
 
-      {state.status === "loading" && (
-        <Flex flexDirection="column" gap={4} style={{ marginTop: 2 }}>
-          <Skeleton height={10} width="60%" />
-          <SkeletonText lines={3} />
+      {/* Conversation thread — initial response + any follow-ups.
+          Each turn alternates: assistant → user → assistant → ... */}
+      {state.conversation.length > 0 && (
+        <Flex flexDirection="column" gap={8} style={{ marginTop: 2 }}>
+          {state.conversation.map((turn, i) => {
+            const isAssistant = turn.role === "assistant";
+            return (
+              <Flex key={i} flexDirection="column"
+                style={{
+                  // User turns are subtly offset and tinted to distinguish
+                  // from Davis's responses.
+                  marginLeft: isAssistant ? 0 : 16,
+                  paddingLeft: isAssistant ? 0 : 10,
+                  borderLeft: isAssistant ? undefined : `2px solid ${accentColor}66`,
+                }}>
+                {!isAssistant && (
+                  <Text style={{
+                    fontSize: 10, fontWeight: 700, color: accentColor,
+                    textTransform: "uppercase", letterSpacing: 0.5,
+                    marginBottom: 2,
+                  }}>
+                    You asked
+                  </Text>
+                )}
+                <Flex flexDirection="column" gap={2}>
+                  {renderMarkdown(turn.text, textColor, accentColor)}
+                </Flex>
+              </Flex>
+            );
+          })}
         </Flex>
       )}
 
-      {state.status === "error" && (
+      {/* Loading skeleton — shown when initial fan-out is mid-flight OR a
+          follow-up is being generated. */}
+      {state.status === "loading" && (
+        <Flex flexDirection="column" gap={4}
+          style={{ marginTop: state.conversation.length > 0 ? 8 : 2 }}>
+          <Skeleton height={10} width="60%" />
+          <SkeletonText lines={state.conversation.length > 0 ? 2 : 3} />
+        </Flex>
+      )}
+
+      {/* Error notice — discreet single-line below the thread. */}
+      {state.status === "error" && state.conversation.length === 0 && (
         <Text style={{ fontSize: 11, color: subColor, fontStyle: "italic" }}>
           Davis CoPilot is unavailable right now. The static recommendation above still applies.
         </Text>
       )}
+      {state.status === "error" && state.conversation.length > 0 && (
+        <Text style={{ fontSize: 11, color: Colors.Text.Critical.Default,
+                       fontStyle: "italic", marginTop: 6 }}>
+          {state.error ?? "Davis CoPilot follow-up failed."}
+        </Text>
+      )}
 
-      {state.status === "success" && state.rec && (
-        <Flex flexDirection="column" gap={2}>
-          {renderMarkdown(state.rec.text, textColor, accentColor)}
-
+      {/* Footer: provenance + follow-up input. Footer renders only after
+          the initial response has arrived (state.rec is set). */}
+      {state.rec && (
+        <Flex flexDirection="column" style={{
+          marginTop: 8, paddingTop: 8,
+          borderTop: `1px solid ${borderColor}`,
+        }}>
           <Flex flexDirection="row" alignItems="center" justifyContent="space-between"
-            style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${borderColor}` }}>
+            style={{ marginBottom: onSendFollowUp ? 6 : 0 }}>
             <Text style={{ fontSize: 10, color: subColor, fontStyle: "italic" }}>
               AI-generated · may contain inaccuracies · verify before acting
             </Text>
-            {state.rec.fromCache && (
+            {state.rec.fromCache && state.conversation.length === 1 && (
               <Text style={{ fontSize: 10, color: subColor }}>
                 cached
               </Text>
             )}
           </Flex>
+
+          {/* Follow-up input — only when caller wired onSendFollowUp.
+              Submits on Enter or button click. Disabled while loading. */}
+          {onSendFollowUp && (
+            <Flex flexDirection="row" gap={6} alignItems="center">
+              <input
+                type="text"
+                value={draft}
+                placeholder="Ask Davis a follow-up question..."
+                disabled={state.status === "loading"}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && draft.trim() && state.status !== "loading") {
+                    const txt = draft;
+                    setDraft("");
+                    void onSendFollowUp(capabilityName, txt);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  flex: 1,
+                  padding: "5px 8px",
+                  fontSize: 12,
+                  borderRadius: 4,
+                  border: `1px solid ${borderColor}`,
+                  background: dk ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.6)",
+                  color: textColor,
+                  fontFamily: "inherit",
+                  outline: "none",
+                }}
+                aria-label={`Ask Davis a follow-up about ${capabilityName}`}
+              />
+              <Button
+                size="condensed"
+                disabled={!draft.trim() || state.status === "loading"}
+                onClick={(e) => {
+                  e?.stopPropagation?.();
+                  const txt = draft;
+                  setDraft("");
+                  void onSendFollowUp(capabilityName, txt);
+                }}
+              >
+                Ask
+              </Button>
+            </Flex>
+          )}
         </Flex>
       )}
     </Flex>

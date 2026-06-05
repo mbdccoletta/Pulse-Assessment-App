@@ -176,6 +176,24 @@ export function buildCapabilityPrompt(cap: CapabilityResult): {
   return { text, supplementary, instruction };
 }
 
+/** Instruction passed alongside follow-up turns. Davis already has the full
+ *  conversation history via `state`, so we just need to enforce concise
+ *  output and the same no-invention rule. */
+export function buildFollowUpInstruction(): string {
+  return (
+    `You are continuing a conversation about a Dynatrace coverage ` +
+    `assessment. Answer the user's follow-up question concisely. ` +
+    `Hard constraints:\n` +
+    `- Do NOT invent Dynatrace features, settings, or URLs.\n` +
+    `- Stay grounded in the prior context (the capability, its failed ` +
+    `criteria, the SE-curated remediationHints, and the Dynatrace docs).\n` +
+    `- Plain markdown only — short paragraphs, optional ordered list. ` +
+    `No code fences, no emoji, no preamble like "Sure, here is...".\n` +
+    `- Total reply under 150 words unless the user explicitly asks for ` +
+    `more detail.`
+  );
+}
+
 /** Build a signature of the failed-criteria set. Same signature → same
  *  recommendations should be returned, so this is the cache key salt.
  *

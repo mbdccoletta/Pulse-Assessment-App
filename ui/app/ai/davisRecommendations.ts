@@ -11,37 +11,48 @@
 // the response is deterministic per (failure signature, prompt version).
 //
 // Design choices ─────────────────────────────────────────────────────────
-// 1. ONE call per capability, not per criterion. A 9-capability assessment
-//    fans out at most 9 Davis requests instead of 94. Less rate-limit risk,
-//    cheaper, faster.
-// 2. Cache key uses the failure SIGNATURE (set of failed criterion IDs),
+// 1. ONE call per capability for the INITIAL recommendation. A 9-capability
+//    assessment fans out at most 9 Davis requests instead of 94.
+// 2. FOLLOW-UPS: the user can ask Davis a clarifying question that continues
+//    the conversation. We pass the opaque `state` from the previous response
+//    back to the SDK so the model keeps context. Follow-ups are NOT cached
+//    (they're session-scoped) — only the initial response is.
+// 3. Cache key uses the failure SIGNATURE (set of failed criterion IDs),
 //    not exact values. A criterion drifting from 49% to 51% (both failing
 //    a ≥50 threshold) does not invalidate.
-// 3. PROMPT_VERSION is in the cache key. Bumping it in promptTemplates.ts
+// 4. PROMPT_VERSION is in the cache key. Bumping it in promptTemplates.ts
 //    invalidates every entry — no orphaned stale responses.
-// 4. Silent degradation. Any Davis error (network, missing scope, rate
+// 5. Silent degradation. Any Davis error (network, missing scope, rate
 //    limit, model failure) returns null, and the UI falls back to the
 //    static recommendation. The assessment itself never fails because the
 //    AI was unavailable.
-// 5. Document Store backed cache mirrors QueryCache exactly so a single
-//    Doc Store auth/version handling pattern covers both. 24h TTL.
 
 import { publicClient } from "@dynatrace-sdk/client-davis-copilot";
+import type { State } from "@dynatrace-sdk/client-davis-copilot";
 import { documentsClient } from "@dynatrace-sdk/client-document";
 import type { CapabilityResult } from "../hooks/useCoverageData";
-import { buildCapabilityPrompt, failureSignature, PROMPT_VERSION } from "./promptTemplates";
+import {
+  buildCapabilityPrompt,
+  buildFollowUpInstruction,
+  failureSignature,
+  PROMPT_VERSION,
+} from "./promptTemplates";
 
-/** Result returned to the React hook. */
+/** Result returned to the React hook for one Davis call. */
 export interface DavisRecommendation {
   /** Markdown body produced by the model. */
   text: string;
   /** Epoch ms when the response was generated (or originally cached). */
   ts: number;
-  /** True if this came from cache (no network call this run). */
+  /** True if this came from cache (no network call this run). Always false
+   *  for follow-up responses since follow-ups are not cached. */
   fromCache: boolean;
   /** Davis-issued ID for the response. Surfaces in the response card for
-   *  debugging and is required to submit feedback later. */
+   *  debugging and is required to submit feedback via recommenderFeedback. */
   messageToken?: string;
+  /** Opaque SDK state required to continue this conversation in a follow-up.
+   *  Persisted in memory only — not written to the Document Store cache. */
+  state?: State;
 }
 
 // ─── Persistent cache ──────────────────────────────────────────────────
@@ -81,6 +92,10 @@ function makeKey(signature: string): string {
  *
  * Same lifecycle as QueryCache: load() at run start, get()/set() during,
  * flush() once at run end. Errors degrade silently to no-cache.
+ *
+ * Only the INITIAL recommendation is cached. Follow-up turns are kept in
+ * the React hook's in-memory state and lost on reload — appropriate for a
+ * conversation, where re-asking the same follow-up is rare.
  */
 export class DavisCache {
   private entries = new Map<string, CacheEntry>();
@@ -168,33 +183,38 @@ export class DavisCache {
   }
 }
 
-// ─── Davis call ─────────────────────────────────────────────────────────
+// ─── Davis calls ────────────────────────────────────────────────────────
 
 /**
- * Get the recommendation for a capability. Checks cache first; on miss,
- * calls Davis CoPilot recommenderConversation. Returns null on any error
- * so the UI can fall back to the static recommendation cleanly.
+ * Get the INITIAL recommendation for a capability. Checks cache first; on
+ * miss, calls Davis CoPilot recommenderConversation. Returns null on any
+ * error so the UI can fall back to the static recommendation cleanly.
  */
 export async function getRecommendation(
   cap: CapabilityResult,
   cache: DavisCache | null,
 ): Promise<DavisRecommendation | null> {
-  // Caps that scored 100% have nothing to recommend.
   if (cap.criteriaResults.filter(cr => cr.points === 0 && !cr.error).length === 0) {
     return null;
   }
 
   const signature = failureSignature(cap);
 
-  // Cache lookup
   if (cache) {
     const hit = cache.get(signature);
     if (hit) {
-      return { text: hit.text, ts: hit.ts, fromCache: true, messageToken: hit.messageToken };
+      // Cached response has no `state` — follow-ups starting from a cached
+      // response begin a fresh conversation (Davis is robust to this; it
+      // can refer back to the supplementary context in the new prompt).
+      return {
+        text: hit.text,
+        ts: hit.ts,
+        fromCache: true,
+        messageToken: hit.messageToken,
+      };
     }
   }
 
-  // Build prompt + call Davis
   const { text: promptText, supplementary, instruction } = buildCapabilityPrompt(cap);
 
   try {
@@ -204,7 +224,6 @@ export async function getRecommendation(
         context: [
           { type: "instruction", value: instruction },
           { type: "supplementary", value: supplementary },
-          // We want the answer grounded in Dynatrace docs, not invented.
           { type: "document-retrieval", value: "dynatrace" },
         ],
         annotations: {
@@ -214,10 +233,7 @@ export async function getRecommendation(
       },
     });
 
-    // Non-streaming response is a ConversationResponse with .text
     if (Array.isArray(resp)) {
-      // Streaming events came back instead of a JSON body — should not
-      // happen with acceptType: "application/json", but guard anyway.
       // eslint-disable-next-line no-console
       console.warn("[Davis] unexpected event-stream response, dropping");
       return null;
@@ -241,12 +257,68 @@ export async function getRecommendation(
       ts: entry.ts,
       fromCache: false,
       messageToken: entry.messageToken,
+      state: resp.state,
     };
   } catch (err) {
-    // 403 missing scope, 429 rate limit, 5xx model failure — all return
-    // null and we fall back to the static recommendation in the UI.
     // eslint-disable-next-line no-console
     console.warn(`[Davis] call failed for ${cap.name}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Continue an existing conversation. Sends `text` as a user follow-up
+ * alongside the opaque `previousState` from the prior response, so Davis
+ * keeps the context (capability, scores, criteria, prior reasoning).
+ *
+ * Not cached — follow-ups are user-driven and session-scoped.
+ */
+export async function getFollowUp(
+  cap: CapabilityResult,
+  followUpText: string,
+  previousState: State | undefined,
+): Promise<DavisRecommendation | null> {
+  if (!followUpText.trim()) return null;
+
+  try {
+    const resp = await publicClient.recommenderConversation({
+      body: {
+        text: followUpText.trim(),
+        state: previousState,
+        context: [
+          { type: "instruction", value: buildFollowUpInstruction() },
+          { type: "document-retrieval", value: "dynatrace" },
+        ],
+        annotations: {
+          origin_app: "my.pulse.assessment",
+          prompt_version: PROMPT_VERSION,
+          turn_type: "follow_up",
+          capability: cap.name.slice(0, 128),
+        },
+      },
+    });
+
+    if (Array.isArray(resp)) {
+      // eslint-disable-next-line no-console
+      console.warn("[Davis] unexpected event-stream response on follow-up");
+      return null;
+    }
+    if (!resp || resp.status === "FAILED" || !resp.text) {
+      // eslint-disable-next-line no-console
+      console.warn("[Davis] follow-up FAILED status or empty text", resp?.status);
+      return null;
+    }
+
+    return {
+      text: resp.text,
+      ts: Date.now(),
+      fromCache: false,
+      messageToken: resp.messageToken,
+      state: resp.state,
+    };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`[Davis] follow-up call failed for ${cap.name}:`, err);
     return null;
   }
 }
