@@ -520,7 +520,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? "50vh" : undefined,
             }}>
-              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} />
+              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} />
             </Flex>
           </>) : viewMode === "maturity" ? (
             <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} isMobile={isMobile} />

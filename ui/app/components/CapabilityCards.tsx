@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import { ExternalLink } from "@dynatrace/strato-components/typography";
@@ -28,10 +28,12 @@ interface Props {
    *  name. When provided, an "AI Insight" section renders under each
    *  expanded card. */
   davisRecommendations?: DavisRecommendationMap;
-  /** Optional follow-up sender from the useDavisRecommendations hook.
-   *  When provided, each card's AI section gains an "Ask follow-up" input
-   *  so the SE/customer can continue the conversation. */
+  /** Optional follow-up sender from the useDavisRecommendations hook. */
   onSendFollowUp?: (capabilityName: string, text: string) => Promise<void>;
+  /** Optional on-demand insight trigger. When provided, expanding a card
+   *  auto-fires this for the capability so the user gets an insight without
+   *  an extra click (still gated by per-capability idempotence in the hook). */
+  onRequestInsight?: (capabilityName: string) => Promise<void>;
 }
 
 const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: boolean }> = ({ cr, dk }) => {
@@ -132,8 +134,22 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
   );
 };
 
-export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations, onSendFollowUp }) => {
+export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations, onSendFollowUp, onRequestInsight }) => {
   const dk = useCurrentTheme() === "dark";
+
+  // When a capability is expanded (user clicked the card), fire the Davis
+  // insight request for it. The hook is idempotent — repeated calls for
+  // a capability already loaded/loading become no-ops, so this is safe to
+  // run on every activeIdx change.
+  useEffect(() => {
+    if (activeIdx == null || !onRequestInsight || !davisRecommendations) return;
+    const cap = capabilities[activeIdx];
+    if (!cap) return;
+    const s = davisRecommendations[cap.name];
+    if (s && s.status === "idle") {
+      void onRequestInsight(cap.name);
+    }
+  }, [activeIdx, capabilities, onRequestInsight, davisRecommendations]);
 
   return (
     <Flex flexDirection="column" gap={6}>
@@ -191,16 +207,16 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                   fontSize: 11, padding: "2px 8px", borderRadius: 6,
                   background: ml.color + (dk ? "25" : "18"), color: ml.color, fontWeight: 600,
                 }}>{ml.label}</Text>
-                {/* AI Insight indicator — visible on collapsed cards too so the
-                    SE/customer knows AI tips are available without expanding.
-                    Click on the card already toggles expansion. */}
+                {/* AI Insight indicator — visible on collapsed cards too. The
+                    label reflects whether the user has triggered the Davis
+                    call yet, so they know what clicking the card will do. */}
                 {davisRecommendations?.[cap.name] && davisRecommendations[cap.name]!.status !== "skipped" && (
                   (() => {
                     const aiState = davisRecommendations[cap.name]!;
                     const aiText = aiState.status === "loading" ? "AI…"
                                  : aiState.status === "error"   ? "AI !"
-                                 : aiState.status === "success" ? (act ? "AI ✓" : "AI tip")
-                                 : "AI";
+                                 : aiState.status === "success" ? (act ? "AI ✓" : "AI ready")
+                                 : "Click for AI";
                     const aiColor = aiState.status === "error"
                       ? Colors.Text.Critical.Default
                       : Colors.Text.Primary.Default;
@@ -236,6 +252,7 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                     state={davisRecommendations[cap.name]}
                     capabilityName={cap.name}
                     onSendFollowUp={onSendFollowUp}
+                    onRequestInsight={onRequestInsight}
                   />
                 )}
                 {cap.criteriaResults.map((cr) => (
