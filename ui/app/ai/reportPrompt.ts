@@ -59,9 +59,15 @@ export function buildReportPrompt(ctx: ReportContext, userPrompt: string): Repor
     const total = cap.criteriaResults.length;
     const top = topFailing(cap, 3);
     const topStr = top.length > 0
-      ? ` Worst: ${top.map(t => `${t.id}=${t.value}%`).join(", ")}.`
+      ? ` Worst-performing failed criteria: ${top.map(t => `${t.id} at ${t.value}%`).join(", ")}.`
       : "";
-    return `- ${cap.name}: ${cap.score}% coverage, ${cap.maturity.maturityScore}/100 maturity (${cap.maturity.levelLabel}). ${failed}/${total} criteria failing.${topStr}`;
+    // Tier breakdown lets Davis answer maturity-aware questions ("which
+    // Foundation gates are still closed?") without us pre-digesting it.
+    const f = cap.maturity.foundation;
+    const b = cap.maturity.bestPractice;
+    const e = cap.maturity.excellence;
+    const tiers = `tiers F=${f.passed}/${f.total}, BP=${b.passed}/${b.total}, E=${e.passed}/${e.total}`;
+    return `- ${cap.name}: coverage ${cap.score}%, maturity ${cap.maturity.maturityScore}/100 (${cap.maturity.levelLabel}), ${tiers}, ${failed}/${total} criteria failing.${topStr}`;
   }).join("\n");
 
   const cleanUserPrompt = clamp(userPrompt.trim(), 800);
