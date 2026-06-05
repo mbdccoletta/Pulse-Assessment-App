@@ -8,6 +8,7 @@ import { Flex, Grid, Surface, Container } from "@dynatrace/strato-components/lay
 import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-components-preview/buttons";
 import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
+import { useDevMode } from "../hooks/useDevMode";
 import { CovMatRadar } from "../components/CovMatRadar";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_TIERS } from "../data/criterionTiers";
@@ -107,6 +108,7 @@ function computeMaturity(criteria: { id: string; points: number; error: boolean 
 export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveSnapshot }) => {
   const dk = useCurrentTheme() === "dark";
   const navigate = useNavigate();
+  const { isDev } = useDevMode();
 
   // Last 12 snapshots available for comparison
   const available = useMemo(() => snapshots.slice(0, 12), [snapshots]);
@@ -289,17 +291,19 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
         <Tooltip text="Return to the main assessment page." position="bottom">
         <Button onClick={() => navigate("/")} size="condensed">← Back</Button>
         </Tooltip>
-        <Tooltip text="Open dedicated AI Insights page (all capabilities at once)." position="bottom">
-          <Button
-            onClick={() => navigate("/ai-insights")}
-            size="condensed"
-            variant="emphasized"
-            color="primary"
-            aria-label="Open AI Insights page"
-          >
-            AI Insights
-          </Button>
-        </Tooltip>
+        {isDev && (
+          <Tooltip text="Open dedicated AI Insights page (all capabilities at once)." position="bottom">
+            <Button
+              onClick={() => navigate("/ai-insights")}
+              size="condensed"
+              variant="emphasized"
+              color="primary"
+              aria-label="Open AI Insights page"
+            >
+              AI Insights
+            </Button>
+          </Tooltip>
+        )}
         <Text style={{ fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" }}>Evolution</Text>
         <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
           {snapPickerBtn("A", snapA, showListA, () => { setShowListA(v => !v); setShowListB(false); }, Colors.Charts.Categorical.Color01.Default)}
