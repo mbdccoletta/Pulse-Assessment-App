@@ -36,19 +36,19 @@ interface Props {
 const TEMPLATES: { title: string; body: string }[] = [
   {
     title: "Executive summary",
-    body: "Can you draft a 1-page executive summary of this assessment for a customer's CTO? Highlight overall posture, the 2-3 most important strengths, the top 2-3 gaps, and a recommended 90-day priority. Avoid jargon — the audience is business leadership.",
+    body: "What are the key points I should include in an executive summary of this assessment for a customer's CTO? Cover overall posture, the 2-3 most important strengths, the top 2-3 gaps, and a recommended 90-day priority. The audience is business leadership so avoid deep technical jargon.",
   },
   {
     title: "Technical action plan",
-    body: "Can you produce a technical action plan for the next quarter? Group actions by capability, list each action with the criteria it addresses, the expected score lift, and rough effort (S/M/L). Order by impact.",
+    body: "What technical actions should I prioritize for the next quarter to improve this customer's coverage? For each action, what criteria does it address, what score lift can I expect, and what's the rough effort (S/M/L)? Please order by impact.",
   },
   {
     title: "QBR talking points",
-    body: "Can you give me talking points for a quarterly business review with this customer? Cover what is working well, what needs investment, ROI framing for closing the top 3 gaps, and 2 questions to ask the customer to drive engagement.",
+    body: "What are the most important talking points I should prepare for a quarterly business review with this customer? Specifically: what is working well, what needs investment, how should I frame the ROI of closing the top 3 gaps, and what 2 discovery questions could drive deeper engagement?",
   },
   {
-    title: "Customer-facing letter",
-    body: "Can you write a customer-facing letter (formal but warm tone) summarizing the assessment results and recommending the next 3 priorities? Include a brief opening, a per-capability paragraph for the lowest 3 scores, and a closing call-to-action.",
+    title: "Customer follow-up notes",
+    body: "What are the key points I should communicate to the customer in a follow-up note? Please include a brief framing of overall posture, the per-capability findings for the lowest 3 scores with specific recommendations, and the next 3 priorities they should focus on.",
   },
 ];
 
