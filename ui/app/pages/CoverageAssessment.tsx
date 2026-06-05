@@ -19,6 +19,7 @@ import { ScaleTierBanner } from "../components/ScaleTierBanner";
 import { DpsCostBadge } from "../components/DpsCostBadge";
 import type { UseScaleTierResult } from "../hooks/useScaleTier";
 import { useDavisRecommendations } from "../hooks/useDavisRecommendations";
+import { AiReportModal } from "../components/AiReportModal";
 import { CAPABILITIES } from "../queries";
 import { CAP_SUMMARIES } from "../data/capSummaries";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
@@ -113,6 +114,8 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   const wasLoadingRef = useRef(false);
   const [excludedCaps, setExcludedCaps] = useState<Set<string>>(new Set());
   const [showGuide, setShowGuide] = useState(false);
+  /** AI Report modal — replaces the old First Day Results language picker. */
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Davis CoPilot dynamic recommendations — customer-facing.
   // Returns { byCapability, sendFollowUp }. byCapability is the map of
@@ -375,18 +378,15 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 </Button.Suffix>
               )}
             </Button>
-            <Menu>
-              <Menu.Trigger>
-                <Button loading={exporting} size="condensed">
-                  First Day Results
-                </Button>
-              </Menu.Trigger>
-              <Menu.Content>
-                <Menu.Item onSelect={() => generateClientReport("en")}>Download English (EN)</Menu.Item>
-                <Menu.Item onSelect={() => generateClientReport("pt")}>Download Portugues (PT)</Menu.Item>
-                <Menu.Item onSelect={() => generateClientReport("es")}>Download Espanol (ES)</Menu.Item>
-              </Menu.Content>
-            </Menu>
+            <Button
+              size="condensed"
+              variant="emphasized"
+              color="primary"
+              onClick={() => setShowReportModal(true)}
+              aria-label="Generate a custom report from this assessment using Davis CoPilot"
+            >
+              Generate Report
+            </Button>
             {/* Diagnostic controls — gated by isDev (?dev=1 or
                 localStorage.cca.dev). Hidden from customer view. */}
             {isDev && coverageData.perfEntries != null && (
@@ -670,6 +670,20 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
           <Flex flexDirection="column" style={{ fontSize: 12, color: textSec }}>{error}</Flex>
         </Flex>
       )}
+
+      {/* AI Report Modal — opens from the toolbar "Generate Report" button.
+          Always mounted so the open animation works, gated by `show`. */}
+      <AiReportModal
+        show={showReportModal}
+        onDismiss={() => setShowReportModal(false)}
+        ctx={{
+          tenant: tenant ?? "(unknown)",
+          date: date ?? "",
+          overallCoverage: totalScore,
+          overallMaturity: overallMaturityLevel,
+          capabilities,
+        }}
+      />
 
     </Flex>
   );
