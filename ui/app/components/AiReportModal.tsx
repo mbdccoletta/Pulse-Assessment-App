@@ -33,22 +33,26 @@ interface Props {
 /** Pre-filled templates the SE can pick. They translate to natural-language
  *  questions, not commands — same as the per-capability prompt strategy
  *  that gets past the Davis guardrail. */
+// SE-grade question templates. Each is a focused, professional question
+// that maps to a real Pulse Assessment use case. Phrased to ask Davis for
+// INFORMATION (its strength), not document generation (which trips the
+// guardrail). All start with "What" / "How" / "Which" — pure Q&A shape.
 const TEMPLATES: { title: string; body: string }[] = [
   {
-    title: "Executive summary",
-    body: "What are the key points I should include in an executive summary of this assessment for a customer's CTO? Cover overall posture, the 2-3 most important strengths, the top 2-3 gaps, and a recommended 90-day priority. The audience is business leadership so avoid deep technical jargon.",
+    title: "What should I prioritize?",
+    body: "Given the current state of this assessment, what are the top 3 actions I should prioritize to maximise impact for the customer? Please order by impact-to-effort ratio. For each action: cite the specific capability and criterion IDs it addresses, quote the current values and gaps from the data, estimate the resulting score lift, and note whether it's a Foundation-tier fix (which gates the Maturity formula) or a Best Practice / Excellence improvement. Explain the reasoning behind the ordering so I can defend it to the customer.",
   },
   {
-    title: "Technical action plan",
-    body: "What technical actions should I prioritize for the next quarter to improve this customer's coverage? For each action, what criteria does it address, what score lift can I expect, and what's the rough effort (S/M/L)? Please order by impact.",
+    title: "How do I increase coverage?",
+    body: "Looking specifically at coverage scores across the 9 capabilities, what are the 5 fastest actions I can take to lift the overall coverage average? Identify the failing criteria with the smallest gap to passing threshold (quick wins) and the capabilities most likely to move with a single configuration change. Please order by points-of-coverage gained per unit of effort, and group actions that share the same underlying integration (e.g. cloud platform setup) so we can sequence them efficiently.",
   },
   {
-    title: "QBR talking points",
-    body: "What are the most important talking points I should prepare for a quarterly business review with this customer? Specifically: what is working well, what needs investment, how should I frame the ROI of closing the top 3 gaps, and what 2 discovery questions could drive deeper engagement?",
+    title: "What are the points of attention?",
+    body: "What are the most important warning signs and risk areas in this assessment data? Please highlight, in order of severity: (a) Foundation-tier failures that cap Maturity progression at L1 regardless of how well Best Practice and Excellence score, (b) criteria sitting at exactly 0% that suggest disabled or missing integrations, (c) capabilities that have several Excellence wins but failing Foundation — these flatter the score but mask structural gaps, and (d) any capability whose coverage is below 50%. Do not suggest fixes yet — just call out what deserves immediate attention and why.",
   },
   {
-    title: "Customer follow-up notes",
-    body: "What are the key points I should communicate to the customer in a follow-up note? Please include a brief framing of overall posture, the per-capability findings for the lowest 3 scores with specific recommendations, and the next 3 priorities they should focus on.",
+    title: "How do I increase maturity?",
+    body: "How can I improve Maturity scores across the 9 capabilities? Remember the progressive formula: Foundation tier weight 60%, Best Practice 25% counts only if Foundation reaches 80%, Excellence 15% counts only if Best Practice reaches 60%. Given each capability's current Maturity Level (L0/L1/L2/L3) and per-tier breakdown, what is the optimal sequence of actions to advance each capability one level? Focus on Foundation-tier failures first across all capabilities — they unlock the whole formula. For each capability, name the specific tier-gate that needs to be cleared next and the action to clear it.",
   },
 ];
 
