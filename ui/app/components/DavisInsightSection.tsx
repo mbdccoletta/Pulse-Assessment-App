@@ -338,12 +338,19 @@ export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, on
                 disabled={state.status === "loading"}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
+                  // Stop ALL keystrokes from bubbling up — the parent
+                  // capability card listens for Enter/Space to toggle
+                  // expansion (accessibility pattern), which would collapse
+                  // the card mid-typing. We submit on Enter ourselves.
+                  e.stopPropagation();
                   if (e.key === "Enter" && draft.trim() && state.status !== "loading") {
                     const txt = draft;
                     setDraft("");
                     void onSendFollowUp(capabilityName, txt);
                   }
                 }}
+                onKeyUp={(e) => e.stopPropagation()}
+                onKeyPress={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   flex: 1,
