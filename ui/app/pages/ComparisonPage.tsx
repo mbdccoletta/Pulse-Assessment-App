@@ -293,9 +293,11 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           <Button
             onClick={() => navigate("/ai-insights")}
             size="condensed"
+            variant="emphasized"
+            color="primary"
             aria-label="Open AI Insights page"
           >
-            🤖 AI Insights
+            AI Insights
           </Button>
         </Tooltip>
         <Text style={{ fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" }}>Evolution</Text>

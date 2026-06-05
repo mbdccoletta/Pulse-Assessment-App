@@ -152,7 +152,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
         </Flex>
         <Flex flexDirection="row" gap={8}>
           <Button onClick={refresh} size="condensed" disabled={loading}>
-            ↻ Refresh
+            Refresh
           </Button>
         </Flex>
       </Flex>

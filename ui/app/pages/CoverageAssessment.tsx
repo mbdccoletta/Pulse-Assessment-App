@@ -396,7 +396,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 onClick={() => coverageData.downloadPerfReport()}
                 aria-label="Download performance report as JSON"
               >
-                📥 Perf JSON
+                Perf JSON
               </Button>
             )}
             {isDev && (
@@ -405,7 +405,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 onClick={async () => { await coverageData.forceRefresh(); refresh(); }}
                 aria-label="Clear 24h cache and run a fresh assessment"
               >
-                🗘 Force refresh
+                Force refresh
               </Button>
             )}
             {/* AI Insights is now customer-facing — visible without dev gate.
@@ -415,10 +415,12 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 the page. */}
             <Button
               size="condensed"
+              variant="emphasized"
+              color="primary"
               onClick={() => navigate("/ai-insights")}
               aria-label="Open dedicated AI Insights page (all capabilities at once)"
             >
-              🤖 AI Insights
+              AI Insights
             </Button>
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
               Tenant: <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
