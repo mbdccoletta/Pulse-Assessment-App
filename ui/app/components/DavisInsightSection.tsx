@@ -240,17 +240,42 @@ export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, on
         </Flex>
       )}
 
-      {/* Error notice — discreet single-line below the thread. */}
-      {state.status === "error" && state.conversation.length === 0 && (
-        <Text style={{ fontSize: 11, color: subColor, fontStyle: "italic" }}>
-          Davis CoPilot is unavailable right now. The static recommendation above still applies.
-        </Text>
-      )}
-      {state.status === "error" && state.conversation.length > 0 && (
-        <Text style={{ fontSize: 11, color: Colors.Text.Critical.Default,
-                       fontStyle: "italic", marginTop: 6 }}>
-          {state.error ?? "Davis CoPilot follow-up failed."}
-        </Text>
+      {/* Error notice — surfaces the actual HTTP status, raw message, and
+          an SE-actionable hint so the user can fix the cause without
+          opening DevTools. */}
+      {state.status === "error" && (
+        <Flex flexDirection="column" gap={4}
+          style={{ marginTop: state.conversation.length > 0 ? 6 : 2 }}>
+          <Text style={{
+            fontSize: 11, fontWeight: 700,
+            color: Colors.Text.Critical.Default,
+          }}>
+            {state.errorDetail?.status
+              ? `Davis CoPilot error (HTTP ${state.errorDetail.status})`
+              : "Davis CoPilot unavailable"}
+          </Text>
+          {state.errorDetail?.message && (
+            <Text style={{
+              fontSize: 11, color: textColor,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              padding: "4px 6px", borderRadius: 3,
+              background: dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+              wordBreak: "break-word",
+            }}>
+              {state.errorDetail.message}
+            </Text>
+          )}
+          {state.errorDetail?.hint && (
+            <Text style={{ fontSize: 11, color: subColor, lineHeight: 1.5 }}>
+              {state.errorDetail.hint}
+            </Text>
+          )}
+          {!state.errorDetail && state.conversation.length === 0 && (
+            <Text style={{ fontSize: 11, color: subColor, fontStyle: "italic" }}>
+              The static recommendation above still applies.
+            </Text>
+          )}
+        </Flex>
       )}
 
       {/* Footer: provenance + follow-up input. Footer renders only after
