@@ -1,37 +1,35 @@
 // ui/app/hooks/useDavisRecommendations.ts
 //
-// React hook that produces dynamic Davis CoPilot recommendations for the
-// current assessment AND enables conversation follow-ups per capability.
+// React hook that produces dynamic Davis CoPilot recommendations on demand
+// per capability AND enables conversation follow-ups.
 //
 // Contract ───────────────────────────────────────────────────────────────
 //   Input:  CapabilityResult[] (post-run, fully scored)
 //   Output: {
 //     byCapability: Record<capName, DavisRecommendationState>,
+//     requestInsight: (capName) => Promise<void>,
 //     sendFollowUp: (capName, text) => Promise<void>,
 //   }
 //
 // Lifecycle ──────────────────────────────────────────────────────────────
-//   1. When `enabled === true` AND capabilities transition from empty to
-//      populated, load the cache once, then fan out one Davis call per
-//      capability that has at least one failed criterion.
-//   2. Each call's response (text + opaque State) is stored. The State is
-//      what enables follow-ups — the SDK uses it to continue the same
-//      conversation context.
-//   3. `sendFollowUp(capName, text)` calls Davis again with the previous
-//      State + the new question, then appends the response to the
-//      capability's conversation thread.
-//   4. After the initial fan-out completes, flush() persists any new
-//      INITIAL responses to the Doc Store cache. Follow-ups are NOT
-//      persisted (session-scoped).
-//   5. Re-runs with the SAME capabilities reuse cached initials; ongoing
-//      conversations survive a re-render of the consumer but reset on a
-//      full reload (which is the typical chat UX).
+//   1. On capabilities change: initialise state for each capability as
+//      "idle" (or "skipped" if there are no failed criteria — nothing to
+//      ask Davis about). No SDK calls fire yet.
+//   2. The consumer calls requestInsight(capName) when the user shows
+//      intent — e.g. expanding a card, or clicking a "Generate" button on
+//      the dedicated AI Insights page. This:
+//        - Marks the capability "loading"
+//        - Loads the 24h cache (lazy, once per session)
+//        - Either resolves from cache or fires one Davis call
+//   3. sendFollowUp(capName, text) continues an existing conversation by
+//      passing the opaque State from the prior response back to the SDK.
+//      Follow-ups are NOT cached — session-scoped.
 //
-// Bounded cost ───────────────────────────────────────────────────────────
-// Davis CoPilot enforces 25 questions/user/15min and 60/environment/15min
-// (per the docs). With 9 capabilities + 5 follow-ups each, a worst-case
-// session would burn 54 questions — close to the per-user ceiling. We cap
-// follow-ups at MAX_FOLLOWUPS to leave headroom for normal SE work.
+// Why on-demand ──────────────────────────────────────────────────────────
+// Davis CoPilot caps usage at 25 questions/user/15 min and 60/env/15 min.
+// An assessment with 9 failing capabilities would burn 9 calls every time
+// the user opened the app. On-demand keeps the steady state at zero and
+// only spends quota when the SE/customer explicitly asks for an insight.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getEnvironmentUrl } from "@dynatrace-sdk/app-environment";
@@ -54,25 +52,26 @@ export interface DavisConversationTurn {
   /** Davis-issued ID. Required to submit feedback later. Only present on
    *  assistant turns. */
   messageToken?: string;
-  /** True when the assistant turn came from the persistent cache (i.e.
-   *  the initial recommendation, served warm). */
+  /** True when the assistant turn came from the persistent cache. */
   fromCache?: boolean;
 }
 
 /** Per-capability state surfaced to the UI. */
 export interface DavisRecommendationState {
-  /** Coarse lifecycle of the LATEST turn. While a follow-up is in flight,
-   *  status is "loading" even if a prior turn already succeeded. */
+  /** Coarse lifecycle of the LATEST turn.
+   *  - "idle":     no Davis call attempted yet for this capability
+   *  - "loading":  initial call OR follow-up in flight
+   *  - "success":  at least one assistant turn delivered
+   *  - "error":    last call failed; errorDetail carries the diagnosis
+   *  - "skipped":  capability scored 100% — nothing to recommend */
   status: "idle" | "loading" | "success" | "error" | "skipped";
   /** Convenience handle to the latest assistant turn. */
   rec?: DavisRecommendation;
-  /** Full conversation thread. The first entry is the assistant's initial
-   *  recommendation; subsequent entries alternate user/assistant. */
+  /** Full conversation thread. */
   conversation: DavisConversationTurn[];
-  /** Error message from the latest failed call (initial or follow-up). */
+  /** Error message from the latest failed call. */
   error?: string;
-  /** Structured error info — HTTP status + hint — surfaced to the UI so
-   *  the user sees the actual cause (missing scope, not enabled, etc.). */
+  /** Structured error info — HTTP status + hint. */
   errorDetail?: DavisError;
 }
 
@@ -81,24 +80,22 @@ export type DavisRecommendationMap = Record<string, DavisRecommendationState>;
 
 interface UseDavisOptions {
   /** Gate the entire hook. When false, never calls Davis and returns
-   *  an empty map. Used to hide behind ?dev=1 while we validate quality. */
+   *  an empty map. */
   enabled: boolean;
 }
 
 /** Result returned by the hook. */
 export interface UseDavisHandle {
-  /** Per-capability state. Empty when disabled or before fan-out completes. */
+  /** Per-capability state. */
   byCapability: DavisRecommendationMap;
-  /** Send a follow-up question on a capability's existing conversation.
-   *  No-op if the capability never received an initial response. Capped at
-   *  MAX_FOLLOWUPS questions per capability per session. */
+  /** Trigger an INITIAL Davis call for one capability. No-op if the
+   *  capability is already loading, succeeded, or skipped. */
+  requestInsight: (capabilityName: string) => Promise<void>;
+  /** Continue an existing conversation on a capability. Capped at
+   *  MAX_FOLLOWUPS per capability per session. */
   sendFollowUp: (capabilityName: string, text: string) => Promise<void>;
 }
 
-/** Hard cap on follow-ups per capability per session. Davis allows up to
- *  25 calls/user/15min; this lets every capability take ~3 follow-ups
- *  while still leaving budget for the initial fan-out + the SE's normal
- *  Dynatrace Assist usage. */
 const MAX_FOLLOWUPS = 5;
 
 function tenantIdFrom(envUrl: string | null): string {
@@ -112,25 +109,32 @@ export function useDavisRecommendations(
   { enabled }: UseDavisOptions,
 ): UseDavisHandle {
   const [map, setMap] = useState<DavisRecommendationMap>({});
-  /** Joined signature of the last capabilities array we processed. */
+  /** Signature of the last capabilities array we initialised for. Re-init
+   *  only when the SET of failing criteria changes. */
   const lastSigRef = useRef<string>("");
-  /** Single per-tenant cache instance reused across runs in this session. */
+  /** Single per-tenant cache instance reused across requests in this
+   *  session. Lazy — only created on the first requestInsight call. */
   const cacheRef = useRef<DavisCache | null>(null);
-  /** Opaque SDK State per capability — needed to continue a conversation.
-   *  Kept in a ref rather than state because it's only consumed by the
-   *  sendFollowUp callback and changes shouldn't re-render the consumer. */
+  /** Promise of an in-flight cache load, so concurrent requestInsight
+   *  calls share a single load. */
+  const cacheLoadingRef = useRef<Promise<void> | null>(null);
+  /** Opaque SDK State per capability — needed to continue a conversation. */
   const stateRef = useRef<Record<string, State | undefined>>({});
   /** Follow-up call count per capability (to enforce MAX_FOLLOWUPS). */
   const followUpCountRef = useRef<Record<string, number>>({});
-  /** Live capability list, kept in a ref so sendFollowUp can resolve a
-   *  CapabilityResult by name without becoming a closure-stale callback. */
+  /** Live capability list, kept in a ref so callbacks resolve capabilities
+   *  by name without becoming closure-stale. */
   const capabilitiesRef = useRef<CapabilityResult[]>(capabilities);
   capabilitiesRef.current = capabilities;
 
+  // ── Initialise state per capability whenever the failure SET changes ──
+  // No SDK calls here — only state shape setup.
   useEffect(() => {
     if (!enabled || capabilities.length === 0) {
       if (Object.keys(map).length) setMap({});
       lastSigRef.current = "";
+      stateRef.current = {};
+      followUpCountRef.current = {};
       return;
     }
 
@@ -138,101 +142,125 @@ export function useDavisRecommendations(
     if (combined === lastSigRef.current) return;
     lastSigRef.current = combined;
 
-    let cancelled = false;
-
-    (async () => {
-      if (!cacheRef.current) {
-        try {
-          const envUrl = getEnvironmentUrl();
-          const tenantId = tenantIdFrom(envUrl ?? null);
-          cacheRef.current = new DavisCache(tenantId);
-          await cacheRef.current.load();
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.warn("[useDavisRecommendations] cache init failed:", err);
-          cacheRef.current = null;
-        }
-      }
-
-      const initial: DavisRecommendationMap = {};
-      for (const cap of capabilities) {
-        const failed = cap.criteriaResults.filter(cr => cr.points === 0 && !cr.error).length;
-        initial[cap.name] = failed === 0
-          ? { status: "skipped", conversation: [] }
-          : { status: "loading", conversation: [] };
-      }
-      if (!cancelled) setMap(initial);
-
-      await Promise.all(
-        capabilities.map(async (cap) => {
-          if (initial[cap.name].status === "skipped") return;
-          try {
-            const result = await getRecommendation(cap, cacheRef.current);
-            if (cancelled) return;
-            if (!result) {
-              setMap(prev => ({
-                ...prev,
-                [cap.name]: {
-                  status: "error",
-                  conversation: [],
-                  error: "Davis CoPilot unavailable",
-                },
-              }));
-              return;
-            }
-            if (!result.ok) {
-              setMap(prev => ({
-                ...prev,
-                [cap.name]: {
-                  status: "error",
-                  conversation: [],
-                  error: result.err.message,
-                  errorDetail: result.err,
-                },
-              }));
-              return;
-            }
-            const rec = result.rec;
-            stateRef.current[cap.name] = rec.state;
-            followUpCountRef.current[cap.name] = 0;
-            setMap(prev => ({
-              ...prev,
-              [cap.name]: {
-                status: "success",
-                rec,
-                conversation: [{
-                  role: "assistant",
-                  text: rec.text,
-                  ts: rec.ts,
-                  messageToken: rec.messageToken,
-                  fromCache: rec.fromCache,
-                }],
-              },
-            }));
-          } catch (err) {
-            if (cancelled) return;
-            setMap(prev => ({
-              ...prev,
-              [cap.name]: {
-                status: "error",
-                conversation: [],
-                error: err instanceof Error ? err.message : String(err),
-              },
-            }));
-          }
-        }),
-      );
-
-      if (cacheRef.current && !cancelled) {
-        void cacheRef.current.flush();
-      }
-    })();
-
-    return () => { cancelled = true; };
+    // Build idle/skipped state — DO NOT fire any Davis calls.
+    const initial: DavisRecommendationMap = {};
+    for (const cap of capabilities) {
+      const failed = cap.criteriaResults.filter(cr => cr.points === 0 && !cr.error).length;
+      initial[cap.name] = failed === 0
+        ? { status: "skipped", conversation: [] }
+        : { status: "idle", conversation: [] };
+    }
+    // Reset session-scoped follow-up state for capabilities that changed.
+    stateRef.current = {};
+    followUpCountRef.current = {};
+    setMap(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [capabilities, enabled]);
 
-  // ─── Follow-up sender ─────────────────────────────────────────────────
+  // ── Cache initialisation, shared across concurrent requestInsight calls ──
+  const ensureCache = useCallback(async (): Promise<void> => {
+    if (cacheRef.current) return;
+    if (cacheLoadingRef.current) {
+      await cacheLoadingRef.current;
+      return;
+    }
+    cacheLoadingRef.current = (async () => {
+      try {
+        const envUrl = getEnvironmentUrl();
+        const tenantId = tenantIdFrom(envUrl ?? null);
+        const cache = new DavisCache(tenantId);
+        await cache.load();
+        cacheRef.current = cache;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[useDavisRecommendations] cache init failed:", err);
+        cacheRef.current = null;
+      } finally {
+        cacheLoadingRef.current = null;
+      }
+    })();
+    await cacheLoadingRef.current;
+  }, []);
+
+  // ── On-demand insight fetcher ─────────────────────────────────────────
+  const requestInsight = useCallback(async (capabilityName: string) => {
+    const cap = capabilitiesRef.current.find(c => c.name === capabilityName);
+    if (!cap) return;
+
+    const current = map[capabilityName];
+    // Skip if already loading, already succeeded, or there's nothing to ask.
+    if (current && (current.status === "loading" || current.status === "success" || current.status === "skipped")) {
+      return;
+    }
+
+    // Mark loading immediately so repeated clicks don't fan out.
+    setMap(prev => ({
+      ...prev,
+      [capabilityName]: {
+        ...(prev[capabilityName] ?? { status: "idle" as const, conversation: [] }),
+        status: "loading",
+        error: undefined,
+        errorDetail: undefined,
+      },
+    }));
+
+    // Lazy-init the cache. Errors degrade silently to no-cache.
+    await ensureCache();
+
+    const result = await getRecommendation(cap, cacheRef.current);
+
+    if (!result) {
+      setMap(prev => ({
+        ...prev,
+        [capabilityName]: {
+          status: "error",
+          conversation: [],
+          error: "Davis CoPilot unavailable",
+        },
+      }));
+      return;
+    }
+
+    if (!result.ok) {
+      setMap(prev => ({
+        ...prev,
+        [capabilityName]: {
+          status: "error",
+          conversation: [],
+          error: result.err.message,
+          errorDetail: result.err,
+        },
+      }));
+      return;
+    }
+
+    const rec = result.rec;
+    stateRef.current[capabilityName] = rec.state;
+    followUpCountRef.current[capabilityName] = 0;
+
+    setMap(prev => ({
+      ...prev,
+      [capabilityName]: {
+        status: "success",
+        rec,
+        conversation: [{
+          role: "assistant",
+          text: rec.text,
+          ts: rec.ts,
+          messageToken: rec.messageToken,
+          fromCache: rec.fromCache,
+        }],
+      },
+    }));
+
+    // Fire-and-forget cache flush — persists new entries without blocking UI.
+    if (cacheRef.current && !rec.fromCache) {
+      void cacheRef.current.flush();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ensureCache]);
+
+  // ── Follow-up sender ─────────────────────────────────────────────────
   const sendFollowUp = useCallback(async (capabilityName: string, text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -240,7 +268,6 @@ export function useDavisRecommendations(
     const cap = capabilitiesRef.current.find(c => c.name === capabilityName);
     if (!cap) return;
 
-    // Quota guard
     const used = followUpCountRef.current[capabilityName] ?? 0;
     if (used >= MAX_FOLLOWUPS) {
       setMap(prev => ({
@@ -254,16 +281,15 @@ export function useDavisRecommendations(
       return;
     }
 
-    // Optimistically append the user turn + mark loading
     setMap(prev => {
-      const current = prev[capabilityName] ?? { status: "idle" as const, conversation: [] };
+      const cur = prev[capabilityName] ?? { status: "idle" as const, conversation: [] };
       return {
         ...prev,
         [capabilityName]: {
-          ...current,
+          ...cur,
           status: "loading",
           conversation: [
-            ...current.conversation,
+            ...cur.conversation,
             { role: "user", text: trimmed, ts: Date.now() },
           ],
         },
@@ -275,12 +301,12 @@ export function useDavisRecommendations(
 
     if (!result) {
       setMap(prev => {
-        const current = prev[capabilityName];
-        if (!current) return prev;
+        const cur = prev[capabilityName];
+        if (!cur) return prev;
         return {
           ...prev,
           [capabilityName]: {
-            ...current,
+            ...cur,
             status: "error",
             error: "Davis CoPilot unavailable for this follow-up.",
           },
@@ -291,12 +317,12 @@ export function useDavisRecommendations(
 
     if (!result.ok) {
       setMap(prev => {
-        const current = prev[capabilityName];
-        if (!current) return prev;
+        const cur = prev[capabilityName];
+        if (!cur) return prev;
         return {
           ...prev,
           [capabilityName]: {
-            ...current,
+            ...cur,
             status: "error",
             error: result.err.message,
             errorDetail: result.err,
@@ -307,24 +333,22 @@ export function useDavisRecommendations(
     }
 
     const rec = result.rec;
-
-    // Persist new state + bump counter
     stateRef.current[capabilityName] = rec.state;
     followUpCountRef.current[capabilityName] = used + 1;
 
     setMap(prev => {
-      const current = prev[capabilityName];
-      if (!current) return prev;
+      const cur = prev[capabilityName];
+      if (!cur) return prev;
       return {
         ...prev,
         [capabilityName]: {
-          ...current,
+          ...cur,
           status: "success",
           rec,
           error: undefined,
           errorDetail: undefined,
           conversation: [
-            ...current.conversation,
+            ...cur.conversation,
             {
               role: "assistant",
               text: rec.text,
@@ -338,5 +362,5 @@ export function useDavisRecommendations(
     });
   }, []);
 
-  return { byCapability: map, sendFollowUp };
+  return { byCapability: map, requestInsight, sendFollowUp };
 }

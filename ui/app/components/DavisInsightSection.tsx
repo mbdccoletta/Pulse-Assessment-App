@@ -35,6 +35,10 @@ interface Props {
    *  Davis clarifying questions. When omitted, only the initial response
    *  shows (used for snapshot views or read-only contexts). */
   onSendFollowUp?: (capabilityName: string, text: string) => Promise<void>;
+  /** Optional on-demand insight trigger. When provided AND state.status is
+   *  "idle", the component renders a "Generate AI insight" button that
+   *  fires the initial Davis call for this capability. */
+  onRequestInsight?: (capabilityName: string) => Promise<void>;
 }
 
 /** Tiny markdown renderer — handles `**bold**`, `` `code` ``, `# heading`,
@@ -160,7 +164,7 @@ function renderInline(text: string, textColor: string, accentColor: string): Rea
   return parts;
 }
 
-export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, onSendFollowUp }) => {
+export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, onSendFollowUp, onRequestInsight }) => {
   const dk = useCurrentTheme() === "dark";
   const [draft, setDraft] = useState("");
 
@@ -196,6 +200,32 @@ export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, on
       border: `1px solid ${borderColor}`, background: bgColor,
     }}>
       {Header}
+
+      {/* Idle state — no Davis call attempted yet. Render a CTA button
+          so the user explicitly opts in (and spends quota) only when
+          they actually want a recommendation. */}
+      {state.status === "idle" && (
+        <Flex flexDirection="row" alignItems="center" gap={8}
+          style={{ marginTop: 4 }}>
+          <Text style={{ fontSize: 11, color: subColor, flex: 1 }}>
+            Generate an AI-powered recommendation grounded in this capability's
+            failing criteria and Dynatrace documentation.
+          </Text>
+          {onRequestInsight && (
+            <Button
+              size="condensed"
+              variant="emphasized"
+              color="primary"
+              onClick={(e) => {
+                e?.stopPropagation?.();
+                void onRequestInsight(capabilityName);
+              }}
+            >
+              Generate insight
+            </Button>
+          )}
+        </Flex>
+      )}
 
       {/* Conversation thread — initial response + any follow-ups.
           Each turn alternates: assistant → user → assistant → ... */}

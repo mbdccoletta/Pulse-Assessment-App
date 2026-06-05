@@ -61,11 +61,13 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
   const dk = useCurrentTheme() === "dark";
   const { capabilities, tenant, date, loading, refresh } = coverageData;
 
-  // Customer-facing — fires Davis calls whenever capabilities are present.
-  // Cache + signature dedup keep cost bounded; failures degrade gracefully.
+  // Customer-facing — on-demand only. requestInsight fires the Davis call
+  // for one capability when the user clicks "Generate insight"; sendFollowUp
+  // continues an existing conversation. No auto-fanout at page load.
   const davisHandle = useDavisRecommendations(capabilities, { enabled: true });
   const recommendations = davisHandle.byCapability;
   const sendFollowUp = davisHandle.sendFollowUp;
+  const requestInsight = davisHandle.requestInsight;
 
   // Sort capabilities by score ascending so the worst-performing (most
   // actionable) capability lands at the top. We rebuild this on every
@@ -81,6 +83,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
     let errored = 0;
     let pending = 0;
     let perfect = 0;
+    let idle = 0;
     for (const cap of capabilities) {
       const state = recommendations[cap.name];
       if (!state || state.status === "skipped") {
@@ -94,9 +97,11 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
         errored++;
       } else if (state.status === "loading") {
         pending++;
+      } else if (state.status === "idle") {
+        idle++;
       }
     }
-    return { withInsight, cached, errored, pending, perfect };
+    return { withInsight, cached, errored, pending, perfect, idle };
   }, [capabilities, recommendations]);
 
   // Theme-aware tokens.
@@ -153,6 +158,26 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
           </Flex>
         </Flex>
         <Flex flexDirection="row" gap={8}>
+          <Button
+            size="condensed"
+            variant="emphasized"
+            color="primary"
+            disabled={stats.withInsight + stats.pending + stats.errored + stats.perfect >= capabilities.length}
+            onClick={() => {
+              // Fire requestInsight for every capability that's still idle.
+              // The hook is idempotent — already-loading/success calls
+              // become no-ops — so this is safe to spray.
+              for (const cap of capabilities) {
+                const s = recommendations[cap.name];
+                if (s && s.status === "idle") {
+                  void requestInsight(cap.name);
+                }
+              }
+            }}
+            aria-label="Generate AI insight for every capability that does not yet have one"
+          >
+            Generate all
+          </Button>
           <Button onClick={refresh} size="condensed" disabled={loading}>
             Refresh
           </Button>
@@ -168,6 +193,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
           background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
         }}>
         <Stat label="With insight" value={stats.withInsight} color={Colors.Text.Success.Default} />
+        <Stat label="Idle (click to generate)" value={stats.idle} color={accent} />
         <Stat label="Cached" value={stats.cached} color={accent} />
         <Stat label="Pending" value={stats.pending} color={Colors.Charts.Status.Warning.Default} />
         <Stat label="Errored" value={stats.errored} color={Colors.Text.Critical.Default} />
@@ -247,7 +273,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
                   All criteria passed — no recommendation needed.
                 </Text>
               ) : (
-                <DavisInsightSection state={state} capabilityName={cap.name} onSendFollowUp={sendFollowUp} />
+                <DavisInsightSection state={state} capabilityName={cap.name} onSendFollowUp={sendFollowUp} onRequestInsight={requestInsight} />
               )}
             </Container>
           );
