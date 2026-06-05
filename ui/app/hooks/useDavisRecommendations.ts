@@ -42,6 +42,7 @@ import {
   getRecommendation,
   getFollowUp,
   type DavisRecommendation,
+  type DavisError,
 } from "../ai/davisRecommendations";
 import { failureSignature } from "../ai/promptTemplates";
 
@@ -70,6 +71,9 @@ export interface DavisRecommendationState {
   conversation: DavisConversationTurn[];
   /** Error message from the latest failed call (initial or follow-up). */
   error?: string;
+  /** Structured error info — HTTP status + hint — surfaced to the UI so
+   *  the user sees the actual cause (missing scope, not enabled, etc.). */
+  errorDetail?: DavisError;
 }
 
 /** Map keyed by capability name. */
@@ -163,9 +167,9 @@ export function useDavisRecommendations(
         capabilities.map(async (cap) => {
           if (initial[cap.name].status === "skipped") return;
           try {
-            const rec = await getRecommendation(cap, cacheRef.current);
+            const result = await getRecommendation(cap, cacheRef.current);
             if (cancelled) return;
-            if (!rec) {
+            if (!result) {
               setMap(prev => ({
                 ...prev,
                 [cap.name]: {
@@ -176,6 +180,19 @@ export function useDavisRecommendations(
               }));
               return;
             }
+            if (!result.ok) {
+              setMap(prev => ({
+                ...prev,
+                [cap.name]: {
+                  status: "error",
+                  conversation: [],
+                  error: result.err.message,
+                  errorDetail: result.err,
+                },
+              }));
+              return;
+            }
+            const rec = result.rec;
             stateRef.current[cap.name] = rec.state;
             followUpCountRef.current[cap.name] = 0;
             setMap(prev => ({
@@ -254,9 +271,9 @@ export function useDavisRecommendations(
     });
 
     const previousState = stateRef.current[capabilityName];
-    const rec = await getFollowUp(cap, trimmed, previousState);
+    const result = await getFollowUp(cap, trimmed, previousState);
 
-    if (!rec) {
+    if (!result) {
       setMap(prev => {
         const current = prev[capabilityName];
         if (!current) return prev;
@@ -272,6 +289,25 @@ export function useDavisRecommendations(
       return;
     }
 
+    if (!result.ok) {
+      setMap(prev => {
+        const current = prev[capabilityName];
+        if (!current) return prev;
+        return {
+          ...prev,
+          [capabilityName]: {
+            ...current,
+            status: "error",
+            error: result.err.message,
+            errorDetail: result.err,
+          },
+        };
+      });
+      return;
+    }
+
+    const rec = result.rec;
+
     // Persist new state + bump counter
     stateRef.current[capabilityName] = rec.state;
     followUpCountRef.current[capabilityName] = used + 1;
@@ -286,6 +322,7 @@ export function useDavisRecommendations(
           status: "success",
           rec,
           error: undefined,
+          errorDetail: undefined,
           conversation: [
             ...current.conversation,
             {

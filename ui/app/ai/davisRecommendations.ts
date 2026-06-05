@@ -55,6 +55,59 @@ export interface DavisRecommendation {
   state?: State;
 }
 
+/** Structured error info we surface to the UI so the user gets the actual
+ *  HTTP status + human-readable hint instead of a generic "unavailable". */
+export interface DavisError {
+  /** HTTP status code if available, or 0 for network errors. */
+  status: number;
+  /** Concise message — the API body's `message` field when present, else
+   *  the SDK error's message. Safe to render in the UI. */
+  message: string;
+  /** SE-actionable hint based on status code. */
+  hint: string;
+}
+
+/** Convert any thrown error into a structured DavisError. */
+function classifyError(err: unknown): DavisError {
+  // SDK errors carry response.status and body.
+  const e = err as {
+    response?: { status?: number };
+    body?: { error?: { message?: string }; message?: string };
+    message?: string;
+  };
+  const status = e?.response?.status ?? 0;
+  const bodyMsg = e?.body?.error?.message ?? e?.body?.message;
+  const fallbackMsg = e?.message ?? String(err);
+  const message = (bodyMsg || fallbackMsg).slice(0, 240);
+
+  let hint: string;
+  switch (status) {
+    case 401:
+      hint = "Unauthorized. Your session expired — sign out and back in.";
+      break;
+    case 403:
+      hint = "Forbidden. The OAuth token is missing the davis-copilot:conversations:execute scope. Sign out and back in to re-grant the scope, or contact your admin if the scope was rejected.";
+      break;
+    case 404:
+      hint = "Not found. Davis CoPilot is likely not enabled on this tenant. Ask an admin to enable Davis CoPilot, or verify the feature is in your subscription.";
+      break;
+    case 429:
+      hint = "Rate-limited. Davis CoPilot caps usage at 25 questions per user and 60 per environment per 15 minutes. Wait a few minutes.";
+      break;
+    case 500:
+    case 502:
+    case 503:
+      hint = "Davis CoPilot service error. Retry in a minute.";
+      break;
+    case 0:
+      hint = "Network error. Check connectivity to the Dynatrace tenant.";
+      break;
+    default:
+      hint = `Unexpected error (HTTP ${status}). See the raw message above.`;
+  }
+  return { status, message, hint };
+}
+
 // ─── Persistent cache ──────────────────────────────────────────────────
 
 interface CacheEntry {
@@ -185,15 +238,22 @@ export class DavisCache {
 
 // ─── Davis calls ────────────────────────────────────────────────────────
 
+/** Union result: either a recommendation or a structured error. Lets the
+ *  UI render the actual failure mode (status + hint) instead of generic
+ *  "unavailable" text. */
+export type DavisResult =
+  | { ok: true; rec: DavisRecommendation }
+  | { ok: false; err: DavisError };
+
 /**
  * Get the INITIAL recommendation for a capability. Checks cache first; on
- * miss, calls Davis CoPilot recommenderConversation. Returns null on any
- * error so the UI can fall back to the static recommendation cleanly.
+ * miss, calls Davis CoPilot recommenderConversation. Returns a structured
+ * result so the UI can show the actual error (HTTP status + hint).
  */
 export async function getRecommendation(
   cap: CapabilityResult,
   cache: DavisCache | null,
-): Promise<DavisRecommendation | null> {
+): Promise<DavisResult | null> {
   if (cap.criteriaResults.filter(cr => cr.points === 0 && !cr.error).length === 0) {
     return null;
   }
@@ -207,10 +267,13 @@ export async function getRecommendation(
       // response begin a fresh conversation (Davis is robust to this; it
       // can refer back to the supplementary context in the new prompt).
       return {
-        text: hit.text,
-        ts: hit.ts,
-        fromCache: true,
-        messageToken: hit.messageToken,
+        ok: true,
+        rec: {
+          text: hit.text,
+          ts: hit.ts,
+          fromCache: true,
+          messageToken: hit.messageToken,
+        },
       };
     }
   }
@@ -236,12 +299,12 @@ export async function getRecommendation(
     if (Array.isArray(resp)) {
       // eslint-disable-next-line no-console
       console.warn("[Davis] unexpected event-stream response, dropping");
-      return null;
+      return { ok: false, err: { status: 0, message: "Unexpected event-stream response", hint: "Davis returned a streaming response when JSON was expected." } };
     }
     if (!resp || resp.status === "FAILED" || !resp.text) {
       // eslint-disable-next-line no-console
       console.warn("[Davis] FAILED status or empty text", resp?.status);
-      return null;
+      return { ok: false, err: { status: 0, message: `Response status: ${resp?.status ?? "empty"}`, hint: "Davis returned a failed or empty response. Try again in a moment." } };
     }
 
     const entry: CacheEntry = {
@@ -253,16 +316,20 @@ export async function getRecommendation(
     if (cache) cache.set(signature, entry);
 
     return {
-      text: entry.text,
-      ts: entry.ts,
-      fromCache: false,
-      messageToken: entry.messageToken,
-      state: resp.state,
+      ok: true,
+      rec: {
+        text: entry.text,
+        ts: entry.ts,
+        fromCache: false,
+        messageToken: entry.messageToken,
+        state: resp.state,
+      },
     };
   } catch (err) {
+    const classified = classifyError(err);
     // eslint-disable-next-line no-console
-    console.warn(`[Davis] call failed for ${cap.name}:`, err);
-    return null;
+    console.warn(`[Davis] call failed for ${cap.name}:`, classified, err);
+    return { ok: false, err: classified };
   }
 }
 
@@ -277,7 +344,7 @@ export async function getFollowUp(
   cap: CapabilityResult,
   followUpText: string,
   previousState: State | undefined,
-): Promise<DavisRecommendation | null> {
+): Promise<DavisResult | null> {
   if (!followUpText.trim()) return null;
 
   try {
@@ -301,24 +368,28 @@ export async function getFollowUp(
     if (Array.isArray(resp)) {
       // eslint-disable-next-line no-console
       console.warn("[Davis] unexpected event-stream response on follow-up");
-      return null;
+      return { ok: false, err: { status: 0, message: "Unexpected event-stream response", hint: "Davis returned a streaming response when JSON was expected." } };
     }
     if (!resp || resp.status === "FAILED" || !resp.text) {
       // eslint-disable-next-line no-console
       console.warn("[Davis] follow-up FAILED status or empty text", resp?.status);
-      return null;
+      return { ok: false, err: { status: 0, message: `Response status: ${resp?.status ?? "empty"}`, hint: "Davis returned a failed or empty response. Try again in a moment." } };
     }
 
     return {
-      text: resp.text,
-      ts: Date.now(),
-      fromCache: false,
-      messageToken: resp.messageToken,
-      state: resp.state,
+      ok: true,
+      rec: {
+        text: resp.text,
+        ts: Date.now(),
+        fromCache: false,
+        messageToken: resp.messageToken,
+        state: resp.state,
+      },
     };
   } catch (err) {
+    const classified = classifyError(err);
     // eslint-disable-next-line no-console
-    console.warn(`[Davis] follow-up call failed for ${cap.name}:`, err);
-    return null;
+    console.warn(`[Davis] follow-up call failed for ${cap.name}:`, classified, err);
+    return { ok: false, err: classified };
   }
 }
