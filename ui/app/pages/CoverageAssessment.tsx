@@ -395,16 +395,18 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 </Menu.Content>
               </Menu>
             )}
-            {/* Dev only: Davis-powered Generate Report. */}
+            {/* Dev only: Davis-powered Assist. Opens advanced prompts for
+                opportunities, action priorities, executive (coverage &
+                maturity) and technical reports. */}
             {isDev && (
               <Button
                 size="condensed"
                 variant="emphasized"
                 color="primary"
                 onClick={() => setShowReportModal(true)}
-                aria-label="Generate a custom report from this assessment using Davis CoPilot"
+                aria-label="Open Assist — Davis CoPilot advanced prompts for this assessment"
               >
-                Generate Report
+                Assist
               </Button>
             )}
             {/* Diagnostic controls — gated by isDev (?dev=1 or
