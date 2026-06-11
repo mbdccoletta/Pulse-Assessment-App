@@ -51,6 +51,25 @@ function readStorageFlag(): boolean {
   }
 }
 
+/** True when the app is being served from the local dev server.
+ *
+ *  `dt-app dev` serves the app bundle from http://localhost:<port>/ui and
+ *  loads it inside the Dynatrace local-dev-server iframe. Inside that
+ *  iframe, window.location.hostname is "localhost" (or 127.0.0.1). A
+ *  DEPLOYED app is always served from <tenant>.apps.dynatrace.com, which
+ *  never matches localhost — so this is a safe, automatic proxy for
+ *  "running locally for SE testing". It means the SE never has to set
+ *  ?dev=1 or localStorage by hand, and customers can never trip it. */
+function isLocalDevServer(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const h = window.location.hostname;
+    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 export interface UseDevModeResult {
   /** True when diagnostic controls should be visible. */
   isDev: boolean;
@@ -59,6 +78,15 @@ export interface UseDevModeResult {
 export function useDevMode(): UseDevModeResult {
   // Resolved once on mount. The flag is sticky for the session lifetime
   // because dev controls aren't worth re-rendering everything for.
-  const [isDev] = useState<boolean>(() => readUrlFlag() || readStorageFlag());
+  //
+  // Three independent activation paths (any one is enough):
+  //   1. running on the local dev server  → automatic, zero setup
+  //   2. ?dev=1 in the URL                 → shareable one-off
+  //   3. localStorage.cca.dev              → sticky on this browser
+  // A deployed customer tenant matches none of these, so the diagnostic
+  // + Davis Assist surface stays hidden in production.
+  const [isDev] = useState<boolean>(() =>
+    isLocalDevServer() || readUrlFlag() || readStorageFlag()
+  );
   return { isDev };
 }
