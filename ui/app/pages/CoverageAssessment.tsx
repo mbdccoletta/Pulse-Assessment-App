@@ -429,19 +429,6 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 Force refresh
               </Button>
             )}
-            {/* Dev only: dedicated AI Insights page. Hidden from customer
-                tenants — the entire Davis surface is dev-gated. */}
-            {isDev && (
-              <Button
-                size="condensed"
-                variant="emphasized"
-                color="primary"
-                onClick={() => navigate("/ai-insights")}
-                aria-label="Open dedicated AI Insights page (all capabilities at once)"
-              >
-                AI Insights
-              </Button>
-            )}
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
               Tenant: <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
               {stats && (
