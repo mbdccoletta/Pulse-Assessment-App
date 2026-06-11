@@ -43,66 +43,54 @@ interface TemplateGroup {
 
 const TEMPLATE_GROUPS: TemplateGroup[] = [
   {
-    category: "Tactical",
+    category: "Opportunities & Improvements",
+    templates: [
+      {
+        title: "Where are the biggest opportunities?",
+        body: "Looking at this assessment, where are the biggest opportunities to improve the customer's observability? Please identify the 5 highest-value improvements available right now. For each: name the capability and the specific criterion IDs involved, quote the current value and gap from the data, explain why it matters (what the customer gains in visibility or risk reduction), and rate the opportunity size as High / Medium / Low. Highlight any single change that would unlock multiple criteria at once.",
+      },
+      {
+        title: "What quick wins can I capture?",
+        body: "What are the fastest quick wins in this assessment — improvements that need little effort but lift the score meaningfully? Please identify failing criteria with the smallest gap to their passing threshold and capabilities likely to move with a single configuration change (a OneAgent flag, a cloud integration toggle, an OpenPipeline rule). Order by score-points gained per unit of effort, cite the criterion IDs, and group quick wins that share the same underlying setup so I can sequence them efficiently.",
+      },
+    ],
+  },
+  {
+    category: "Action Priorities (customer-driven)",
     templates: [
       {
         title: "What should I prioritize?",
-        body: "Given the current state of this assessment, what are the top 3 actions I should prioritize to maximise impact? Please order by impact-to-effort ratio. For each action: cite the specific capability and criterion IDs it addresses, quote the current values and gaps from the data, estimate the resulting score lift, and note whether it's a Foundation-tier fix (which gates the Maturity formula) or a Best Practice / Excellence improvement. Explain the reasoning behind the ordering so I can defend it to the customer.",
+        body: "Given the current state of this assessment, what are the top 3 actions I should prioritize to maximise impact for the customer? Please order by impact-to-effort ratio. For each action: cite the capability and criterion IDs it addresses, quote the current values and gaps, estimate the resulting score lift, and note whether it's a Foundation-tier fix (which gates the Maturity formula) or a Best Practice / Excellence improvement. Explain the reasoning behind the ordering so I can defend it to the customer.",
       },
       {
-        title: "What are the points of attention?",
-        body: "What are the most important warning signs and risk areas in this data? Please highlight in order of severity: (a) Foundation-tier failures that cap Maturity at L1, (b) criteria at exactly 0% that suggest disabled or missing integrations, (c) capabilities with several Excellence wins but failing Foundation — these flatter the score but mask structural gaps, (d) any capability below 50% coverage. Do not suggest fixes yet — just call out what deserves attention and why.",
-      },
-    ],
-  },
-  {
-    category: "Technical deep-dive",
-    templates: [
-      {
-        title: "Root cause & blind spots",
-        body: "For each failing criterion in this assessment, what is the most likely root cause in the customer's Dynatrace configuration? Please identify the missing or misconfigured component (e.g. OneAgent flag, cloud integration, OpenPipeline rule, OpenTelemetry instrumentation, Davis AI setting). Then map each root cause to the type of incident the customer would NOT detect today — i.e. what blind spots does this assessment reveal? Be specific about which signals, alerts, or problem types are at risk.",
-      },
-      {
-        title: "Architecture maturity review",
-        body: "Looking at the pattern of failures across all 9 capabilities, what does it tell me about the customer's observability architecture maturity? Identify any architectural anti-patterns visible in the data — for example: cloud monitoring enabled but no log enrichment, OneAgent broadly deployed but Kubernetes clusters disconnected, RUM active without synthetic monitoring, or AI Observability without Davis problem coverage. Propose architectural-level improvements that would unlock multiple criteria at once before recommending tactical fixes.",
-      },
-      {
-        title: "Feature adoption roadmap",
-        body: "What is the optimal sequence of Dynatrace feature enablement to take this customer from their current overall coverage to 90%+? Please structure the answer as 3 phases (0-3 months, 3-6 months, 6-12 months). For each phase: list the specific features to enable, the criterion IDs that get unlocked, the prerequisites that must be satisfied first, and the expected lift in overall coverage and overall maturity at the end of the phase.",
+        title: "Prioritize for a specific customer goal",
+        body: "My customer's primary goal this quarter is: [DESCRIBE THE GOAL — e.g. reduce MTTR, prepare for a cloud migration, pass a security audit, improve digital experience]. Given that goal and this assessment data, which gaps should I prioritize and in what order? Please focus only on the capabilities and criteria that move the needle on this goal, cite the criterion IDs, quote the gaps, and explain how closing each one advances the stated objective. Ignore gaps that don't serve this goal.",
       },
     ],
   },
   {
-    category: "Strategy",
+    category: "Executive Report (Coverage & Maturity)",
     templates: [
       {
-        title: "How do I increase coverage?",
-        body: "Looking specifically at coverage scores, what are the 5 fastest actions to lift the overall coverage average? Identify failing criteria with the smallest gap to threshold (quick wins) and capabilities likely to move with a single configuration change. Order by points-of-coverage gained per unit of effort, and group actions that share the same underlying integration (e.g. one cloud platform setup that unblocks several cloud-enrichment criteria) so we can sequence them efficiently.",
+        title: "Executive summary — coverage & maturity",
+        body: "What should I include in a 1-page executive summary of this assessment for the customer's CIO/CTO? Please structure it around two headline numbers — overall Coverage and overall Maturity — and explain what each means in plain business language. Then cover: the 2-3 strongest capabilities, the 2-3 weakest, what the maturity level tells us about how deeply the platform is adopted, and a single recommended 90-day focus. Avoid technical jargon — the audience is business leadership.",
       },
       {
-        title: "How do I increase maturity?",
-        body: "How can I improve Maturity scores across the 9 capabilities? Remember the progressive formula: Foundation 60% weight, Best Practice 25% counts only if Foundation reaches 80%, Excellence 15% counts only if BP reaches 60%. Given each capability's current Maturity Level (L0-L3) and per-tier breakdown, what is the optimal sequence of actions to advance each capability one level? Foundation-tier failures first across all capabilities — they unlock the whole formula. For each capability, name the specific tier-gate to clear next and the action to clear it.",
-      },
-      {
-        title: "12-month maturity roadmap",
-        body: "Please build a 12-month roadmap to advance this customer's maturity. Break it into quarterly milestones. For each quarter: which capabilities are the focus, which actions get executed (cite criterion IDs), expected capability-level outcomes at end of quarter (L1→L2→L3), and resource implications (SE hours, customer effort, integration touchpoints). Account for the Foundation→BP→Excellence gating throughout. End with the expected overall coverage and overall maturity targets at month 12.",
+        title: "Board-level narrative",
+        body: "What is the story this assessment tells about the customer's observability posture, framed for a board / leadership conversation? Please compare their Coverage and Maturity scores to what a healthy enterprise Dynatrace adoption looks like, call out which capabilities show real investment vs. underinvestment, quantify the untapped value in the licence footprint they already pay for, and give me 3 talking points the customer's champion can take upward to justify continued or expanded investment.",
       },
     ],
   },
   {
-    category: "Business",
+    category: "Technical Report (how to advance)",
     templates: [
       {
-        title: "ROI & business case",
-        body: "What is the business case for the customer closing the top 5 gaps in this assessment? For each gap: estimated cost of an undetected incident in that area (downtime / revenue / brand), expected MTTR reduction once the gap is closed, FTE hours saved per quarter through better observability, and any compliance or regulatory exposure (SOC2, PCI, HIPAA, ISO 27001) the gap may create. Frame the answer in language suitable for a CTO-level budget discussion — concrete numbers where reasonable, ranges where uncertain.",
+        title: "Technical action plan with real steps",
+        body: "Please give me a detailed technical action plan to advance this customer's coverage and maturity. Group the actions by capability. For each action provide: the exact Dynatrace feature, setting, or integration to enable (be specific — name the OneAgent setting, the cloud integration, the OpenPipeline rule, the OTel instrumentation, the Davis AI configuration), the criterion IDs it resolves, the prerequisites that must be in place first, a rough effort estimate (S/M/L), and the expected score lift. Order the plan by impact. Do not invent settings — if unsure, say so.",
       },
       {
-        title: "Executive narrative",
-        body: "What story does this assessment tell about the customer's observability maturity, and how should I frame it for a CIO/CTO conversation? Cover: how does this posture compare to typical enterprise Dynatrace adoption, which capabilities indicate technological investment vs. underinvestment, what untapped value exists in the existing licence footprint, and what are 3 board-level talking points the customer can take to their leadership? Avoid jargon — the audience is business leadership.",
-      },
-      {
-        title: "Licence optimization",
-        body: "Based on the failing criteria patterns, where is the customer likely under-utilizing Dynatrace capabilities they already own? Identify features that are paid for but inactive (signals: criteria at 0% in capabilities with active foundations). Conversely, identify gaps that justify a capability upgrade or expansion (e.g. Log Management add-on, RUM, AppSec, Davis CoPilot). Give me a balanced view: optimize current spend AND surface expansion opportunities the SE can have a conversation about.",
+        title: "Root cause & how to fix each gap",
+        body: "For each failing criterion in this assessment, what is the most likely root cause in the customer's Dynatrace configuration, and exactly how do I fix it? Please identify the missing or misconfigured component for each gap (OneAgent flag, cloud integration, OpenPipeline rule, OTel instrumentation, Davis setting), describe the concrete steps to remediate, and note what incident or blind spot the customer is exposed to until it's fixed. Be specific and practical — I want steps I can hand to the customer's platform team.",
       },
     ],
   },
@@ -253,13 +241,15 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
   };
 
   return (
-    <Modal show={show} onDismiss={close} title="Generate Report with Davis CoPilot" size="large">
+    <Modal show={show} onDismiss={close} title="Assist · Powered by Davis CoPilot" size="large">
       <Flex flexDirection="column" gap={12} style={{ minWidth: 600, maxWidth: 900 }}>
         <Text style={{ fontSize: 13, color: subColor, lineHeight: 1.5 }}>
-          Describe the report you need. Davis CoPilot will analyse this
-          assessment (tenant <Strong style={{ color: textColor }}>{ctx.tenant}</Strong>,
-          date {ctx.date}, overall {ctx.overallCoverage}% coverage) and produce
-          a tailored response. Pick a template below or write your own.
+          Ask Davis CoPilot about this assessment (tenant{" "}
+          <Strong style={{ color: textColor }}>{ctx.tenant}</Strong>, overall{" "}
+          {ctx.overallCoverage}% coverage, {ctx.overallMaturity}/100 maturity).
+          Pick one of the advanced prompts below — opportunities &amp; improvements,
+          action priorities, an executive report on coverage &amp; maturity, or a
+          technical how-to-advance plan — or write your own question.
         </Text>
 
         {/* Templates — grouped by analytical angle (Tactical / Technical /
