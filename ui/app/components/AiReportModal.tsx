@@ -203,6 +203,7 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
   const dk = useCurrentTheme() === "dark";
   const [draft, setDraft] = useState("");
   const [copied, setCopied] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const { status, text, errorDetail, generate, reset } = useAiReport(ctx);
 
   const textColor = Colors.Text.Neutral.Default;
@@ -240,101 +241,124 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
     URL.revokeObjectURL(url);
   };
 
+  const clearResult = () => { reset(); setCopied(false); };
+
   return (
-    <Modal show={show} onDismiss={close} title="Assist · Powered by Davis CoPilot" size="large">
-      <Flex flexDirection="column" gap={12} style={{ minWidth: 600, maxWidth: 900 }}>
-        <Text style={{ fontSize: 13, color: subColor, lineHeight: 1.5 }}>
-          Ask Davis CoPilot about this assessment (tenant{" "}
-          <Strong style={{ color: textColor }}>{ctx.tenant}</Strong>, overall{" "}
-          {ctx.overallCoverage}% coverage, {ctx.overallMaturity}/100 maturity).
-          Pick one of the advanced prompts below — opportunities &amp; improvements,
-          action priorities, an executive report on coverage &amp; maturity, or a
-          technical how-to-advance plan — or write your own question.
+    <Modal show={show} onDismiss={close} title="Assist" size="large">
+      <Flex flexDirection="column" gap={16} style={{ minWidth: 600, maxWidth: 880 }}>
+
+        {/* Compact context line */}
+        <Text style={{ fontSize: 12, color: subColor }}>
+          Tenant <Strong style={{ color: textColor }}>{ctx.tenant}</Strong> ·{" "}
+          {ctx.overallCoverage}% coverage · {ctx.overallMaturity}/100 maturity
         </Text>
 
-        {/* Templates — grouped by analytical angle (Tactical / Technical /
-            Strategy / Business). Each category renders a small label above
-            its chip row so the SE can see the analytical range available. */}
+        {/* ── PRIMARY: custom prompt ─────────────────────────────────── */}
         <Flex flexDirection="column" gap={6}>
-          {TEMPLATE_GROUPS.map(group => (
-            <Flex key={group.category} flexDirection="column" gap={4}>
-              <Text style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
-                textTransform: "uppercase", color: subColor,
-              }}>
-                {group.category}
-              </Text>
-              <Flex flexDirection="row" gap={6} flexWrap="wrap">
-                {group.templates.map(t => (
-                  <Button
-                    key={t.title}
-                    size="condensed"
-                    onClick={() => setDraft(t.body)}
-                    disabled={status === "loading"}
-                  >
-                    {t.title}
-                  </Button>
-                ))}
-              </Flex>
-            </Flex>
-          ))}
-        </Flex>
-
-        {/* Textarea */}
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="e.g. Can you write a 2-page customer-facing report focusing on…"
-          disabled={status === "loading"}
-          rows={5}
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            fontSize: 13,
-            lineHeight: 1.5,
-            borderRadius: 6,
-            border: `1px solid ${borderColor}`,
-            background: dk ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.6)",
-            color: textColor,
-            fontFamily: "inherit",
-            outline: "none",
-            resize: "vertical",
-            boxSizing: "border-box",
-          }}
-        />
-
-        {/* Generate row */}
-        <Flex flexDirection="row" justifyContent="space-between" alignItems="center">
-          <Text style={{ fontSize: 11, color: subColor }}>
-            {draft.length} chars · uses 1 Davis CoPilot call
+          <Text style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
+            Ask anything about this assessment
           </Text>
-          <Flex flexDirection="row" gap={8}>
-            {status === "success" && (
-              <Button size="condensed" onClick={onCopy}>
-                {copied ? "Copied" : "Copy"}
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={
+              "Type your question. Examples:\n" +
+              "• Which 3 gaps should I fix first and why?\n" +
+              "• Summarise coverage and maturity for a CTO.\n" +
+              "• How do I raise Infrastructure from L1 to L2 — give exact steps."
+            }
+            disabled={status === "loading"}
+            rows={6}
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              fontSize: 13,
+              lineHeight: 1.55,
+              borderRadius: 8,
+              border: `1px solid ${borderColor}`,
+              background: dk ? "rgba(0,0,0,0.20)" : "rgba(255,255,255,0.75)",
+              color: textColor,
+              fontFamily: "inherit",
+              outline: "none",
+              resize: "vertical",
+              boxSizing: "border-box",
+            }}
+          />
+
+          {/* Action row */}
+          <Flex flexDirection="row" justifyContent="space-between" alignItems="center">
+            <Flex flexDirection="row" gap={8} alignItems="center">
+              <Button
+                size="condensed"
+                disabled={!draft || status === "loading"}
+                onClick={() => setDraft("")}
+              >
+                Clear
               </Button>
-            )}
-            {status === "success" && (
-              <Button size="condensed" onClick={onDownload}>
-                Download .md
-              </Button>
-            )}
+              {draft.trim() && (
+                <Text style={{ fontSize: 11, color: subColor }}>
+                  {draft.length} chars · 1 Davis call
+                </Text>
+              )}
+            </Flex>
             <Button
-              size="condensed"
               variant="emphasized"
               color="primary"
               disabled={!draft.trim() || status === "loading"}
               onClick={() => void generate(draft)}
             >
-              {status === "loading" ? "Generating…" : status === "success" ? "Regenerate" : "Generate"}
+              {status === "loading" ? "Generating…" : status === "success" ? "Ask again" : "Ask Davis"}
             </Button>
           </Flex>
         </Flex>
 
-        {/* Response area */}
+        {/* ── SECONDARY: collapsible suggestions ─────────────────────── */}
+        <Flex flexDirection="column" gap={6}>
+          <Text
+            onClick={() => setShowSuggestions(v => !v)}
+            style={{
+              fontSize: 12, fontWeight: 600, color: accentColor,
+              cursor: "pointer", userSelect: "none",
+            }}
+          >
+            {showSuggestions ? "▾ Hide example prompts" : "▸ Need ideas? Show example prompts"}
+          </Text>
+          {showSuggestions && (
+            <Flex flexDirection="column" gap={12} style={{
+              padding: 12, borderRadius: 8,
+              border: `1px solid ${borderColor}`,
+              background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
+            }}>
+              {TEMPLATE_GROUPS.map(group => (
+                <Flex key={group.category} flexDirection="column" gap={4}>
+                  <Text style={{
+                    fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                    textTransform: "uppercase", color: subColor,
+                  }}>
+                    {group.category}
+                  </Text>
+                  <Flex flexDirection="row" gap={6} flexWrap="wrap">
+                    {group.templates.map(t => (
+                      <Button
+                        key={t.title}
+                        size="condensed"
+                        onClick={() => { setDraft(t.body); setShowSuggestions(false); }}
+                        disabled={status === "loading"}
+                      >
+                        {t.title}
+                      </Button>
+                    ))}
+                  </Flex>
+                </Flex>
+              ))}
+            </Flex>
+          )}
+        </Flex>
+
+        {/* ── Response area ──────────────────────────────────────────── */}
         {status === "loading" && (
           <Flex flexDirection="column" gap={8} style={{
-            padding: 16, borderRadius: 6,
+            padding: 16, borderRadius: 8,
             border: `1px solid ${borderColor}`,
             background: dk ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)",
           }}>
@@ -347,12 +371,12 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
 
         {status === "error" && (
           <Flex flexDirection="column" gap={4} style={{
-            padding: 12, borderRadius: 6,
+            padding: 12, borderRadius: 8,
             border: `1px solid ${Colors.Text.Critical.Default}33`,
             background: dk ? "rgba(229,57,53,0.06)" : "rgba(229,57,53,0.04)",
           }}>
             <Text style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Critical.Default }}>
-              {errorDetail?.status ? `Davis CoPilot error (HTTP ${errorDetail.status})` : "Davis CoPilot unavailable"}
+              {errorDetail?.status ? `Davis error (HTTP ${errorDetail.status})` : "Davis unavailable"}
             </Text>
             {errorDetail?.message && (
               <Text style={{
@@ -372,22 +396,35 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
         )}
 
         {status === "success" && text && (
-          <Flex flexDirection="column" gap={4} style={{
-            padding: 16, borderRadius: 6,
-            border: `1px solid ${borderColor}`,
-            background: dk ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)",
-            maxHeight: 460, overflowY: "auto",
-          }}>
-            {renderMarkdown(text, textColor, accentColor)}
-            <Flex style={{ marginTop: 12, paddingTop: 8, borderTop: `1px solid ${borderColor}` }}>
-              <Text style={{ fontSize: 10, color: subColor, fontStyle: "italic" }}>
-                AI-generated by Davis CoPilot · may contain inaccuracies · verify before sharing externally
+          <Flex flexDirection="column" gap={8}>
+            {/* Result toolbar */}
+            <Flex flexDirection="row" justifyContent="space-between" alignItems="center">
+              <Text style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
+                Answer
               </Text>
+              <Flex flexDirection="row" gap={6}>
+                <Button size="condensed" onClick={onCopy}>{copied ? "Copied" : "Copy"}</Button>
+                <Button size="condensed" onClick={onDownload}>Download .md</Button>
+                <Button size="condensed" onClick={clearResult}>Clear result</Button>
+              </Flex>
+            </Flex>
+            <Flex flexDirection="column" gap={4} style={{
+              padding: 16, borderRadius: 8,
+              border: `1px solid ${borderColor}`,
+              background: dk ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)",
+              maxHeight: 440, overflowY: "auto",
+            }}>
+              {renderMarkdown(text, textColor, accentColor)}
+              <Flex style={{ marginTop: 12, paddingTop: 8, borderTop: `1px solid ${borderColor}` }}>
+                <Text style={{ fontSize: 10, color: subColor, fontStyle: "italic" }}>
+                  AI-generated · may contain inaccuracies · verify before sharing externally
+                </Text>
+              </Flex>
             </Flex>
           </Flex>
         )}
 
-        {/* Footer-style row at the bottom of the modal body. */}
+        {/* Footer */}
         <Flex flexDirection="row" justifyContent="flex-end"
           style={{ marginTop: 4, paddingTop: 8, borderTop: `1px solid ${borderColor}` }}>
           <Button onClick={close}>Close</Button>
