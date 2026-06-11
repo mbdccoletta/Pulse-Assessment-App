@@ -409,26 +409,6 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 Assist
               </Button>
             )}
-            {/* Diagnostic controls — gated by isDev (?dev=1 or
-                localStorage.cca.dev). Hidden from customer view. */}
-            {isDev && coverageData.perfEntries != null && (
-              <Button
-                size="condensed"
-                onClick={() => coverageData.downloadPerfReport()}
-                aria-label="Download performance report as JSON"
-              >
-                Perf JSON
-              </Button>
-            )}
-            {isDev && (
-              <Button
-                size="condensed"
-                onClick={async () => { await coverageData.forceRefresh(); refresh(); }}
-                aria-label="Clear 24h cache and run a fresh assessment"
-              >
-                Force refresh
-              </Button>
-            )}
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
               Tenant: <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
               {stats && (
