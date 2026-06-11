@@ -362,7 +362,7 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
             </Flex>
 
             {/* Thread */}
-            <Flex flexDirection="column" gap={10} style={{
+            <Flex flexDirection="column" gap={12} style={{
               padding: 14, borderRadius: 8, border: `1px solid ${borderColor}`,
               background: dk ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)",
               maxHeight: 420, overflowY: "auto",
