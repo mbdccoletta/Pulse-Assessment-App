@@ -25,7 +25,7 @@ import { CRITERION_ACTIONS } from "../remediationActions";
  *  v3: compact text + inline failed-criteria table. Triggered guardrail.
  *  v2: structured supplementary JSON + verbose prompt. Returned FAILED.
  *  v1: original generic prompt. */
-export const PROMPT_VERSION = "v4";
+export const PROMPT_VERSION = "v5";
 
 /** Shape of the criterion data we feed to the model. Kept minimal but rich
  *  enough that Davis can write a specific, data-grounded recommendation
@@ -113,34 +113,48 @@ export function buildCapabilityPrompt(cap: CapabilityResult): {
   // Frame the whole thing as a question an SE would ask Davis Assist.
   // The guardrail rejects task-style prompts ("Analyse X", "Rules: ...");
   // it accepts genuine questions about Dynatrace usage.
+  // Each line carries the criterion's ground truth: ID, tier, exact label,
+  // a short description of what it measures, the observed value/gap, and the
+  // SE-curated remediation hint. The description + label prevent Davis from
+  // inventing what a criterion means (e.g. mislabelling "Cloud region
+  // enrichment" as "network monitoring").
   const criteriaLines = failed.map(f =>
-    `- ${f.id} (${f.tier}): ${clamp(f.label, 60)} is at ${f.currentValue}%, needs ≥${f.passingThreshold}% (gap ${f.gap.toFixed(0)} points). ` +
-    `Suggested action: ${clamp(f.remediationHint, 140)}`
+    `- ${f.id} (${f.tier}): "${clamp(f.label, 60)}" — ${clamp(f.description, 120)} ` +
+    `Currently ${f.currentValue}%, needs ≥${f.passingThreshold}% (gap ${f.gap.toFixed(0)} points). ` +
+    `Suggested fix: ${clamp(f.remediationHint, 140)}`
   ).join("\n");
 
   const text =
     `I'm an SE reviewing a Dynatrace observability coverage assessment for ` +
     `a customer's "${cap.name}" capability. The capability scored ${cap.score}% ` +
     `coverage and ${cap.maturity.maturityScore}/100 maturity. These criteria are ` +
-    `below their passing thresholds:\n\n` +
+    `below their passing thresholds (each line gives the exact name, what it ` +
+    `measures, the current value, the gap, and a suggested fix):\n\n` +
     `${criteriaLines}\n\n` +
     `What are the 3 most impactful Dynatrace actions I should recommend to the ` +
     `customer to lift this capability's score? Please prioritise foundation-tier ` +
     `fixes first since they gate the maturity formula, then the highest-leverage ` +
-    `single action, then the easiest enablement. For each action, can you cite ` +
-    `which criterion IDs above it addresses, quote the current value and gap, and ` +
-    `estimate the score lift?`;
+    `single action, then the easiest enablement. For each action: cite which ` +
+    `criterion IDs above it addresses (using their exact names), quote the current ` +
+    `value and gap, give a concrete example of how to do it in Dynatrace (the ` +
+    `specific UI path, integration, or attribute), and estimate the score lift.`;
 
   // No supplementary — everything is in `text` as a natural question.
   const supplementary = "";
 
-  // ── INSTRUCTION (format only — no task instructions) ────────────────
+  // ── INSTRUCTION (format + accuracy + worked examples) ───────────────
   const instruction =
     `Please answer with three numbered sections: "## 1. <action title>", ` +
     `"## 2. <action title>", "## 3. <action title>". Under each heading write ` +
-    `one short paragraph (3-5 sentences). Bold the lead action verb. Keep ` +
-    `the total reply under 240 words. Avoid bullet lists, code blocks, ` +
-    `emoji, or links to external sites.`;
+    `one short paragraph (3-5 sentences). Bold the lead action verb.\n` +
+    `In each paragraph include a concrete, real example of how to perform the ` +
+    `action in Dynatrace — name the actual Settings path, integration, OneAgent ` +
+    `flag, OpenPipeline rule, or telemetry attribute (e.g. "enable the AWS ` +
+    `integration under Settings > Cloud and virtualization so logs carry the ` +
+    `cloud.region attribute"). Describe each criterion using its EXACT name from ` +
+    `the data above — never rename or guess what it measures. Do not invent ` +
+    `settings or URLs; if unsure a control exists, describe the goal instead. ` +
+    `Keep the total reply under 280 words. Avoid code blocks, emoji, and external links.`;
 
   return { text, supplementary, instruction };
 }
