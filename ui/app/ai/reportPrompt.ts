@@ -58,12 +58,12 @@ export function buildReportPrompt(ctx: ReportContext, userPrompt: string): Repor
     const failed = cap.criteriaResults.filter(cr => cr.points === 0 && !cr.error).length;
     const total = cap.criteriaResults.length;
     const top = topFailing(cap, 4);
-    // CRITICAL: include the real LABEL for each failing criterion. Without
-    // it, Davis only sees "i15 at 0%" and hallucinates the meaning (e.g.
-    // calling i15 "network monitoring" when it's actually "Cloud region
-    // enrichment"). The label is the criterion's ground truth.
+    // Reference each failing check by its plain-English NAME only — never
+    // the internal id (e.g. "i15"). The name is the ground truth and is the
+    // only thing the reader understands; sending the id makes Davis echo a
+    // cryptic code back.
     const topStr = top.length > 0
-      ? ` Worst-performing failed criteria: ${top.map(t => `${t.id} "${clamp(t.label, 55)}" at ${t.value}%`).join("; ")}.`
+      ? ` Weakest checks: ${top.map(t => `"${clamp(t.label, 55).replace(/\s*\(%\)\s*$/, "")}" at ${t.value}%`).join("; ")}.`
       : "";
     // Tier breakdown lets Davis answer maturity-aware questions ("which
     // Foundation gates are still closed?") without us pre-digesting it.
@@ -88,36 +88,38 @@ export function buildReportPrompt(ctx: ReportContext, userPrompt: string): Repor
     `and overall maturity is ${ctx.overallMaturity}/100. The 9 capability ` +
     `scores are:\n${capLines}\n\n` +
     `Please ground your answer in this assessment data and in the Dynatrace ` +
-    `documentation. When you mention a criterion, use the exact label shown ` +
-    `next to its ID above — do not infer or rename what a criterion measures.`;
+    `documentation. When you mention a check, refer to it by the exact name ` +
+    `shown above — never invent or rename what it measures, and never use an ` +
+    `internal code.`;
 
   // No supplementary — everything in the question. Empty string ⇒ omitted
   // from the SDK context array by the caller.
   const supplementary = "";
 
   const instruction =
-    `Please reply in plain markdown with headings (## or ###) for major ` +
-    `sections, short paragraphs, and lists where they aid scanning.\n\n` +
-    `Accuracy rules (important):\n` +
-    `- When you reference a criterion by ID, describe it using the EXACT ` +
-    `label given next to that ID in the data. Never guess or invent what a ` +
-    `criterion measures — if a label says "Cloud region enrichment", do not ` +
-    `call it "network monitoring".\n` +
-    `- Do not invent Dynatrace features, settings, or URLs. If you are not ` +
-    `certain a setting exists, describe the goal instead of naming a fake control.\n\n` +
+    `Write in a clear, friendly, professional tone — approachable but precise, ` +
+    `like an experienced SE writing for a colleague or customer. Reply in plain ` +
+    `markdown with headings (## or ###) for major sections, short paragraphs, and ` +
+    `lists where they aid scanning.\n\n` +
+    `Naming (important):\n` +
+    `- Refer to every check by its plain-English name exactly as written above ` +
+    `(e.g. "Cloud region enrichment"). NEVER use internal codes like "i15", "a3", ` +
+    `or the words "criterion ID" — the reader does not know those codes and they ` +
+    `read as cryptic.\n` +
+    `- Never guess or rename what a check measures. If a name says "Cloud region ` +
+    `enrichment", do not call it "network monitoring".\n` +
+    `- Do not invent Dynatrace features, settings, or URLs. If unsure a setting ` +
+    `exists, describe the goal instead of naming a fake control.\n\n` +
     `Make every recommendation concrete and illustrated:\n` +
-    `- For each action, give a specific, real example of HOW to do it in ` +
-    `Dynatrace — e.g. "In Settings > Cloud and virtualization > AWS, add the ` +
-    `connection and enable supporting services so logs carry cloud.region", ` +
-    `or "Add an OpenPipeline processor that extracts cloud.account.id from ` +
-    `the log record". Name the actual UI path, integration, or attribute.\n` +
-    `- State the expected outcome in numbers (e.g. "this should lift ` +
-    `Infrastructure coverage by ~4 points and move it from L1 to L2").\n` +
-    `- Prefer worked examples over abstract advice. The reader is an SE who ` +
-    `wants to hand concrete steps to the customer's platform team.\n\n` +
-    `Avoid code fences and emoji. Aim for a complete report — do not truncate. ` +
-    `If the user's request implies a specific length or format (executive ` +
-    `summary, talking points, action plan), honor that.`;
+    `- Give a specific, real example of HOW to do it in Dynatrace — e.g. "In ` +
+    `Settings > Cloud and virtualization > AWS, add the connection so logs carry ` +
+    `the cloud.region attribute". Name the actual UI path, integration, or attribute.\n` +
+    `- State the expected outcome in plain numbers (e.g. "this should lift ` +
+    `Infrastructure coverage by about 4 points and move it from L1 to L2").\n` +
+    `- Prefer worked examples over abstract advice.\n\n` +
+    `Avoid code fences and emoji. Aim for a complete answer — do not truncate. ` +
+    `If the user's request implies a specific length or format (executive summary, ` +
+    `talking points, action plan), honor that.`;
 
   return { text, supplementary, instruction };
 }
