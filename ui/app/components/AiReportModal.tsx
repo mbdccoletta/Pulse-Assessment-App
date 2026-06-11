@@ -202,9 +202,10 @@ function renderInline(text: string, textColor: string, accentColor: string): Rea
 export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
   const dk = useCurrentTheme() === "dark";
   const [draft, setDraft] = useState("");
+  const [followUpDraft, setFollowUpDraft] = useState("");
   const [copied, setCopied] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const { status, text, errorDetail, generate, reset } = useAiReport(ctx);
+  const { status, conversation, errorDetail, generate, followUp, reset } = useAiReport(ctx);
 
   const textColor = Colors.Text.Neutral.Default;
   const subColor = Colors.Text.Neutral.Subdued;
@@ -212,15 +213,22 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
   const borderColor = dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
   const surface = Colors.Background.Surface.Default;
 
+  const hasThread = conversation.length > 0;
+  const lastAnswer = [...conversation].reverse().find(t => t.role === "assistant")?.text ?? "";
+  /** Full transcript for download — every turn, labelled. */
+  const transcript = conversation
+    .map(t => (t.role === "user" ? `## Q: ${t.text}` : t.text))
+    .join("\n\n---\n\n");
+
   const close = () => {
     onDismiss();
     // Defer reset so the closing animation doesn't show a blank state mid-flight.
-    setTimeout(() => { reset(); setDraft(""); setCopied(false); }, 250);
+    setTimeout(() => { reset(); setDraft(""); setFollowUpDraft(""); setCopied(false); }, 250);
   };
 
   const onCopy = async () => {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(lastAnswer);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch (err) {
@@ -230,18 +238,25 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
   };
 
   const onDownload = () => {
-    const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+    const blob = new Blob([transcript], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `pulse-report-${ctx.tenant}-${ctx.date}.md`;
+    a.download = `pulse-assist-${ctx.tenant}-${ctx.date}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  const clearResult = () => { reset(); setCopied(false); };
+  const clearResult = () => { reset(); setFollowUpDraft(""); setCopied(false); };
+
+  const submitFollowUp = () => {
+    if (!followUpDraft.trim() || status === "loading") return;
+    const q = followUpDraft;
+    setFollowUpDraft("");
+    void followUp(q);
+  };
 
   return (
     <Modal show={show} onDismiss={close} title="Assist" size="large">
@@ -253,174 +268,182 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx }) => {
           {ctx.overallCoverage}% coverage · {ctx.overallMaturity}/100 maturity
         </Text>
 
-        {/* ── PRIMARY: custom prompt ─────────────────────────────────── */}
-        <Flex flexDirection="column" gap={6}>
-          <Text style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
-            Ask anything about this assessment
-          </Text>
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={
-              "Type your question. Examples:\n" +
-              "• Which 3 gaps should I fix first and why?\n" +
-              "• Summarise coverage and maturity for a CTO.\n" +
-              "• How do I raise Infrastructure from L1 to L2 — give exact steps."
-            }
-            disabled={status === "loading"}
-            rows={6}
-            style={{
-              width: "100%",
-              padding: "12px 14px",
-              fontSize: 13,
-              lineHeight: 1.55,
-              borderRadius: 8,
-              border: `1px solid ${borderColor}`,
-              background: dk ? "rgba(0,0,0,0.20)" : "rgba(255,255,255,0.75)",
-              color: textColor,
-              fontFamily: "inherit",
-              outline: "none",
-              resize: "vertical",
-              boxSizing: "border-box",
-            }}
-          />
+        {/* ════ START SCREEN — only before the first question ════ */}
+        {!hasThread && (
+          <>
+            {/* PRIMARY: custom prompt */}
+            <Flex flexDirection="column" gap={6}>
+              <Text style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
+                Ask anything about this assessment
+              </Text>
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={
+                  "Type your question. Examples:\n" +
+                  "• Which 3 gaps should I fix first and why?\n" +
+                  "• Summarise coverage and maturity for a CTO.\n" +
+                  "• How do I raise Infrastructure from L1 to L2 — give exact steps."
+                }
+                disabled={status === "loading"}
+                rows={6}
+                style={{
+                  width: "100%", padding: "12px 14px", fontSize: 13, lineHeight: 1.55,
+                  borderRadius: 8, border: `1px solid ${borderColor}`,
+                  background: dk ? "rgba(0,0,0,0.20)" : "rgba(255,255,255,0.75)",
+                  color: textColor, fontFamily: "inherit", outline: "none",
+                  resize: "vertical", boxSizing: "border-box",
+                }}
+              />
+              <Flex flexDirection="row" justifyContent="space-between" alignItems="center">
+                <Flex flexDirection="row" gap={8} alignItems="center">
+                  <Button size="condensed" disabled={!draft || status === "loading"} onClick={() => setDraft("")}>
+                    Clear
+                  </Button>
+                  {draft.trim() && (
+                    <Text style={{ fontSize: 11, color: subColor }}>{draft.length} chars · 1 Davis call</Text>
+                  )}
+                </Flex>
+                <Button
+                  variant="emphasized" color="primary"
+                  disabled={!draft.trim() || status === "loading"}
+                  onClick={() => void generate(draft)}
+                >
+                  {status === "loading" ? "Asking…" : "Ask Davis"}
+                </Button>
+              </Flex>
+            </Flex>
 
-          {/* Action row */}
-          <Flex flexDirection="row" justifyContent="space-between" alignItems="center">
-            <Flex flexDirection="row" gap={8} alignItems="center">
-              <Button
-                size="condensed"
-                disabled={!draft || status === "loading"}
-                onClick={() => setDraft("")}
+            {/* SECONDARY: collapsible suggestions */}
+            <Flex flexDirection="column" gap={6}>
+              <Text
+                onClick={() => setShowSuggestions(v => !v)}
+                style={{ fontSize: 12, fontWeight: 600, color: accentColor, cursor: "pointer", userSelect: "none" }}
               >
-                Clear
-              </Button>
-              {draft.trim() && (
-                <Text style={{ fontSize: 11, color: subColor }}>
-                  {draft.length} chars · 1 Davis call
-                </Text>
+                {showSuggestions ? "▾ Hide example prompts" : "▸ Need ideas? Show example prompts"}
+              </Text>
+              {showSuggestions && (
+                <Flex flexDirection="column" gap={12} style={{
+                  padding: 12, borderRadius: 8, border: `1px solid ${borderColor}`,
+                  background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
+                }}>
+                  {TEMPLATE_GROUPS.map(group => (
+                    <Flex key={group.category} flexDirection="column" gap={4}>
+                      <Text style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: subColor }}>
+                        {group.category}
+                      </Text>
+                      <Flex flexDirection="row" gap={6} flexWrap="wrap">
+                        {group.templates.map(t => (
+                          <Button key={t.title} size="condensed" disabled={status === "loading"}
+                            onClick={() => { setDraft(t.body); setShowSuggestions(false); }}>
+                            {t.title}
+                          </Button>
+                        ))}
+                      </Flex>
+                    </Flex>
+                  ))}
+                </Flex>
               )}
             </Flex>
-            <Button
-              variant="emphasized"
-              color="primary"
-              disabled={!draft.trim() || status === "loading"}
-              onClick={() => void generate(draft)}
-            >
-              {status === "loading" ? "Generating…" : status === "success" ? "Ask again" : "Ask Davis"}
-            </Button>
-          </Flex>
-        </Flex>
-
-        {/* ── SECONDARY: collapsible suggestions ─────────────────────── */}
-        <Flex flexDirection="column" gap={6}>
-          <Text
-            onClick={() => setShowSuggestions(v => !v)}
-            style={{
-              fontSize: 12, fontWeight: 600, color: accentColor,
-              cursor: "pointer", userSelect: "none",
-            }}
-          >
-            {showSuggestions ? "▾ Hide example prompts" : "▸ Need ideas? Show example prompts"}
-          </Text>
-          {showSuggestions && (
-            <Flex flexDirection="column" gap={12} style={{
-              padding: 12, borderRadius: 8,
-              border: `1px solid ${borderColor}`,
-              background: dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
-            }}>
-              {TEMPLATE_GROUPS.map(group => (
-                <Flex key={group.category} flexDirection="column" gap={4}>
-                  <Text style={{
-                    fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
-                    textTransform: "uppercase", color: subColor,
-                  }}>
-                    {group.category}
-                  </Text>
-                  <Flex flexDirection="row" gap={6} flexWrap="wrap">
-                    {group.templates.map(t => (
-                      <Button
-                        key={t.title}
-                        size="condensed"
-                        onClick={() => { setDraft(t.body); setShowSuggestions(false); }}
-                        disabled={status === "loading"}
-                      >
-                        {t.title}
-                      </Button>
-                    ))}
-                  </Flex>
-                </Flex>
-              ))}
-            </Flex>
-          )}
-        </Flex>
-
-        {/* ── Response area ──────────────────────────────────────────── */}
-        {status === "loading" && (
-          <Flex flexDirection="column" gap={8} style={{
-            padding: 16, borderRadius: 8,
-            border: `1px solid ${borderColor}`,
-            background: dk ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)",
-          }}>
-            <Skeleton height={16} width="40%" />
-            <SkeletonText lines={5} />
-            <Skeleton height={12} width="80%" />
-            <SkeletonText lines={3} />
-          </Flex>
+          </>
         )}
 
-        {status === "error" && (
-          <Flex flexDirection="column" gap={4} style={{
-            padding: 12, borderRadius: 8,
-            border: `1px solid ${Colors.Text.Critical.Default}33`,
-            background: dk ? "rgba(229,57,53,0.06)" : "rgba(229,57,53,0.04)",
-          }}>
-            <Text style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Critical.Default }}>
-              {errorDetail?.status ? `Davis error (HTTP ${errorDetail.status})` : "Davis unavailable"}
-            </Text>
-            {errorDetail?.message && (
-              <Text style={{
-                fontSize: 11, color: textColor,
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                padding: "4px 6px", borderRadius: 3,
-                background: dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
-                wordBreak: "break-word",
-              }}>{errorDetail.message}</Text>
-            )}
-            {errorDetail?.hint && (
-              <Text style={{ fontSize: 11, color: subColor, lineHeight: 1.5 }}>
-                {errorDetail.hint}
-              </Text>
-            )}
-          </Flex>
-        )}
-
-        {status === "success" && text && (
+        {/* ════ CONVERSATION SCREEN — once a question has been asked ════ */}
+        {hasThread && (
           <Flex flexDirection="column" gap={8}>
-            {/* Result toolbar */}
+            {/* Conversation toolbar */}
             <Flex flexDirection="row" justifyContent="space-between" alignItems="center">
-              <Text style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
-                Answer
-              </Text>
+              <Text style={{ fontSize: 13, fontWeight: 700, color: textColor }}>Conversation</Text>
               <Flex flexDirection="row" gap={6}>
-                <Button size="condensed" onClick={onCopy}>{copied ? "Copied" : "Copy"}</Button>
-                <Button size="condensed" onClick={onDownload}>Download .md</Button>
-                <Button size="condensed" onClick={clearResult}>Clear result</Button>
+                <Button size="condensed" disabled={!lastAnswer} onClick={onCopy}>{copied ? "Copied" : "Copy answer"}</Button>
+                <Button size="condensed" disabled={!lastAnswer} onClick={onDownload}>Download .md</Button>
+                <Button size="condensed" onClick={clearResult}>New conversation</Button>
               </Flex>
             </Flex>
-            <Flex flexDirection="column" gap={4} style={{
-              padding: 16, borderRadius: 8,
-              border: `1px solid ${borderColor}`,
+
+            {/* Thread */}
+            <Flex flexDirection="column" gap={10} style={{
+              padding: 14, borderRadius: 8, border: `1px solid ${borderColor}`,
               background: dk ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)",
-              maxHeight: 440, overflowY: "auto",
+              maxHeight: 420, overflowY: "auto",
             }}>
-              {renderMarkdown(text, textColor, accentColor)}
-              <Flex style={{ marginTop: 12, paddingTop: 8, borderTop: `1px solid ${borderColor}` }}>
-                <Text style={{ fontSize: 10, color: subColor, fontStyle: "italic" }}>
-                  AI-generated · may contain inaccuracies · verify before sharing externally
-                </Text>
-              </Flex>
+              {conversation.map((turn, i) => {
+                const isUser = turn.role === "user";
+                return (
+                  <Flex key={i} flexDirection="column"
+                    style={{
+                      marginLeft: isUser ? 0 : 0,
+                      paddingLeft: isUser ? 10 : 0,
+                      borderLeft: isUser ? `2px solid ${accentColor}66` : undefined,
+                    }}>
+                    {isUser && (
+                      <Text style={{ fontSize: 10, fontWeight: 700, color: accentColor, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>
+                        You asked
+                      </Text>
+                    )}
+                    {isUser
+                      ? <Text style={{ fontSize: 13, color: textColor, lineHeight: 1.5 }}>{turn.text}</Text>
+                      : <Flex flexDirection="column" gap={2}>{renderMarkdown(turn.text, textColor, accentColor)}</Flex>}
+                  </Flex>
+                );
+              })}
+
+              {/* In-thread loading skeleton for the pending answer */}
+              {status === "loading" && (
+                <Flex flexDirection="column" gap={6} style={{ marginTop: 2 }}>
+                  <Skeleton height={12} width="50%" />
+                  <SkeletonText lines={3} />
+                </Flex>
+              )}
+
+              {/* In-thread error — thread preserved above */}
+              {status === "error" && (
+                <Flex flexDirection="column" gap={4} style={{
+                  marginTop: 4, padding: 10, borderRadius: 6,
+                  border: `1px solid ${Colors.Text.Critical.Default}33`,
+                }}>
+                  <Text style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Critical.Default }}>
+                    {errorDetail?.status ? `Davis error (HTTP ${errorDetail.status})` : "Davis unavailable"}
+                  </Text>
+                  {errorDetail?.hint && (
+                    <Text style={{ fontSize: 11, color: subColor, lineHeight: 1.5 }}>{errorDetail.hint}</Text>
+                  )}
+                </Flex>
+              )}
             </Flex>
+
+            {/* Follow-up input — keep interacting with the answer */}
+            <Flex flexDirection="row" gap={6} alignItems="center">
+              <input
+                type="text"
+                value={followUpDraft}
+                placeholder="Ask a follow-up question…"
+                disabled={status === "loading"}
+                onChange={(e) => setFollowUpDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") submitFollowUp();
+                }}
+                onKeyUp={(e) => e.stopPropagation()}
+                style={{
+                  flex: 1, padding: "8px 12px", fontSize: 13, borderRadius: 8,
+                  border: `1px solid ${borderColor}`,
+                  background: dk ? "rgba(0,0,0,0.20)" : "rgba(255,255,255,0.75)",
+                  color: textColor, fontFamily: "inherit", outline: "none",
+                }}
+              />
+              <Button
+                variant="emphasized" color="primary"
+                disabled={!followUpDraft.trim() || status === "loading"}
+                onClick={submitFollowUp}
+              >
+                {status === "loading" ? "…" : "Send"}
+              </Button>
+            </Flex>
+
+            <Text style={{ fontSize: 10, color: subColor, fontStyle: "italic" }}>
+              AI-generated · may contain inaccuracies · verify before sharing externally
+            </Text>
           </Flex>
         )}
 
