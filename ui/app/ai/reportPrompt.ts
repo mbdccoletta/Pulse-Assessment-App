@@ -11,7 +11,21 @@
 // Same Q&A natural-language framing as promptTemplates v4 to avoid the
 // GUARDRAIL_CHECK_FAILED rejection seen on task-style prompts.
 
-import type { CapabilityResult } from "../hooks/useCoverageData";
+/** Minimal capability shape the report builder needs. Both the live
+ *  CapabilityResult and the lighter snapshot capability (Evolution page)
+ *  satisfy this — maturity detail is optional and defaulted when absent. */
+export interface ReportCapability {
+  name: string;
+  score: number;
+  criteriaResults: { id: string; label: string; value: number; points: number; error: boolean }[];
+  maturity?: {
+    maturityScore: number;
+    levelLabel: string;
+    foundation: { passed: number; total: number };
+    bestPractice: { passed: number; total: number };
+    excellence: { passed: number; total: number };
+  };
+}
 
 /** Truncate long strings so the prompt body stays compact. */
 function clamp(s: string, n: number): string {
@@ -21,7 +35,7 @@ function clamp(s: string, n: number): string {
 
 /** Top-N worst-performing failed criteria for one capability — used to give
  *  Davis enough detail to be specific without flooding the prompt. */
-function topFailing(cap: CapabilityResult, n: number): { id: string; value: number; label: string }[] {
+function topFailing(cap: ReportCapability, n: number): { id: string; value: number; label: string }[] {
   return cap.criteriaResults
     .filter(cr => cr.points === 0 && !cr.error)
     .sort((a, b) => a.value - b.value)
@@ -35,7 +49,11 @@ export interface ReportContext {
   date: string;
   overallCoverage: number;
   overallMaturity: number;
-  capabilities: CapabilityResult[];
+  capabilities: ReportCapability[];
+  /** Optional change context — e.g. a snapshot-to-snapshot delta summary
+   *  from the Evolution page. When present it's appended so Davis can
+   *  answer "what changed" questions. */
+  comparisonNote?: string;
 }
 
 /** Output of the prompt builder — same triple as the per-capability one. */
@@ -67,11 +85,14 @@ export function buildReportPrompt(ctx: ReportContext, userPrompt: string): Repor
       : "";
     // Tier breakdown lets Davis answer maturity-aware questions ("which
     // Foundation gates are still closed?") without us pre-digesting it.
-    const f = cap.maturity.foundation;
-    const b = cap.maturity.bestPractice;
-    const e = cap.maturity.excellence;
-    const tiers = `tiers F=${f.passed}/${f.total}, BP=${b.passed}/${b.total}, E=${e.passed}/${e.total}`;
-    return `- ${cap.name}: coverage ${cap.score}%, maturity ${cap.maturity.maturityScore}/100 (${cap.maturity.levelLabel}), ${tiers}, ${failed}/${total} criteria failing.${topStr}`;
+    // Snapshot capabilities (Evolution page) omit maturity detail — in that
+    // case we report coverage + failing count only.
+    const m = cap.maturity;
+    if (m) {
+      const tiers = `tiers F=${m.foundation.passed}/${m.foundation.total}, BP=${m.bestPractice.passed}/${m.bestPractice.total}, E=${m.excellence.passed}/${m.excellence.total}`;
+      return `- ${cap.name}: coverage ${cap.score}%, maturity ${m.maturityScore}/100 (${m.levelLabel}), ${tiers}, ${failed}/${total} criteria failing.${topStr}`;
+    }
+    return `- ${cap.name}: coverage ${cap.score}%, ${failed}/${total} criteria failing.${topStr}`;
   }).join("\n");
 
   const cleanUserPrompt = clamp(userPrompt.trim(), 800);
@@ -87,6 +108,9 @@ export function buildReportPrompt(ctx: ReportContext, userPrompt: string): Repor
     `(tenant ${ctx.tenant}). Overall coverage is ${ctx.overallCoverage}% ` +
     `and overall maturity is ${ctx.overallMaturity}/100. The 9 capability ` +
     `scores are:\n${capLines}\n\n` +
+    (ctx.comparisonNote
+      ? `Change since the previous snapshot:\n${clamp(ctx.comparisonNote, 900)}\n\n`
+      : "") +
     `Please ground your answer in this assessment data and in the Dynatrace ` +
     `documentation. When you mention a check, refer to it by the exact name ` +
     `shown above — never invent or rename what it measures, and never use an ` +
