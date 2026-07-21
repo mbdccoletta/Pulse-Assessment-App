@@ -664,6 +664,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
         <AiReportModal
           show={showReportModal}
           onDismiss={() => setShowReportModal(false)}
+          page={viewMode === "maturity" ? "maturity" : viewMode === "recommendations" ? "executive" : "coverage"}
           ctx={{
             tenant: tenant ?? "(unknown)",
             date: date ?? "",

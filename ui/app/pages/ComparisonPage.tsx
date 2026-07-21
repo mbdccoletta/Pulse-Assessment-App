@@ -9,6 +9,7 @@ import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-comp
 import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
 import { useDevMode } from "../hooks/useDevMode";
+import { AiReportModal } from "../components/AiReportModal";
 import { CovMatRadar } from "../components/CovMatRadar";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_TIERS } from "../data/criterionTiers";
@@ -119,6 +120,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   const [showListB, setShowListB] = useState(false);
   const [dimension, setDimension] = useState<"coverage" | "maturity">("coverage");
   const [expandedRadar, setExpandedRadar] = useState(false);
+  const [showAssist, setShowAssist] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -292,15 +294,15 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
         <Button onClick={() => navigate("/")} size="condensed">← Back</Button>
         </Tooltip>
         {isDev && (
-          <Tooltip text="Open dedicated AI Insights page (all capabilities at once)." position="bottom">
+          <Tooltip text="Ask Davis CoPilot about how this assessment changed over time." position="bottom">
             <Button
-              onClick={() => navigate("/ai-insights")}
+              onClick={() => setShowAssist(true)}
               size="condensed"
               variant="emphasized"
               color="primary"
-              aria-label="Open AI Insights page"
+              aria-label="Open Assist for the Evolution view"
             >
-              AI Insights
+              Assist
             </Button>
           </Tooltip>
         )}
@@ -424,6 +426,33 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           </ExpandableChartModal>
 
         </Flex>
+      )}
+
+      {/* Assist (dev-only) — grounded in the snapshot-to-snapshot delta so
+          the "what changed" starters actually work. */}
+      {isDev && snapA && (
+        <AiReportModal
+          show={showAssist}
+          onDismiss={() => setShowAssist(false)}
+          page="comparison"
+          ctx={{
+            tenant: coverageData.tenant ?? "(unknown)",
+            date: new Date(snapA.timestamp).toISOString().slice(0, 10),
+            overallCoverage: snapA.totalScore,
+            overallMaturity: comparison?.currentMaturity ?? 0,
+            capabilities: snapA.capabilities,
+            comparisonNote: comparison
+              ? `Comparing the current snapshot to a previous one taken ${new Date(comparison.baseline.timestamp).toISOString().slice(0,10)}. `
+                + `Overall coverage moved ${comparison.totalDelta >= 0 ? "+" : ""}${comparison.totalDelta} points `
+                + `(${comparison.baseline.totalScore}% → ${comparison.current.totalScore}%); `
+                + `overall maturity ${comparison.maturityDelta >= 0 ? "+" : ""}${comparison.maturityDelta} `
+                + `(${comparison.baselineMaturity} → ${comparison.currentMaturity}). Per capability: `
+                + comparison.capDiffs
+                    .map(c => `${c.name} coverage ${c.prevScore}%→${c.currScore}% (${c.delta >= 0 ? "+" : ""}${c.delta})`)
+                    .join("; ") + "."
+              : undefined,
+          }}
+        />
       )}
     </Flex>
   );
