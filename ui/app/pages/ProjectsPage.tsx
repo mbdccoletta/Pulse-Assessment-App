@@ -27,6 +27,7 @@ import { SkeletonText } from "@dynatrace/strato-components/content";
 import { DynatraceIntelligenceSignetIcon } from "@dynatrace/strato-icons";
 import type { CoverageData } from "../hooks/useCoverageData";
 import { useProjects, type ObservabilityProject } from "../hooks/useProjects";
+import { useOwnershipTeams } from "../hooks/useOwnershipTeams";
 import { analyzeProject } from "../ai/projectAnalysis";
 import { openDynatraceAssist } from "../ai/assistIntent";
 import type { ReportContext } from "../ai/reportPrompt";
@@ -76,7 +77,12 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
   const [name, setName] = useState("");
   const [objective, setObjective] = useState("");
   const [team, setTeam] = useState("");
+  /** Identifier of the selected official Ownership team ("" = none/free-text). */
+  const [teamId, setTeamId] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  // Official Dynatrace Ownership teams (Settings > Ownership > Teams).
+  // Fetched lazily when the new-project modal opens.
+  const ownership = useOwnershipTeams(showNew);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, "loading" | string | undefined>>({});
 
@@ -136,7 +142,7 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
       execute: false,
       extraContext:
         `Declared customer project: "${p.name}". Objective: ${p.objective}.` +
-        (p.team ? ` Team: ${p.team}.` : "") +
+        (p.team ? ` Team: ${p.team}${p.teamIdentifier ? ` (Ownership identifier ${p.teamIdentifier})` : ""}.` : "") +
         (p.targetDate ? ` Target: ${p.targetDate}.` : "") +
         (p.analysis ? `\nPrior AI analysis and execution plan for this project:\n${p.analysis.text}` : ""),
     });
@@ -144,13 +150,16 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
 
   const submitNew = () => {
     if (!name.trim() || !objective.trim()) return;
+    const officialTeam = teamId ? ownership.teams.find(t => t.identifier === teamId) : undefined;
     addProject({
       name: name.trim(),
       objective: objective.trim(),
-      team: team.trim() || undefined,
+      // Prefer the official Ownership team; fall back to free text.
+      team: officialTeam?.name ?? (team.trim() || undefined),
+      teamIdentifier: officialTeam?.identifier,
       targetDate: targetDate.trim() || undefined,
     });
-    setName(""); setObjective(""); setTeam(""); setTargetDate("");
+    setName(""); setObjective(""); setTeam(""); setTeamId(""); setTargetDate("");
     setShowNew(false);
   };
 
@@ -352,10 +361,36 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
           </Flex>
           <Flex flexDirection="row" gap={8}>
             <Flex flexDirection="column" gap={4} style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, fontWeight: 600, color: text }}>Team (optional)</Text>
-              <input style={inputStyle} value={team} placeholder="e.g. Platform SRE"
-                onChange={e => setTeam(e.target.value)}
-                onKeyDown={e => e.stopPropagation()} onKeyUp={e => e.stopPropagation()} />
+              <Text style={{ fontSize: 12, fontWeight: 600, color: text }}>Owning team (optional)</Text>
+              {ownership.teams.length > 0 ? (
+                <>
+                  <select
+                    style={{ ...inputStyle, appearance: "auto" as React.CSSProperties["appearance"] }}
+                    value={teamId}
+                    onChange={e => setTeamId(e.target.value)}
+                    aria-label="Select an official Dynatrace Ownership team"
+                  >
+                    <option value="">— No team —</option>
+                    {ownership.teams.map(t => (
+                      <option key={t.identifier} value={t.identifier}>{t.name}</option>
+                    ))}
+                  </select>
+                  <Text style={{ fontSize: 10, color: textTert }}>
+                    Official Ownership teams (Settings &gt; Ownership &gt; Teams)
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <input style={inputStyle} value={team} placeholder="e.g. Platform SRE"
+                    onChange={e => setTeam(e.target.value)}
+                    onKeyDown={e => e.stopPropagation()} onKeyUp={e => e.stopPropagation()} />
+                  <Text style={{ fontSize: 10, color: textTert }}>
+                    {ownership.loading
+                      ? "Loading Ownership teams…"
+                      : "No Ownership teams found — define them under Settings > Ownership > Teams to pick officially."}
+                  </Text>
+                </>
+              )}
             </Flex>
             <Flex flexDirection="column" gap={4} style={{ flex: 1 }}>
               <Text style={{ fontSize: 12, fontWeight: 600, color: text }}>Target (optional)</Text>

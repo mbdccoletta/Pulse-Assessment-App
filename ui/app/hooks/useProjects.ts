@@ -32,8 +32,12 @@ export interface ObservabilityProject {
   name: string;
   /** Free-text objective — what the customer wants to achieve. */
   objective: string;
-  /** Optional owning team. */
+  /** Optional owning team — display name. When picked from the official
+   *  Ownership teams (Settings > Ownership > Teams), teamIdentifier holds
+   *  the identifier used in dt.owner tags. */
   team?: string;
+  /** Official Dynatrace Ownership team identifier (dt.owner value). */
+  teamIdentifier?: string;
   /** Optional target date (free text, e.g. "Q4 2026"). */
   targetDate?: string;
   createdAt: number;
