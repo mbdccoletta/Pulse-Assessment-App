@@ -87,11 +87,23 @@ export async function analyzeProject(
     (project.targetDate ? ` Target date: ${project.targetDate}.` : "");
 
   const text =
-    `My customer declared an internal observability project. ` +
+    `My customer declared an internal project with a business objective. ` +
     `Project name: "${project.name}". Objective: ${project.objective.slice(0, 1200)}.${meta}\n\n` +
     `Which of these nine Dynatrace Pulse capabilities are most relevant to this ` +
-    `project, and what execution plan should the customer follow to achieve the ` +
-    `objective? The capabilities are: ${CAP_NAMES.join(", ")}.\n\n` +
+    `project, and what execution plan should the customer follow to ACHIEVE THE ` +
+    `OBJECTIVE ITSELF? The capabilities are: ${CAP_NAMES.join(", ")}.\n\n` +
+    `Important framing: the deliverable of this plan is the customer's business ` +
+    `outcome (for example: cloud cost actually reduced, MTTR actually lowered, ` +
+    `the audit actually passed) — NOT an improvement of assessment scores or a ` +
+    `list of Dynatrace configurations. Use the assessment data in two ways: ` +
+    `(1) capabilities that are already strong are TOOLS — say concretely how to ` +
+    `use the data they already collect to deliver the objective now (for a ` +
+    `cost-reduction objective that means things like: use utilization metrics ` +
+    `and Davis forecasts to find idle or over-provisioned hosts and rightsize ` +
+    `or decommission them, tune Kubernetes requests/limits, reduce log ` +
+    `ingestion waste, identify workloads for commitment discounts); ` +
+    `(2) recommend fixing an assessment check ONLY when that specific gap ` +
+    `genuinely blocks the objective, and state what decision it unblocks.\n\n` +
     (officialTeamNames.length > 0
       ? `The customer's teams (Dynatrace Ownership) are: ${officialTeamNames.join(", ")}. ` +
         `Which of these teams should be involved in executing the plan?\n\n`
@@ -105,11 +117,13 @@ export async function analyzeProject(
     (officialTeamNames.length > 0
       ? `then a line starting with "Involved teams:" listing the exact team names; `
       : "") +
-    `then a short explanation of why each matters for this objective; then a phased ` +
-    `execution plan (first 30 days, 60 days, 90 days) grounded in the current ` +
-    `assessment gaps below — naming the specific checks to fix and the concrete ` +
-    `Dynatrace actions; and finally the quick wins the team can capture ` +
-    `immediately?\n\n` +
+    `then a short explanation of why each matters for this objective; then a ` +
+    `phased execution plan (first 30 days, 60 days, 90 days) where every phase ` +
+    `is defined by outcomes toward the objective — with any observability ` +
+    `enablement only as a supporting step inside a phase, never the goal of ` +
+    `the phase; then the quick wins expressed in the objective's own units; ` +
+    `and finally the success metrics the customer should track to prove the ` +
+    `objective is being met?\n\n` +
     `Context: ${buildAssessmentContext(ctx)}\n\n` +
     `Please refer to every check by its plain-English name exactly as given — ` +
     `never internal codes.`;
@@ -120,8 +134,10 @@ export async function analyzeProject(
     "headings for the phases, short paragraphs, lists where useful. Refer to " +
     "assessment checks by their plain-English names only — never internal " +
     "codes like i15. Be concrete: name actual Dynatrace settings, " +
-    "integrations, or attributes; do not invent features or URLs. Keep the " +
-    "total under 450 words.";
+    "integrations, or attributes; do not invent features or URLs. State " +
+    "expected outcomes in the OBJECTIVE'S own units (e.g. estimated cost " +
+    "saved, minutes of MTTR, audit controls covered) rather than assessment " +
+    "score points, whenever possible. Keep the total under 500 words.";
 
   try {
     const resp = await publicClient.recommenderConversation({
