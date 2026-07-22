@@ -45,7 +45,7 @@ interface Props {
  *  `## subheading`, ordered/unordered lists, and blank-line paragraph
  *  breaks. No links (Davis output sometimes invents URLs; we suppress them
  *  to avoid sending users to 404s). */
-function renderMarkdown(md: string, textColor: string, accentColor: string): React.ReactNode {
+export function renderMarkdown(md: string, textColor: string, accentColor: string): React.ReactNode {
   // Strip any HTML tags defensively — we never want raw HTML execution.
   const safe = md.replace(/<[^>]*>/g, "");
   const lines = safe.split("\n");
