@@ -99,7 +99,7 @@ export const PAGE_STARTERS: Record<AssistPage, StarterGroup[]> = {
         },
         {
           title: "Summarise progress for a status update",
-          body: "Write a short progress update I can send to the customer, summarising how their observability coverage and maturity changed between these two snapshots. Lead with the wins, acknowledge any regressions honestly, and end with the recommended next focus.",
+          body: "What are the key points for a short progress update I can send to the customer, summarising how their observability coverage and maturity changed between these two snapshots? Please lead with the wins, acknowledge any regressions honestly, and end with the recommended next focus.",
         },
         {
           title: "What regressed and why?",
@@ -120,11 +120,11 @@ export const TEAM_REPORTS: StarterGroup[] = [
     starters: [
       {
         title: "CIO one-pager",
-        body: "Produce a one-page executive briefing for a CIO. Open with overall Coverage and Maturity in plain language, then 3 short sections: what's strong, what's at risk, and the recommended 90-day investment. Use short paragraphs and a few bullet points. No jargon.",
+        body: "What should I include in a one-page executive briefing for a CIO about this assessment? Please open with overall Coverage and Maturity in plain language, then cover 3 short sections: what's strong, what's at risk, and the recommended 90-day investment. Short paragraphs and a few bullet points, no jargon.",
       },
       {
         title: "Board talking points",
-        body: "Give me 5 concise board-level talking points about the customer's observability posture based on this assessment, each one sentence, framed around business value and risk rather than technology.",
+        body: "What are 5 concise board-level talking points about the customer's observability posture based on this assessment? Each should be one sentence, framed around business value and risk rather than technology.",
       },
     ],
   },
@@ -133,11 +133,11 @@ export const TEAM_REPORTS: StarterGroup[] = [
     starters: [
       {
         title: "Technical action plan",
-        body: "Produce a technical action plan for the platform/SRE team. Group actions by capability. For each: the exact Dynatrace setting/integration to enable, the checks it resolves (by name), prerequisites, rough effort (S/M/L), and expected score lift. Order by impact. Format as clear sections with short bullet steps.",
+        body: "What technical action plan should the platform/SRE team follow based on this assessment? Please group actions by capability and for each give: the exact Dynatrace setting or integration to enable, the checks it resolves (by name), prerequisites, rough effort (S/M/L), and the expected score lift. How would you order it by impact?",
       },
       {
         title: "Reliability gaps checklist",
-        body: "Give me a checklist of the reliability and monitoring gaps this assessment reveals, phrased as actionable to-do items an SRE can tick off. Group by capability, most critical first, and note for each what incident it would help detect.",
+        body: "Which reliability and monitoring gaps does this assessment reveal, phrased as actionable to-do items an SRE can tick off? Please group by capability, most critical first, and note for each what incident it would help detect.",
       },
     ],
   },
@@ -146,7 +146,7 @@ export const TEAM_REPORTS: StarterGroup[] = [
     starters: [
       {
         title: "Security posture report",
-        body: "Summarise the customer's security and threat observability posture from this assessment. Cover Application Security and Threat Observability specifically: what's covered, what's missing, and the concrete steps to close the top gaps. Note any compliance-relevant blind spots (audit trails, attack surface visibility).",
+        body: "How would you summarise the customer's security and threat observability posture from this assessment? Looking at Application Security and Threat Observability specifically: what's covered, what's missing, and what concrete steps close the top gaps? Are there compliance-relevant blind spots (audit trails, attack surface visibility)?",
       },
     ],
   },
@@ -168,7 +168,7 @@ export const TEAM_REPORTS: StarterGroup[] = [
       },
       {
         title: "Business value narrative",
-        body: "Frame the value of closing the top 5 gaps in business terms: for each, the risk it removes (downtime, MTTR, undetected incidents, compliance exposure) and the observability outcome the customer gains. Keep it concrete and suitable for a value-realisation discussion.",
+        body: "How should I frame the value of closing the top 5 gaps in business terms? For each: what risk does it remove (downtime, MTTR, undetected incidents, compliance exposure) and what observability outcome does the customer gain? Keep it concrete and suitable for a value-realisation discussion.",
       },
     ],
   },
