@@ -35,6 +35,7 @@ import { openDynatraceAssist } from "../ai/assistIntent";
 import type { ReportContext } from "../ai/reportPrompt";
 import { renderMarkdown } from "../components/DavisInsightSection";
 import { ProjectRadar } from "../components/ProjectRadar";
+import { ProjectDetailModal } from "../components/ProjectDetailModal";
 import { CAPABILITIES } from "../queries";
 
 interface Props {
@@ -105,6 +106,8 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
       .map(t => ({ identifier: t.identifier, name: teamName(t.identifier), count: t.byCapability[capName] }));
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, "loading" | string | undefined>>({});
+  /** Project id whose detail modal (charts view) is open. */
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const text = Colors.Text.Neutral.Default;
   const textSec = Colors.Text.Neutral.Subdued;
@@ -304,6 +307,10 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
                   )}
                   {p.analysis && (
                     <>
+                      <Button size="condensed" variant="emphasized" color="primary"
+                        onClick={() => setDetailId(p.id)}>
+                        Details &amp; charts
+                      </Button>
                       <Button size="condensed" onClick={() => setExpanded(prev => ({ ...prev, [p.id]: !isOpen }))}>
                         {isOpen ? "Hide plan" : "Show plan"}
                       </Button>
@@ -458,6 +465,28 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
           );
         })}
       </Flex>
+
+      {/* ── Project detail modal (charts view) ── */}
+      {detailId && (() => {
+        const p = projects.find(x => x.id === detailId);
+        if (!p) return null;
+        const caps = (p.analysis?.capabilities ?? []).map(capName => ({
+          name: capName,
+          color: CAP_COLOR[capName] ?? accent,
+          coverage: coverageData.capabilities.find(c => c.name === capName)?.score ?? 0,
+          maturity: coverageData.capabilities.find(c => c.name === capName)?.maturity.maturityScore ?? 0,
+        }));
+        return (
+          <ProjectDetailModal
+            project={p}
+            capabilities={caps}
+            discovery={discovery.teams}
+            teamName={teamName}
+            onDismiss={() => setDetailId(null)}
+            onDownloadMd={() => downloadPlan(p)}
+          />
+        );
+      })()}
 
       {/* ── New project modal ── */}
       <Modal show={showNew} onDismiss={() => setShowNew(false)} title="Declare an observability project" size="small">
