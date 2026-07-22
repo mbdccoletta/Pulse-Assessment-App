@@ -71,7 +71,15 @@ export interface ReportPrompt {
  *                   appended at the end as "Please …" so Davis treats it
  *                   as the explicit request.
  */
-export function buildReportPrompt(ctx: ReportContext, userPrompt: string): ReportPrompt {
+/**
+ * Build the assessment context block — the full picture of the current run
+ * (overall scores, per-capability detail, optional snapshot delta) in the
+ * plain-English form Davis understands. Shared by:
+ *   - buildReportPrompt (embedded chat, dev fallback)
+ *   - assistIntent.ts   (native Dynatrace Assist conversation starters,
+ *     where it becomes the hidden `supplementary` context — 100K char cap)
+ */
+export function buildAssessmentContext(ctx: ReportContext): string {
   const capLines = ctx.capabilities.map(cap => {
     const failed = cap.criteriaResults.filter(cr => cr.points === 0 && !cr.error).length;
     const total = cap.criteriaResults.length;
@@ -95,6 +103,18 @@ export function buildReportPrompt(ctx: ReportContext, userPrompt: string): Repor
     return `- ${cap.name}: coverage ${cap.score}%, ${failed}/${total} criteria failing.${topStr}`;
   }).join("\n");
 
+  return (
+    `I just ran a Dynatrace observability coverage assessment (Pulse ` +
+    `Assessment app) for a customer, tenant ${ctx.tenant}, on ${ctx.date}. ` +
+    `Overall coverage is ${ctx.overallCoverage}% and overall maturity is ` +
+    `${ctx.overallMaturity}/100. The capability scores are:\n${capLines}` +
+    (ctx.comparisonNote
+      ? `\nChange since the previous snapshot:\n${clamp(ctx.comparisonNote, 900)}`
+      : "")
+  );
+}
+
+export function buildReportPrompt(ctx: ReportContext, userPrompt: string): ReportPrompt {
   const cleanUserPrompt = clamp(userPrompt.trim(), 800);
 
   // v2 framing: put the user's question FIRST so Davis sees it as the
@@ -104,13 +124,7 @@ export function buildReportPrompt(ctx: ReportContext, userPrompt: string): Repor
   // because Davis read it as a meta-task. Direct question works.
   const text =
     `${cleanUserPrompt}\n\n` +
-    `Context: I just ran a Dynatrace coverage assessment for a customer ` +
-    `(tenant ${ctx.tenant}). Overall coverage is ${ctx.overallCoverage}% ` +
-    `and overall maturity is ${ctx.overallMaturity}/100. The 9 capability ` +
-    `scores are:\n${capLines}\n\n` +
-    (ctx.comparisonNote
-      ? `Change since the previous snapshot:\n${clamp(ctx.comparisonNote, 900)}\n\n`
-      : "") +
+    `Context: ${buildAssessmentContext(ctx)}\n\n` +
     `Please ground your answer in this assessment data and in the Dynatrace ` +
     `documentation. When you mention a check, refer to it by the exact name ` +
     `shown above — never invent or rename what it measures, and never use an ` +
