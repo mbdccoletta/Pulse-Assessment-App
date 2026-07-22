@@ -121,7 +121,12 @@ export async function analyzeProject(
     `phased execution plan (first 30 days, 60 days, 90 days) where every phase ` +
     `is defined by outcomes toward the objective — with any observability ` +
     `enablement only as a supporting step inside a phase, never the goal of ` +
-    `the phase; then the quick wins expressed in the objective's own units; ` +
+    `the phase — and each phase broken into 2-4 SMALL, ACHIEVABLE milestones: ` +
+    `each milestone narrowly scoped (a pilot on one team, one segment, one ` +
+    `namespace, or a top-10 list — never "all resources"), with the owning ` +
+    `team, a clear definition of done, and a modest numeric target the team ` +
+    `can realistically hit within the phase; start with a pilot and expand ` +
+    `what works; then the quick wins expressed in the objective's own units; ` +
     `and finally the success metrics the customer should track to prove the ` +
     `objective is being met?\n\n` +
     `Context: ${buildAssessmentContext(ctx)}\n\n` +
@@ -137,7 +142,10 @@ export async function analyzeProject(
     "integrations, or attributes; do not invent features or URLs. State " +
     "expected outcomes in the OBJECTIVE'S own units (e.g. estimated cost " +
     "saved, minutes of MTTR, audit controls covered) rather than assessment " +
-    "score points, whenever possible. Keep the total under 500 words.";
+    "score points, whenever possible. Every milestone must be small and " +
+    "attainable: narrow scope, one owning team, a definition of done, and a " +
+    "modest numeric target — never sweeping goals like 'optimize all cloud " +
+    "resources'. Keep the total under 500 words.";
 
   try {
     const resp = await publicClient.recommenderConversation({
