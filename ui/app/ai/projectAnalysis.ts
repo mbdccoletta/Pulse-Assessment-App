@@ -118,17 +118,22 @@ export async function analyzeProject(
       ? `then a line starting with "Involved teams:" listing the exact team names; `
       : "") +
     `then a short explanation of why each matters for this objective; then a ` +
-    `phased execution plan (first 30 days, 60 days, 90 days) where every phase ` +
-    `is defined by outcomes toward the objective — with any observability ` +
-    `enablement only as a supporting step inside a phase, never the goal of ` +
-    `the phase — and each phase broken into 2-4 SMALL, ACHIEVABLE milestones: ` +
-    `each milestone narrowly scoped (a pilot on one team, one segment, one ` +
-    `namespace, or a top-10 list — never "all resources"), with the owning ` +
-    `team, a clear definition of done, and a modest numeric target the team ` +
-    `can realistically hit within the phase; start with a pilot and expand ` +
-    `what works; then the quick wins expressed in the objective's own units; ` +
-    `and finally the success metrics the customer should track to prove the ` +
-    `objective is being met?\n\n` +
+    `realistic, detailed execution plan on a WEEK-BY-WEEK timeline (Weeks 1-2, ` +
+    `3-4, 5-8, 9-12) where every block is defined by outcomes toward the ` +
+    `objective — observability enablement only as a supporting step, never the ` +
+    `goal — and each block has 1-2 SMALL, ACHIEVABLE milestones. For EACH ` +
+    `milestone give: the owning team; the concrete steps including WHERE in ` +
+    `Dynatrace the work happens (which app or view — e.g. Hosts, Kubernetes, ` +
+    `Notebooks with a DQL over utilization metrics, Davis forecast — and what ` +
+    `to look at); dependencies and approvals needed before acting (change ` +
+    `windows, sign-off to decommission); a clear definition of done; and a ` +
+    `CONSERVATIVE numeric target with the assumption behind it stated (e.g. ` +
+    `"assuming ~30% of pilot instances show <20% utilization, expect 5-8% ` +
+    `savings on that group" — do not promise aggressive totals like 25% in 90 ` +
+    `days unless the data justifies it). Start with a pilot and expand what ` +
+    `works. Then: the weekly operating cadence (who meets, what report is ` +
+    `reviewed); the top 3 risks with mitigations; the quick wins in the ` +
+    `objective's own units; and the success metrics to track.\n\n` +
     `Context: ${buildAssessmentContext(ctx)}\n\n` +
     `Please refer to every check by its plain-English name exactly as given — ` +
     `never internal codes.`;
@@ -145,7 +150,9 @@ export async function analyzeProject(
     "score points, whenever possible. Every milestone must be small and " +
     "attainable: narrow scope, one owning team, a definition of done, and a " +
     "modest numeric target — never sweeping goals like 'optimize all cloud " +
-    "resources'. Keep the total under 500 words.";
+    "resources'. Targets must be conservative and defensible, with the " +
+    "assumption behind each number stated. Use week-range headings for the " +
+    "timeline. Keep the total under 800 words.";
 
   try {
     const resp = await publicClient.recommenderConversation({
