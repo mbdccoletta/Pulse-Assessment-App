@@ -29,6 +29,7 @@ import type { CoverageData } from "../hooks/useCoverageData";
 import { useProjects, type ObservabilityProject } from "../hooks/useProjects";
 import { useOwnershipTeams } from "../hooks/useOwnershipTeams";
 import { useSegments } from "../hooks/useSegments";
+import { useOwnershipDiscovery, summarizeOwnership } from "../hooks/useOwnershipDiscovery";
 import { analyzeProject } from "../ai/projectAnalysis";
 import { openDynatraceAssist } from "../ai/assistIntent";
 import type { ReportContext } from "../ai/reportPrompt";
@@ -89,6 +90,19 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
   // on the modal.
   const ownership = useOwnershipTeams(true);
   const segmentsSrc = useSegments(showNew);
+  // Real ownership discovery: sweep dt.owner-tagged entities per type and
+  // classify them into capabilities (team × capability × count matrix).
+  const discovery = useOwnershipDiscovery(true);
+
+  /** identifier → display name (falls back to the identifier itself). */
+  const teamName = (identifier: string) =>
+    ownership.teams.find(t => t.identifier === identifier)?.name ?? identifier;
+
+  /** For one capability: the teams that own components in it (discovered). */
+  const ownersOf = (capName: string) =>
+    discovery.teams
+      .filter(t => (t.byCapability[capName] ?? 0) > 0)
+      .map(t => ({ identifier: t.identifier, name: teamName(t.identifier), count: t.byCapability[capName] }));
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, "loading" | string | undefined>>({});
 
@@ -113,7 +127,11 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
 
   const runAnalysis = async (p: ObservabilityProject) => {
     setBusy(prev => ({ ...prev, [p.id]: "loading" }));
-    const result = await analyzeProject(p, ctx, ownership.teams.map(t => t.name));
+    const result = await analyzeProject(
+      p, ctx,
+      ownership.teams.map(t => t.name),
+      summarizeOwnership(discovery.teams, teamName),
+    );
     if (result.ok) {
       saveAnalysis(p.id, { ts: Date.now(), text: result.text, capabilities: result.capabilities, teams: result.teams });
       setBusy(prev => ({ ...prev, [p.id]: undefined }));
@@ -215,6 +233,17 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
         </Button>
       </Flex>
 
+      {/* ── Ownership discovery status ── */}
+      <Flex style={{ padding: "8px 24px 0" }}>
+        <Text style={{ fontSize: 11, color: textTert }}>
+          {discovery.loading
+            ? "Discovering component ownership (dt.owner sweep)…"
+            : discovery.teams.length > 0
+              ? `Ownership discovery: ${discovery.teams.length} team${discovery.teams.length === 1 ? "" : "s"} own ${discovery.teams.reduce((s, t) => s + t.total, 0)} components across the entity model.`
+              : "Ownership discovery: no dt.owner-tagged components found — assign teams to entities via Ownership to ground the maps in real data."}
+        </Text>
+      </Flex>
+
       {/* ── Missing-assessment hint ── */}
       {!hasAssessment && (
         <Flex style={{ padding: "10px 24px" }}>
@@ -301,9 +330,15 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
                   color: CAP_COLOR[capName] ?? accent,
                   value: coverageData.capabilities.find(c => c.name === capName)?.score ?? 0,
                 }));
-                const involvedTeams = (p.analysis!.teams && p.analysis!.teams.length > 0)
-                  ? p.analysis!.teams
-                  : (p.team ? [p.team] : []);
+                // Teams that MUST be involved = union of the teams Davis
+                // flagged in the plan and the teams that actually OWN
+                // components (dt.owner) in the involved capabilities.
+                const discovered = new Set(
+                  p.analysis!.capabilities.flatMap(capName => ownersOf(capName).map(o => o.name)),
+                );
+                for (const t of p.analysis!.teams ?? []) discovered.add(t);
+                if (discovered.size === 0 && p.team) discovered.add(p.team);
+                const involvedTeams = [...discovered];
                 return (
                   <Flex flexDirection="row" gap={16} alignItems="flex-start" flexWrap="wrap">
                     {radarItems.length >= 3 && (
@@ -323,13 +358,34 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
                         }}>
                           Capabilities involved
                         </Text>
-                        {radarItems.map(it => (
-                          <Flex key={it.name} flexDirection="row" alignItems="center" gap={6}>
-                            <Flex style={{ width: 8, height: 8, borderRadius: "50%", background: it.color, flexShrink: 0 }} />
-                            <Text style={{ fontSize: 11, color: text, flex: 1 }}>{it.name}</Text>
-                            <Text style={{ fontSize: 11, fontWeight: 700, color: it.color }}>{it.value}%</Text>
-                          </Flex>
-                        ))}
+                        {radarItems.map(it => {
+                          const owners = ownersOf(it.name);
+                          return (
+                            <Flex key={it.name} flexDirection="column" gap={2}>
+                              <Flex flexDirection="row" alignItems="center" gap={6}>
+                                <Flex style={{ width: 8, height: 8, borderRadius: "50%", background: it.color, flexShrink: 0 }} />
+                                <Text style={{ fontSize: 11, color: text, flex: 1 }}>{it.name}</Text>
+                                <Text style={{ fontSize: 11, fontWeight: 700, color: it.color }}>{it.value}%</Text>
+                              </Flex>
+                              {/* Discovered owners of components in this capability */}
+                              {owners.length > 0 && (
+                                <Flex flexDirection="row" gap={4} flexWrap="wrap" style={{ marginLeft: 14 }}>
+                                  {owners.map(o => (
+                                    <Flex key={o.identifier} style={{
+                                      padding: "1px 8px", borderRadius: 6,
+                                      background: it.color + (dk ? "1c" : "12"),
+                                      border: `1px solid ${it.color}33`,
+                                    }}>
+                                      <Text style={{ fontSize: 10, color: text }}>
+                                        {o.name} · {o.count}
+                                      </Text>
+                                    </Flex>
+                                  ))}
+                                </Flex>
+                              )}
+                            </Flex>
+                          );
+                        })}
                       </Flex>
                       {/* Involved teams (official Ownership names Davis flagged) */}
                       {involvedTeams.length > 0 && (

@@ -72,6 +72,10 @@ export async function analyzeProject(
   /** Official Ownership team names — when provided, Davis is asked which
    *  of them should be involved, and mentions are detected for the card. */
   officialTeamNames: string[] = [],
+  /** Discovered ownership matrix (dt.owner sweep) as plain English — which
+   *  team owns how many components per capability. Grounds the involved-
+   *  teams answer in real data instead of inference. */
+  ownershipSummary = "",
 ): Promise<ProjectAnalysisResult> {
   const meta =
     (project.team
@@ -91,6 +95,10 @@ export async function analyzeProject(
     (officialTeamNames.length > 0
       ? `The customer's teams (Dynatrace Ownership) are: ${officialTeamNames.join(", ")}. ` +
         `Which of these teams should be involved in executing the plan?\n\n`
+      : "") +
+    (ownershipSummary
+      ? `Component ownership discovered from dt.owner tags (real data — use it to ` +
+        `decide which teams must be involved and where):\n${ownershipSummary.slice(0, 4000)}\n\n`
       : "") +
     `Could you structure the answer like this: first a line starting with ` +
     `"Relevant capabilities:" listing the exact names of the relevant ones; ` +
