@@ -68,6 +68,9 @@ export interface OpenAssistOptions {
   /** true → auto-send; false → user reviews/edits in the Assist UI first.
    *  Default false, per the guide's guidance for prefilled prompts. */
   execute?: boolean;
+  /** Extra hidden context appended after the assessment data — e.g. a
+   *  declared project and its prior AI analysis (Projects page). */
+  extraContext?: string;
 }
 
 /**
@@ -75,13 +78,15 @@ export interface OpenAssistOptions {
  * Fire-and-forget: the platform renders the Assist modal; follow-ups,
  * history, and (future) agentic execution are handled natively.
  */
-export function openDynatraceAssist({ prompt, ctx, execute = false }: OpenAssistOptions): void {
+export function openDynatraceAssist({ prompt, ctx, execute = false, extraContext }: OpenAssistOptions): void {
+  const supplementary =
+    buildAssessmentContext(ctx) + (extraContext ? `\n\n${extraContext}` : "");
   sendIntent(
     {
       prompt: prompt.slice(0, 10_000),
       execute,
       contexts: [
-        { type: "supplementary", value: buildAssessmentContext(ctx).slice(0, 100_000) },
+        { type: "supplementary", value: supplementary.slice(0, 100_000) },
         { type: "instruction", value: ASSIST_INSTRUCTION.slice(0, 2_500) },
         { type: "document-retrieval", value: "dynatrace" },
         { type: "origin-app", value: ORIGIN_APP_ID },
