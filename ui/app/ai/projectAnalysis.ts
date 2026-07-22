@@ -67,6 +67,9 @@ export async function analyzeProject(
     (project.team
       ? ` Owning team: ${project.team}${project.teamIdentifier ? ` (Dynatrace Ownership identifier "${project.teamIdentifier}", used in dt.owner tags)` : ""}.`
       : "") +
+    (project.segmentName
+      ? ` The project is identified by the platform Segment "${project.segmentName}" — scope recommendations and any suggested views or queries to that segment where it helps.`
+      : "") +
     (project.targetDate ? ` Target date: ${project.targetDate}.` : "");
 
   const text =

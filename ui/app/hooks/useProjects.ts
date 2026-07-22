@@ -38,6 +38,10 @@ export interface ObservabilityProject {
   team?: string;
   /** Official Dynatrace Ownership team identifier (dt.owner value). */
   teamIdentifier?: string;
+  /** Optional platform Segment identifying the project's scope/team —
+   *  uid + name of a Grail filter-segment (Segments app). */
+  segmentUid?: string;
+  segmentName?: string;
   /** Optional target date (free text, e.g. "Q4 2026"). */
   targetDate?: string;
   createdAt: number;

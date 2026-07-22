@@ -19,7 +19,8 @@
       { "name": "document:documents:write", "comment": "Save assessment snapshots" },
       { "name": "document:documents:delete", "comment": "Cleanup old snapshots" },
       { "name": "davis-copilot:conversations:execute", "comment": "Davis CoPilot dynamic recommendations (feat/davis-insights)" },
-      { "name": "settings:objects:read", "comment": "Read official Ownership teams (builtin:ownership.teams) for Projects" }
+      { "name": "settings:objects:read", "comment": "Read official Ownership teams (builtin:ownership.teams) for Projects" },
+      { "name": "storage:filter-segments:read", "comment": "Read platform Segments to identify teams/scopes on Projects" }
     ]
   }
 }
