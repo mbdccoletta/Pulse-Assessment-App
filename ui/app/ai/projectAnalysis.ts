@@ -21,7 +21,7 @@ import type { ObservabilityProject } from "../hooks/useProjects";
 import type { DavisError } from "./davisRecommendations";
 
 export type ProjectAnalysisResult =
-  | { ok: true; text: string; capabilities: string[] }
+  | { ok: true; text: string; capabilities: string[]; teams: string[] }
   | { ok: false; err: DavisError };
 
 const CAP_NAMES = CAPABILITIES.map(c => c.name);
@@ -32,6 +32,13 @@ const CAP_NAMES = CAPABILITIES.map(c => c.name);
 export function detectCapabilities(text: string): string[] {
   const lower = text.toLowerCase();
   return CAP_NAMES.filter(name => lower.includes(name.toLowerCase()));
+}
+
+/** Same deterministic trick for teams: which of the tenant's OFFICIAL
+ *  Ownership team names did Davis mention in the plan? */
+export function detectTeams(text: string, officialTeamNames: string[]): string[] {
+  const lower = text.toLowerCase();
+  return officialTeamNames.filter(name => name && lower.includes(name.toLowerCase()));
 }
 
 function classifyError(err: unknown): DavisError {
@@ -62,6 +69,9 @@ function classifyError(err: unknown): DavisError {
 export async function analyzeProject(
   project: ObservabilityProject,
   ctx: ReportContext,
+  /** Official Ownership team names — when provided, Davis is asked which
+   *  of them should be involved, and mentions are detected for the card. */
+  officialTeamNames: string[] = [],
 ): Promise<ProjectAnalysisResult> {
   const meta =
     (project.team
@@ -78,9 +88,16 @@ export async function analyzeProject(
     `Which of these nine Dynatrace Pulse capabilities are most relevant to this ` +
     `project, and what execution plan should the customer follow to achieve the ` +
     `objective? The capabilities are: ${CAP_NAMES.join(", ")}.\n\n` +
+    (officialTeamNames.length > 0
+      ? `The customer's teams (Dynatrace Ownership) are: ${officialTeamNames.join(", ")}. ` +
+        `Which of these teams should be involved in executing the plan?\n\n`
+      : "") +
     `Could you structure the answer like this: first a line starting with ` +
-    `"Relevant capabilities:" listing the exact names of the relevant ones; then ` +
-    `a short explanation of why each matters for this objective; then a phased ` +
+    `"Relevant capabilities:" listing the exact names of the relevant ones; ` +
+    (officialTeamNames.length > 0
+      ? `then a line starting with "Involved teams:" listing the exact team names; `
+      : "") +
+    `then a short explanation of why each matters for this objective; then a phased ` +
     `execution plan (first 30 days, 60 days, 90 days) grounded in the current ` +
     `assessment gaps below — naming the specific checks to fix and the concrete ` +
     `Dynatrace actions; and finally the quick wins the team can capture ` +
@@ -127,7 +144,12 @@ export async function analyzeProject(
       };
     }
 
-    return { ok: true, text: resp.text, capabilities: detectCapabilities(resp.text) };
+    return {
+      ok: true,
+      text: resp.text,
+      capabilities: detectCapabilities(resp.text),
+      teams: detectTeams(resp.text, officialTeamNames),
+    };
   } catch (err) {
     const classified = classifyError(err);
     // eslint-disable-next-line no-console
