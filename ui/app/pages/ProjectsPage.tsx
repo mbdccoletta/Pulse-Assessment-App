@@ -28,6 +28,7 @@ import { DynatraceIntelligenceSignetIcon } from "@dynatrace/strato-icons";
 import type { CoverageData } from "../hooks/useCoverageData";
 import { useProjects, type ObservabilityProject } from "../hooks/useProjects";
 import { useOwnershipTeams } from "../hooks/useOwnershipTeams";
+import { useSegments } from "../hooks/useSegments";
 import { analyzeProject } from "../ai/projectAnalysis";
 import { openDynatraceAssist } from "../ai/assistIntent";
 import type { ReportContext } from "../ai/reportPrompt";
@@ -79,10 +80,13 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
   const [team, setTeam] = useState("");
   /** Identifier of the selected official Ownership team ("" = none/free-text). */
   const [teamId, setTeamId] = useState("");
+  /** uid of the selected platform Segment ("" = none). */
+  const [segmentUid, setSegmentUid] = useState("");
   const [targetDate, setTargetDate] = useState("");
-  // Official Dynatrace Ownership teams (Settings > Ownership > Teams).
-  // Fetched lazily when the new-project modal opens.
+  // Official Dynatrace pickers, fetched lazily when the modal opens:
+  // Ownership teams (Settings > Ownership > Teams) + platform Segments.
   const ownership = useOwnershipTeams(showNew);
+  const segmentsSrc = useSegments(showNew);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, "loading" | string | undefined>>({});
 
@@ -143,6 +147,7 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
       extraContext:
         `Declared customer project: "${p.name}". Objective: ${p.objective}.` +
         (p.team ? ` Team: ${p.team}${p.teamIdentifier ? ` (Ownership identifier ${p.teamIdentifier})` : ""}.` : "") +
+        (p.segmentName ? ` Platform Segment: "${p.segmentName}" (uid ${p.segmentUid}).` : "") +
         (p.targetDate ? ` Target: ${p.targetDate}.` : "") +
         (p.analysis ? `\nPrior AI analysis and execution plan for this project:\n${p.analysis.text}` : ""),
     });
@@ -151,15 +156,18 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
   const submitNew = () => {
     if (!name.trim() || !objective.trim()) return;
     const officialTeam = teamId ? ownership.teams.find(t => t.identifier === teamId) : undefined;
+    const segment = segmentUid ? segmentsSrc.segments.find(s => s.uid === segmentUid) : undefined;
     addProject({
       name: name.trim(),
       objective: objective.trim(),
       // Prefer the official Ownership team; fall back to free text.
       team: officialTeam?.name ?? (team.trim() || undefined),
       teamIdentifier: officialTeam?.identifier,
+      segmentUid: segment?.uid,
+      segmentName: segment?.name,
       targetDate: targetDate.trim() || undefined,
     });
-    setName(""); setObjective(""); setTeam(""); setTeamId(""); setTargetDate("");
+    setName(""); setObjective(""); setTeam(""); setTeamId(""); setSegmentUid(""); setTargetDate("");
     setShowNew(false);
   };
 
@@ -250,7 +258,9 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
                 <Flex flexDirection="column">
                   <Text style={{ fontSize: 15, fontWeight: 700, color: text }}>{p.name}</Text>
                   <Text style={{ fontSize: 11, color: textTert }}>
-                    {p.team ? `${p.team} · ` : ""}{p.targetDate ? `target ${p.targetDate} · ` : ""}
+                    {p.team ? `${p.team} · ` : ""}
+                    {p.segmentName ? `segment ${p.segmentName} · ` : ""}
+                    {p.targetDate ? `target ${p.targetDate} · ` : ""}
                     declared {new Date(p.createdAt).toLocaleDateString()}
                   </Text>
                 </Flex>
@@ -398,6 +408,39 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
                 onChange={e => setTargetDate(e.target.value)}
                 onKeyDown={e => e.stopPropagation()} onKeyUp={e => e.stopPropagation()} />
             </Flex>
+          </Flex>
+          {/* Platform Segment — the official Grail scoping mechanism
+              (Segments app). Identifies which slice of the environment the
+              project belongs to; forwarded to Davis so plans stay scoped. */}
+          <Flex flexDirection="column" gap={4}>
+            <Text style={{ fontSize: 12, fontWeight: 600, color: text }}>Segment (optional)</Text>
+            {segmentsSrc.segments.length > 0 ? (
+              <>
+                <select
+                  style={{ ...inputStyle, appearance: "auto" as React.CSSProperties["appearance"] }}
+                  value={segmentUid}
+                  onChange={e => setSegmentUid(e.target.value)}
+                  aria-label="Select a platform Segment"
+                >
+                  <option value="">— No segment —</option>
+                  {segmentsSrc.segments.map(s => (
+                    <option key={s.uid} value={s.uid}>
+                      {s.name}{s.isPublic === false ? " (private)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <Text style={{ fontSize: 10, color: textTert }}>
+                  Platform Segments (Segments app) — scopes the project the way the
+                  customer already slices their environment
+                </Text>
+              </>
+            ) : (
+              <Text style={{ fontSize: 10, color: textTert }}>
+                {segmentsSrc.loading
+                  ? "Loading Segments…"
+                  : "No Segments found — define them in the Segments app to identify projects by scope."}
+              </Text>
+            )}
           </Flex>
           <Flex flexDirection="row" justifyContent="flex-end" gap={8}
             style={{ paddingTop: 8, borderTop: `1px solid ${borderSub}` }}>
