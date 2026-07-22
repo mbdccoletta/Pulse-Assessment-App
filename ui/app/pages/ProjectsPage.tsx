@@ -33,6 +33,7 @@ import { analyzeProject } from "../ai/projectAnalysis";
 import { openDynatraceAssist } from "../ai/assistIntent";
 import type { ReportContext } from "../ai/reportPrompt";
 import { renderMarkdown } from "../components/DavisInsightSection";
+import { ProjectRadar } from "../components/ProjectRadar";
 import { CAPABILITIES } from "../queries";
 
 interface Props {
@@ -83,9 +84,10 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
   /** uid of the selected platform Segment ("" = none). */
   const [segmentUid, setSegmentUid] = useState("");
   const [targetDate, setTargetDate] = useState("");
-  // Official Dynatrace pickers, fetched lazily when the modal opens:
-  // Ownership teams (Settings > Ownership > Teams) + platform Segments.
-  const ownership = useOwnershipTeams(showNew);
+  // Official Dynatrace sources. Ownership teams load on page mount — the
+  // analysis needs them (Davis flags involved teams); Segments stay lazy
+  // on the modal.
+  const ownership = useOwnershipTeams(true);
   const segmentsSrc = useSegments(showNew);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, "loading" | string | undefined>>({});
@@ -111,9 +113,9 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
 
   const runAnalysis = async (p: ObservabilityProject) => {
     setBusy(prev => ({ ...prev, [p.id]: "loading" }));
-    const result = await analyzeProject(p, ctx);
+    const result = await analyzeProject(p, ctx, ownership.teams.map(t => t.name));
     if (result.ok) {
-      saveAnalysis(p.id, { ts: Date.now(), text: result.text, capabilities: result.capabilities });
+      saveAnalysis(p.id, { ts: Date.now(), text: result.text, capabilities: result.capabilities, teams: result.teams });
       setBusy(prev => ({ ...prev, [p.id]: undefined }));
       setExpanded(prev => ({ ...prev, [p.id]: true }));
     } else {
@@ -291,21 +293,70 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
               {/* Objective */}
               <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.55 }}>{p.objective}</Text>
 
-              {/* Capability chips */}
-              {p.analysis && p.analysis.capabilities.length > 0 && (
-                <Flex flexDirection="row" gap={6} flexWrap="wrap">
-                  {p.analysis.capabilities.map(capName => (
-                    <Flex key={capName} flexDirection="row" alignItems="center" gap={4} style={{
-                      padding: "2px 10px", borderRadius: 8,
-                      background: (CAP_COLOR[capName] ?? accent) + (dk ? "22" : "15"),
-                      border: `1px solid ${(CAP_COLOR[capName] ?? accent)}44`,
-                    }}>
-                      <Flex style={{ width: 8, height: 8, borderRadius: "50%", background: CAP_COLOR[capName] ?? accent }} />
-                      <Text style={{ fontSize: 11, fontWeight: 600, color: text }}>{capName}</Text>
+              {/* Objective map: radar (capabilities × current readiness) +
+                  involved teams + per-capability scores */}
+              {p.analysis && p.analysis.capabilities.length > 0 && (() => {
+                const radarItems = p.analysis!.capabilities.map(capName => ({
+                  name: capName,
+                  color: CAP_COLOR[capName] ?? accent,
+                  value: coverageData.capabilities.find(c => c.name === capName)?.score ?? 0,
+                }));
+                const involvedTeams = (p.analysis!.teams && p.analysis!.teams.length > 0)
+                  ? p.analysis!.teams
+                  : (p.team ? [p.team] : []);
+                return (
+                  <Flex flexDirection="row" gap={16} alignItems="flex-start" flexWrap="wrap">
+                    {radarItems.length >= 3 && (
+                      <Flex flexDirection="column" alignItems="center" gap={2}>
+                        <ProjectRadar items={radarItems} />
+                        <Text style={{ fontSize: 9, color: textTert }}>
+                          current readiness of involved capabilities
+                        </Text>
+                      </Flex>
+                    )}
+                    <Flex flexDirection="column" gap={8} style={{ flex: 1, minWidth: 240 }}>
+                      {/* Capability scores (radar legend) */}
+                      <Flex flexDirection="column" gap={4}>
+                        <Text style={{
+                          fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                          textTransform: "uppercase", color: textSec,
+                        }}>
+                          Capabilities involved
+                        </Text>
+                        {radarItems.map(it => (
+                          <Flex key={it.name} flexDirection="row" alignItems="center" gap={6}>
+                            <Flex style={{ width: 8, height: 8, borderRadius: "50%", background: it.color, flexShrink: 0 }} />
+                            <Text style={{ fontSize: 11, color: text, flex: 1 }}>{it.name}</Text>
+                            <Text style={{ fontSize: 11, fontWeight: 700, color: it.color }}>{it.value}%</Text>
+                          </Flex>
+                        ))}
+                      </Flex>
+                      {/* Involved teams (official Ownership names Davis flagged) */}
+                      {involvedTeams.length > 0 && (
+                        <Flex flexDirection="column" gap={4}>
+                          <Text style={{
+                            fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                            textTransform: "uppercase", color: textSec,
+                          }}>
+                            Teams involved
+                          </Text>
+                          <Flex flexDirection="row" gap={6} flexWrap="wrap">
+                            {involvedTeams.map(tn => (
+                              <Flex key={tn} style={{
+                                padding: "2px 10px", borderRadius: 8,
+                                background: accent + (dk ? "22" : "15"),
+                                border: `1px solid ${accent}44`,
+                              }}>
+                                <Text style={{ fontSize: 11, fontWeight: 600, color: text }}>{tn}</Text>
+                              </Flex>
+                            ))}
+                          </Flex>
+                        </Flex>
+                      )}
                     </Flex>
-                  ))}
-                </Flex>
-              )}
+                  </Flex>
+                );
+              })()}
 
               {/* In-flight / error */}
               {isLoading && <SkeletonText lines={3} />}

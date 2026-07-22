@@ -25,6 +25,8 @@ export interface ProjectAnalysis {
   text: string;
   /** Capability names detected in the response (chips on the card). */
   capabilities: string[];
+  /** Official Ownership team names Davis flagged as involved in the plan. */
+  teams?: string[];
 }
 
 export interface ObservabilityProject {
