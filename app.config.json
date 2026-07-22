@@ -18,7 +18,8 @@
       { "name": "document:documents:read", "comment": "Load assessment history" },
       { "name": "document:documents:write", "comment": "Save assessment snapshots" },
       { "name": "document:documents:delete", "comment": "Cleanup old snapshots" },
-      { "name": "davis-copilot:conversations:execute", "comment": "Davis CoPilot dynamic recommendations (feat/davis-insights)" }
+      { "name": "davis-copilot:conversations:execute", "comment": "Davis CoPilot dynamic recommendations (feat/davis-insights)" },
+      { "name": "settings:objects:read", "comment": "Read official Ownership teams (builtin:ownership.teams) for Projects" }
     ]
   }
 }

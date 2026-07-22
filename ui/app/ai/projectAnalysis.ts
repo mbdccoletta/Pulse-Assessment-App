@@ -64,7 +64,9 @@ export async function analyzeProject(
   ctx: ReportContext,
 ): Promise<ProjectAnalysisResult> {
   const meta =
-    (project.team ? ` Owning team: ${project.team}.` : "") +
+    (project.team
+      ? ` Owning team: ${project.team}${project.teamIdentifier ? ` (Dynatrace Ownership identifier "${project.teamIdentifier}", used in dt.owner tags)` : ""}.`
+      : "") +
     (project.targetDate ? ` Target date: ${project.targetDate}.` : "");
 
   const text =
