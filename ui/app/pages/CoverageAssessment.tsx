@@ -413,9 +413,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               <Button
                 size="condensed"
                 onClick={() => navigate("/projects")}
-                aria-label="Open customer observability projects"
+                aria-label="Open assessment-grounded objectives"
               >
-                Projects
+                Objectives
               </Button>
             )}
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>

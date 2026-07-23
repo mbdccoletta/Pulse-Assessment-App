@@ -30,6 +30,7 @@ import { useProjects, type ObservabilityProject } from "../hooks/useProjects";
 import { useOwnershipTeams } from "../hooks/useOwnershipTeams";
 import { useSegments } from "../hooks/useSegments";
 import { useOwnershipDiscovery, summarizeOwnership } from "../hooks/useOwnershipDiscovery";
+import { buildObjectiveSuggestions } from "../utils/objectiveSuggestions";
 import { analyzeProject } from "../ai/projectAnalysis";
 import { openDynatraceAssist } from "../ai/assistIntent";
 import type { ReportContext } from "../ai/reportPrompt";
@@ -128,6 +129,13 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
 
   const hasAssessment = coverageData.capabilities.length > 0;
 
+  // Deterministic small-objective suggestions from the live assessment —
+  // clicking one prefills the form below.
+  const suggestions = useMemo(
+    () => buildObjectiveSuggestions(coverageData.capabilities),
+    [coverageData.capabilities],
+  );
+
   const runAnalysis = async (p: ObservabilityProject) => {
     setBusy(prev => ({ ...prev, [p.id]: "loading" }));
     const result = await analyzeProject(
@@ -225,14 +233,14 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
         <Flex flexDirection="row" alignItems="center" gap={12}>
           <Button onClick={() => navigate("/")} size="condensed">← Back</Button>
           <Flex flexDirection="column">
-            <Text style={{ fontSize: 16, fontWeight: 700, color: text }}>Observability Projects</Text>
+            <Text style={{ fontSize: 16, fontWeight: 700, color: text }}>Objectives</Text>
             <Text style={{ fontSize: 11, color: textTert }}>
-              Declared customer initiatives · Tenant <Strong style={{ color: textSec }}>{ctx.tenant}</Strong>
+              Small, assessment-grounded objectives · Tenant <Strong style={{ color: textSec }}>{ctx.tenant}</Strong>
             </Text>
           </Flex>
         </Flex>
         <Button variant="emphasized" color="primary" onClick={() => setShowNew(true)}>
-          New project
+          New objective
         </Button>
       </Flex>
 
@@ -264,14 +272,14 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
         {!loading && projects.length === 0 && (
           <Flex flexDirection="column" alignItems="center" gap={8} style={{ padding: 48, textAlign: "center" }}>
             <DynatraceIntelligenceSignetIcon size="large" />
-            <Text style={{ fontSize: 14, fontWeight: 700, color: text }}>No projects declared yet</Text>
+            <Text style={{ fontSize: 14, fontWeight: 700, color: text }}>No objectives defined yet</Text>
             <Text style={{ fontSize: 12, color: textSec, maxWidth: 460, lineHeight: 1.5 }}>
-              Declare a customer initiative — a migration, an MTTR goal, an audit —
-              and Davis will map which platform capabilities serve it and propose an
-              execution plan grounded in this assessment.
+              Define a small, achievable objective — pick one suggested from this
+              assessment's data or write your own — and Davis will map the
+              capabilities and teams involved and propose a week-by-week plan.
             </Text>
             <Button variant="emphasized" color="primary" onClick={() => setShowNew(true)}>
-              Declare the first project
+              Define the first objective
             </Button>
           </Flex>
         )}
@@ -488,20 +496,70 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
         );
       })()}
 
-      {/* ── New project modal ── */}
-      <Modal show={showNew} onDismiss={() => setShowNew(false)} title="Declare an observability project" size="small">
-        <Flex flexDirection="column" gap={12} style={{ minWidth: 460 }}>
+      {/* ── New objective modal ── */}
+      <Modal show={showNew} onDismiss={() => setShowNew(false)} title="Define an objective" size="small">
+        <Flex flexDirection="column" gap={12} style={{ minWidth: 520, maxWidth: 640 }}>
+
+          {/* Suggested small objectives — deterministic, from the live
+              assessment. Clicking prefills the form below. */}
+          {suggestions.length > 0 && (
+            <Flex flexDirection="column" gap={6}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: text }}>
+                Suggested from this assessment
+              </Text>
+              <Flex flexDirection="column" gap={4} style={{ maxHeight: 210, overflowY: "auto" }}>
+                {suggestions.map((s, i) => (
+                  <Flex key={i} flexDirection="column" gap={2}
+                    role="button" tabIndex={0}
+                    onClick={() => { setName(s.name); setObjective(s.objective); }}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") { setName(s.name); setObjective(s.objective); }
+                    }}
+                    style={{
+                      padding: "6px 10px", borderRadius: 6, cursor: "pointer",
+                      border: `1px solid ${name === s.name ? accent : borderSub}`,
+                      background: name === s.name
+                        ? (dk ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.08)")
+                        : "transparent",
+                    }}>
+                    <Flex flexDirection="row" alignItems="center" gap={6}>
+                      <Text style={{
+                        fontSize: 9, fontWeight: 700, letterSpacing: 0.4,
+                        textTransform: "uppercase", color: accent,
+                        padding: "1px 6px", borderRadius: 4, background: accent + (dk ? "22" : "14"),
+                        flexShrink: 0,
+                      }}>
+                        {s.category}
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: 600, color: text }}>{s.name}</Text>
+                    </Flex>
+                    <Text style={{ fontSize: 10, color: textTert }}>{s.detail}</Text>
+                  </Flex>
+                ))}
+              </Flex>
+              <Text style={{ fontSize: 10, color: textTert }}>
+                Click a suggestion to prefill — you can edit before saving, or write your own below.
+              </Text>
+            </Flex>
+          )}
+          {suggestions.length === 0 && !hasAssessment && (
+            <Text style={{ fontSize: 11, color: Colors.Charts.Status.Warning.Default }}>
+              Run the assessment to get suggested objectives grounded in real gaps.
+            </Text>
+          )}
+
           <Flex flexDirection="column" gap={4}>
-            <Text style={{ fontSize: 12, fontWeight: 600, color: text }}>Project name</Text>
+            <Text style={{ fontSize: 12, fontWeight: 600, color: text }}>Objective name</Text>
             <input style={inputStyle} value={name} autoFocus
-              placeholder="e.g. Checkout migration to Kubernetes"
+              placeholder="e.g. Fix: Cloud region enrichment"
               onChange={e => setName(e.target.value)}
               onKeyDown={e => e.stopPropagation()} onKeyUp={e => e.stopPropagation()} />
           </Flex>
           <Flex flexDirection="column" gap={4}>
-            <Text style={{ fontSize: 12, fontWeight: 600, color: text }}>Objective</Text>
+            <Text style={{ fontSize: 12, fontWeight: 600, color: text }}>What should be achieved</Text>
             <textarea style={{ ...inputStyle, resize: "vertical" }} rows={4} value={objective}
-              placeholder="What does the customer want to achieve? e.g. Full tracing and log correlation for the new checkout services, with MTTR under 30 minutes."
+              placeholder="Keep it small and concrete — one check, one gate, or one modest score lift. e.g. Pass the Cloud region enrichment check (0% → ≥40%)."
               onChange={e => setObjective(e.target.value)}
               onKeyDown={e => e.stopPropagation()} onKeyUp={e => e.stopPropagation()} />
           </Flex>
@@ -583,7 +641,7 @@ export const ProjectsPage: React.FC<Props> = ({ coverageData, isDev }) => {
             <Button onClick={() => setShowNew(false)}>Cancel</Button>
             <Button variant="emphasized" color="primary"
               disabled={!name.trim() || !objective.trim()} onClick={submitNew}>
-              Create project
+              Create objective
             </Button>
           </Flex>
         </Flex>
