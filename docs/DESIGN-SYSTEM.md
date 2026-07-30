@@ -1,9 +1,13 @@
-# Pulse Assessment - Design System Reference
+# Pulse Assessment — Design System Reference (v2)
 
-Documenta cores, fontes, componentes, layout e padrões usados no Pulse Assessment para que voce possa replicar a mesma identidade em outro app Dynatrace (dt-app).
+Catalogo completo de cores, componentes, layouts e padroes do Pulse Assessment
+para replicar a mesma identidade em outros apps Dynatrace (dt-app).
 
-App de referencia: `pulse-assessment-dyna-version` v2.5.3
-Framework: **React + TypeScript + Strato** (design system oficial da Dynatrace)
+Base: branch `feat/davis-insights`. Framework: **React + TypeScript + Strato 1.x**.
+
+> v2 adiciona tudo que veio com a era Davis/Objectives: chat do Assist,
+> intents nativos, radar SVG, graficos de barras/timeline, cards de
+> objetivos, selects alimentados por fontes oficiais e badges de IA.
 
 ---
 
@@ -11,88 +15,77 @@ Framework: **React + TypeScript + Strato** (design system oficial da Dynatrace)
 
 ```json
 {
-  "@dynatrace/strato-components":          "~1.18.0",
-  "@dynatrace/strato-components-preview":  "~1.11.2",
-  "@dynatrace/strato-design-tokens":       "^1.1.0",
-  "@dynatrace-sdk/client-document":        "^1.30.0",
-  "@dynatrace-sdk/client-query":           "^1.17.0",
-  "chart.js":                              "^4.5.1",
-  "react":                                 "^18.x",
-  "react-router-dom":                      "^6.x"
+  "@dynatrace/strato-components":              "~1.18.0",
+  "@dynatrace/strato-components-preview":      "~1.11.2",
+  "@dynatrace/strato-design-tokens":           "^1.1.0",
+  "@dynatrace/strato-icons":                   "(vem com o toolkit)",
+  "@dynatrace-sdk/app-environment":            "getEnvironmentUrl()",
+  "@dynatrace-sdk/client-query":               "DQL (queryExecute + poll)",
+  "@dynatrace-sdk/client-document":            "Document Store (persistencia)",
+  "@dynatrace-sdk/client-davis-copilot":       "Davis CoPilot (conversation skill)",
+  "@dynatrace-sdk/navigation":                 "sendIntent (Assist nativo)",
+  "@dynatrace-sdk/client-classic-environment-v2": "Settings API (Ownership teams)",
+  "@dynatrace-sdk/client-filter-segment-management": "Segments da plataforma"
 }
 ```
 
-Regra de ouro: **sempre que possivel, usar componentes Strato e design tokens** ao inves de hex hardcoded ou CSS inline. Eles ja respeitam tema claro/escuro automaticamente.
+Regra de ouro: **componentes Strato + design tokens sempre**; hex hardcoded
+apenas para canvas/SVG e cores de dominio (capabilities).
 
 ---
 
 ## 2. Tema (claro/escuro)
 
-O app detecta tema com `useCurrentTheme()` e propaga para componentes que precisam renderizar fora do Strato (canvas, SVG).
-
 ```tsx
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
-
 const dk = useCurrentTheme() === "dark";
-const subtleBg = dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)";
 ```
 
-**Componentes Strato** (Text, Button, Container, ...) **ja se adaptam ao tema sozinhos** via CSS custom properties - so use `dk` quando renderizar fora do Strato (Chart.js, canvas, SVG, overlays manuais).
+Componentes Strato adaptam sozinhos. Use `dk` somente para superficies
+customizadas (canvas, SVG, rgba sutil):
+
+```tsx
+const borderSub = dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
+const trackBg   = dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)";
+const bgHover   = dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)";
+```
 
 ---
 
-## 3. Paleta - Design tokens (preferidos)
-
-Importe via `@dynatrace/strato-design-tokens/colors`. Cada token e uma string `var(--dt-...)` que ja muda com o tema.
+## 3. Paleta — design tokens (preferidos)
 
 ```tsx
 import Colors from "@dynatrace/strato-design-tokens/colors";
 
-const colors = {
-  // Backgrounds
-  bg:        Colors.Background.Base.Default,
-  bgSurface: Colors.Background.Surface.Default,
-  bgSubtle:  Colors.Background.Container.Neutral.Subdued,
-  bgPrimary: Colors.Background.Container.Primary.Default,
+const text     = Colors.Text.Neutral.Default;     // texto principal
+const textSec  = Colors.Text.Neutral.Subdued;     // secundario
+const textTert = Colors.Text.Neutral.Disabled;    // metadados
+const accent   = Colors.Text.Primary.Default;     // acoes/links (indigo)
+const success  = Colors.Text.Success.Default;
+const danger   = Colors.Text.Critical.Default;
+const warning  = Colors.Charts.Status.Warning.Default;
 
-  // Text
-  text:    Colors.Text.Neutral.Default,
-  textSec: Colors.Text.Neutral.Subdued,
-  textTert:Colors.Text.Neutral.Disabled,
-  accent:  Colors.Text.Primary.Default,
-  success: Colors.Text.Success.Default,
-  danger:  Colors.Text.Critical.Default,
-
-  // Borders
-  border:    Colors.Border.Neutral.Default,
-  borderPri: Colors.Border.Primary.Default,
-};
+const bg       = Colors.Background.Base.Default;      // fundo da pagina
+const surface  = Colors.Background.Surface.Default;   // cards/header
+const bgSubtle = Colors.Background.Container.Neutral.Subdued;
+const border   = Colors.Border.Neutral.Default;
 ```
 
-| Token | Uso recomendado |
-|---|---|
-| `Colors.Background.Base.Default` | fundo principal da pagina |
-| `Colors.Background.Surface.Default` | cards / paineis principais |
-| `Colors.Background.Container.Neutral.Subdued` | secoes secundarias |
-| `Colors.Background.Container.Primary.Default` | destaques (info bar) |
-| `Colors.Text.Neutral.Default` | texto principal |
-| `Colors.Text.Neutral.Subdued` | texto secundario / descricoes |
-| `Colors.Text.Neutral.Disabled` | metadados, helper text |
-| `Colors.Text.Primary.Default` | links / acoes / cor de marca |
-| `Colors.Text.Success.Default` | scores positivos, "passed" |
-| `Colors.Text.Critical.Default` | erros, "failed" |
-| `Colors.Border.Neutral.Default` | divisores padrao |
-| `Colors.Border.Primary.Default` | bordas de destaque |
+### Alpha-suffix trick (tints a partir de tokens/hex)
+
+Concatene 2 digitos hex de alpha a uma cor para obter tint tema-safe:
+
+```tsx
+background: accent + "15"          // chip de destaque
+background: capColor + (dk ? "22" : "15")   // chip por capability
+border: `1px solid ${capColor}44`
+```
 
 ---
 
-## 4. Paleta - Cores tematicas hardcoded
+## 4. Cores de dominio (hardcoded, centralizadas)
 
-Estas sao **constantes do dominio** (Pulse), nao tokens. Quando voce levar para outro app, mantenha-as como **enum/dicionario por dominio** e referencie via objeto, nao espalhe pelo codigo.
-
-### 4.1 Cores por capability (radar)
-
-9 cores fortes em alto contraste com fundo escuro. Ficam em `ui/app/queries.ts` ao lado da definicao da capability.
+### 4.1 As 9 capabilities (fonte: `ui/app/queries.ts`)
 
 ```ts
 const CAPABILITY_COLORS = {
@@ -106,583 +99,404 @@ const CAPABILITY_COLORS = {
   "Business Observability":       "#10B981", // verde
   "Software Delivery":            "#6366F1", // indigo
 };
+// lookup map (padrao usado nas paginas):
+const CAP_COLOR: Record<string,string> =
+  Object.fromEntries(CAPABILITIES.map(c => [c.name, c.color]));
 ```
 
-Padrao: paleta Tailwind 500/600. Se voce criar mais dominios, escolha tonalidade **500** e mantenha saturacao consistente.
+### 4.2 Bandas de score (fonte: `ui/app/utils/colors.ts`)
 
-### 4.2 Bandas de score (0-100%)
-
-Centralizado em `ui/app/utils/colors.ts`. Tem hex (para canvas) e token Strato (para JSX) - sempre prefira o token em JSX.
-
-```ts
-import Colors from "@dynatrace/strato-design-tokens/colors";
-
-export const SCORE_BANDS = [
-  { min:  0, max:  20, label: "N/A",       color: "#CD3C44",
-    token: Colors.Charts.Status.Critical.Default },
-  { min: 20, max:  40, label: "Low",       color: "#DC671E",
-    token: Colors.Charts.Categorical.Color14.Default },
-  { min: 40, max:  60, label: "Moderate",  color: "#EEA746",
-    token: Colors.Charts.Status.Warning.Default },
-  { min: 60, max:  80, label: "Good",      color: "#5EB1A9",
-    token: Colors.Charts.Categorical.Color07.Default },
-  { min: 80, max: 100, label: "Excellent", color: "#36B37E",
-    token: Colors.Charts.Status.Ideal.Default },
-];
-
-export function scoreBand(score: number) {
-  if (score >= 80) return SCORE_BANDS[4];
-  if (score >= 60) return SCORE_BANDS[3];
-  if (score >= 40) return SCORE_BANDS[2];
-  if (score >= 20) return SCORE_BANDS[1];
-  return SCORE_BANDS[0];
-}
-```
-
-| Banda | Limites | Hex (canvas) | Token Strato (JSX) |
+| Banda | Faixa | Hex (canvas/SVG) | Token (JSX) |
 |---|---|---|---|
-| N/A | < 20 | `#CD3C44` | `Charts.Status.Critical` |
+| N/A | <20 | `#CD3C44` | `Charts.Status.Critical` |
 | Low | 20-39 | `#DC671E` | `Charts.Categorical.Color14` |
 | Moderate | 40-59 | `#EEA746` | `Charts.Status.Warning` |
 | Good | 60-79 | `#5EB1A9` | `Charts.Categorical.Color07` |
-| Excellent | >= 80 | `#36B37E` | `Charts.Status.Ideal` |
+| Excellent | ≥80 | `#36B37E` | `Charts.Status.Ideal` |
 
 ---
 
 ## 5. Tipografia
-
-Strato injeta a fonte Dynatrace ("Bernina Sans") via CSS global. Voce so usa **componentes**, nao se preocupa com a familia.
 
 ```tsx
 import { Text, Strong, Heading, Code, ExternalLink }
   from "@dynatrace/strato-components/typography";
 ```
 
-### Escala usada no Pulse
-
-| Tamanho | Uso |
+| px | Uso |
 |---|---|
-| **10 px** | chips/badges minusculos, uppercase |
-| **11 px** | metadados, helper text, labels de eixos |
-| **12 px** | texto secundario, criterios |
-| **13 px** | descricoes |
-| **14 px** | titulos de secao, valores destaque |
-| `Heading` Strato | titulos H1/H2 da pagina |
+| 9-10 | badges/labels uppercase, footnotes de grafico |
+| 11 | metadados, hints, legendas |
+| 12 | texto secundario, labels de form |
+| 13 | corpo (chat, planos, objetivos) |
+| 14-16 | titulos de secao/pagina |
 
+Padroes: `fontWeight: 600` enfase media, `700` títulos/uppercase;
+`letterSpacing: 0.5` + `textTransform: "uppercase"` para labels de secao;
+`lineHeight: 1.5-1.6` em paragrafos.
+
+**Section label** (usado em todo lugar):
 ```tsx
-<Text style={{ fontSize: 12, color: Colors.Text.Neutral.Subdued, lineHeight: 1.6 }}>
-  Capabilidade nao avaliada
-</Text>
-
-<Strong style={{ color: text }}>Cobertura total</Strong>
-
-<Text style={{
-  fontSize: 11, fontWeight: 700,
-  textTransform: "uppercase", letterSpacing: 0.5,
-  color: Colors.Text.Primary.Default
-}}>
-  Recommendation
-</Text>
+<Text style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+  textTransform: "uppercase", color: textSec }}>Capabilities involved</Text>
 ```
-
-Padroes:
-- **`fontWeight: 600`** para enfase media (rotulos), **`700`** para destaque/uppercase
-- **`letterSpacing: 0.5` + `textTransform: "uppercase"`** para chip labels
-- **`lineHeight: 1.5-1.6`** em paragrafos
-- Use **`<Strong>`** em vez de `<b>` ou `fontWeight: bold` quando possivel
 
 ---
 
-## 6. Layout primitives
-
-Importe sempre dos pacotes Strato. Page so existe em `-preview`.
+## 6. Layout
 
 ```tsx
 import { Page } from "@dynatrace/strato-components-preview/layouts";
-import { Flex, Grid, Surface, Container }
-  from "@dynatrace/strato-components/layouts";
+import { Flex, Grid, Surface, Container } from "@dynatrace/strato-components/layouts";
 ```
 
-### 6.1 Esqueleto da app
+- Esqueleto: `<Page><Page.Main>…</Page.Main></Page>` dentro de `<ErrorBoundary>`.
+- Split sidebar: `Grid gridTemplateColumns="380px 1fr"` + `minHeight: 0` +
+  `overflow: hidden` no Grid, `overflowY: "auto"` no filho.
+- **Header sticky de pagina** (Objectives/AI pages):
 
 ```tsx
-<Page>
-  <Page.Main>
-    {/* todo o conteudo */}
-  </Page.Main>
-</Page>
-```
-
-### 6.2 Composicao tipica
-
-```
-Page
- +- Page.Main
-     +- Flex (column, height 100%)
-         +- Grid (380px 1fr)          // sidebar + main
-             +- Surface ("primary")   // card destacado
-             |   +- Container          // padding interno
-             |       +- Flex (gap=16)
-             +- Flex (column, scroll) // painel direito
-```
-
-### 6.3 Grid 2-colunas (sidebar fixa + conteudo)
-
-```tsx
-<Grid
-  gridTemplateColumns={isMobile ? "1fr" : "380px 1fr"}
-  gridTemplateRows="minmax(0,1fr)"
-  style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
->
-  <LeftPanel />
-  <Flex flexDirection="column" style={{ overflowY: "scroll", padding: "20px 24px", minHeight: 0 }}>
-    {/* main */}
-  </Flex>
-</Grid>
-```
-
-Padrao **`minHeight: 0`** + **`overflow: hidden`** no Grid e **`overflowY: scroll`** no filho - sem isso o scroll vaza para a pagina inteira.
-
-### 6.4 Container e Surface
-
-| Componente | Quando usar |
-|---|---|
-| `<Surface variant="default">` | wrapper de mais alto nivel (uma "pagina" / aba) |
-| `<Container color="primary" variant="default">` | bloco de destaque dentro da pagina (info bar, info card) |
-| `<Container color="neutral">` | bloco secundario |
-| `<Flex>` | qualquer agrupamento simples (default) |
-
-Sempre passe `style={{ marginBottom: 16 }}` para separar blocos - Strato nao injeta margin entre filhos.
-
----
-
-## 7. Spacing
-
-Pulse segue **multiplos de 4** em quase todo lugar (`gap`, `padding`, `marginBottom`).
-
-| px | Usar para |
-|---|---|
-| **4** | padding de chip, gap entre icone+texto |
-| **6** | padding-y dentro de chip |
-| **8** | gap padrao entre items horizontais |
-| **12** | gap em listas verticais |
-| **16** | margin entre blocos / containers |
-| **20** | padding interno de card |
-| **24** | padding lateral de paineis |
-| **32** | espacamento de pagina ao redor |
-
-```tsx
-<Flex gap={8} alignItems="center">              {/* numeric */}
-<Flex style={{ padding: "20px 24px" }}>         {/* string CSS */}
-<div style={{ marginBottom: 16 }}>              {/* sempre 16 entre blocos */}
-```
-
-`gap` aceita numero (px) ou string. Prefira numero - mais legivel.
-
----
-
-## 8. Buttons e acoes
-
-```tsx
-import { Button } from "@dynatrace/strato-components/buttons";
-import { ToggleButtonGroup, ToggleButtonGroupItem }
-  from "@dynatrace/strato-components-preview/buttons";
-```
-
-### Sizes
-- `size="condensed"` - toolbar / footer (default no Pulse)
-- `size="default"` - corpo da pagina
-- `size="large"` - CTA principal (raro)
-
-### Variants
-- `variant="default"` - acao primaria/CTA
-- `variant="emphasized"` - destaque alto
-- `variant="accent"` - secundario
-- `variant="minimal"` - acao discreta / no toolbar
-- `variant="danger"` - destrutivo
-
-```tsx
-<Button size="condensed" variant="default" onClick={start}>
-  Run Assessment
-</Button>
-
-<Button size="condensed" variant="minimal" onClick={refresh}>
-  ↻ Refresh
-</Button>
-
-{isDev && (
-  <Button size="condensed" onClick={downloadPerfReport}>
-    📥 Perf JSON
-  </Button>
-)}
-```
-
-### Toggle group (view modes)
-
-```tsx
-<ToggleButtonGroup value={viewMode} onChange={setViewMode}>
-  <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
-  <ToggleButtonGroupItem value="maturity">Maturity</ToggleButtonGroupItem>
-  <ToggleButtonGroupItem value="recommendations">Actions</ToggleButtonGroupItem>
-</ToggleButtonGroup>
-```
-
----
-
-## 9. Estados de carregamento e erro
-
-### Skeleton (loading)
-
-```tsx
-import { Skeleton, SkeletonText } from "@dynatrace/strato-components/content";
-
-<Suspense fallback={
-  <Flex flexDirection="column" gap={16} style={{ padding: 32 }}>
-    <Skeleton height={48} width="30%" />
-    <Flex gap={16}>
-      <Skeleton height={300} width="50%" />
-      <Flex flexDirection="column" gap={8} style={{ flex: 1 }}>
-        <SkeletonText lines={3} />
-        <Skeleton height={120} />
-      </Flex>
+<Flex flexDirection="row" alignItems="center" justifyContent="space-between"
+  style={{ padding: "12px 24px", borderBottom: `1px solid ${border}`,
+           background: surface, position: "sticky", top: 0, zIndex: 10 }}>
+  <Flex gap={12} alignItems="center">
+    <Button size="condensed" onClick={goBack}>← Back</Button>
+    <Flex flexDirection="column">
+      <Text style={{ fontSize: 16, fontWeight: 700 }}>Objectives</Text>
+      <Text style={{ fontSize: 11, color: textTert }}>subtitle · Tenant X</Text>
     </Flex>
   </Flex>
-}>
-  <Routes>...</Routes>
-</Suspense>
-```
-
-### ProgressBar (progresso definido)
-
-```tsx
-import { ProgressBar } from "@dynatrace/strato-components/content";
-<ProgressBar value={pct} max={100} />
-```
-
-### ErrorBoundary
-
-Pulse define um `ErrorBoundary` customizado em `ui/app/components/ErrorBoundary.tsx` que envolve toda a `App`. Replique o padrao - **sempre** envolva o topo da app:
-
-```tsx
-<ErrorBoundary>
-  <Page>...</Page>
-</ErrorBoundary>
-```
-
-### Code splitting
-
-```tsx
-const HeavyPage = React.lazy(() =>
-  import("./pages/HeavyPage").then(m => ({ default: m.HeavyPage }))
-);
-```
-
----
-
-## 10. Overlays
-
-```tsx
-import { Modal } from "@dynatrace/strato-components-preview/overlays";
-import { Tooltip as StratoTooltip }
-  from "@dynatrace/strato-components-preview/overlays";
-```
-
-Pulse tem um wrapper proprio (`ui/app/components/Tooltip.tsx`) com largura controlada. Padrao de uso:
-
-```tsx
-<Tooltip text={<Text>Explicacao detalhada</Text>} maxWidth={320}>
-  <Text>Termo com tooltip</Text>
-</Tooltip>
-```
-
-Modal:
-
-```tsx
-<Modal show={open} onDismiss={() => setOpen(false)} title="Detalhes">
-  {/* corpo */}
-</Modal>
-```
-
----
-
-## 11. Bordas e cantos arredondados
-
-| `borderRadius` | Uso |
-|---|---|
-| **4 px** | chips pequenos, pills internos |
-| **6 px** | botoes condensed (Strato ja aplica) |
-| **8 px** | badges, callouts |
-| **h/2** | progress bar full-pill (`h=8` -> `borderRadius=4`) |
-
-```tsx
-<Flex style={{
-  borderRadius: 8,
-  padding: "2px 10px",
-  background: accent + "15",   // accent com 15/255 opacity
-}}>
-  <Text>22 / 32 selected</Text>
+  <Button variant="emphasized" color="primary">New objective</Button>
 </Flex>
 ```
 
-### Bordas sutis tema-aware
+### Spacing — GOTCHA importante
 
-```tsx
-const borderSub = dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)";
-const bgHover  = dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)";
-```
-
-Use para dividers ou separators internos onde `Colors.Border.Neutral.Default` seria forte demais.
+`Flex gap` aceita **apenas** estes tokens:
+`0 | 2 | 4 | 6 | 8 | 12 | 16 | 20 | 24 | 32 | 40 | 48 | 56 | 64`.
+**`gap={10}` quebra o build.** Use 8 ou 12. Em `style={{}}` qualquer px vale.
 
 ---
 
-## 12. Padroes de UI
+## 7. Buttons — GOTCHAS do Strato 1.x
 
-### Badges/chips
+- `variant`: `"default" | "accent" | "emphasized"` — **NAO existe "minimal"**.
+- CTA primario: `variant="emphasized" color="primary"`.
+- `size="condensed"` para toolbars.
+- Prefixo com icone: `<Button.Prefix><ArrowUpIcon /></Button.Prefix>`.
+- `IntentButton` (mesmo pacote) para intents declarativos.
 
 ```tsx
-<Text style={{
-  fontSize: 11, fontWeight: 700,
+<Button variant="emphasized" color="primary" onClick={send}>
+  <Button.Prefix><ArrowUpIcon /></Button.Prefix>
+  Send
+</Button>
+```
+
+---
+
+## 8. Icones (strato-icons)
+
+```tsx
+import { DavisCoPilotIcon, DynatraceIntelligenceSignetIcon, ArrowUpIcon }
+  from "@dynatrace/strato-icons";
+<DynatraceIntelligenceSignetIcon size="large" />
+```
+
+- `DynatraceIntelligenceSignetIcon` — identidade do Assist/IA (headers, empty states)
+- `DavisCoPilotIcon` — avatar de mensagens do Davis no chat
+- `ArrowUpIcon` — botao de enviar do composer
+
+**Nada de emoji em botoes/labels** (decisao de design do app).
+
+---
+
+## 9. Overlays / Modal — GOTCHA
+
+`Modal` de `@dynatrace/strato-components-preview/overlays`.
+**`Modal.Footer` NAO existe no 1.x** — faca o footer como ultima row:
+
+```tsx
+<Flex flexDirection="row" justifyContent="flex-end" gap={8}
+  style={{ paddingTop: 8, borderTop: `1px solid ${borderSub}` }}>
+  <Button onClick={close}>Close</Button>
+</Flex>
+```
+
+Modal de chat com altura fixa: wrapper `style={{ minWidth: 620, maxWidth: 860,
+height: 560 }}` em `flexDirection="column"`; area central com
+`flex: 1, minHeight: 0, overflowY: "auto"`; composer fixo embaixo.
+
+---
+
+## 10. Forms customizados
+
+`inputStyle` compartilhado (inputs/textarea/select nativos estilizados):
+
+```tsx
+const inputStyle: React.CSSProperties = {
+  width: "100%", padding: "9px 12px", fontSize: 13, borderRadius: 6,
+  border: `1px solid ${borderSub}`,
+  background: dk ? "rgba(0,0,0,0.20)" : "rgba(255,255,255,0.85)",
+  color: text, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
+};
+```
+
+- **Chat composer (pill)**: mesmo estilo com `borderRadius: 20`.
+- **Select nativo**: `style={{ ...inputStyle, appearance: "auto" }}` + hint
+  abaixo dizendo a fonte oficial dos dados (ex: "Official Ownership teams
+  (Settings > Ownership > Teams)").
+- **GOTCHA teclado**: inputs dentro de cards clicaveis (Space/Enter togglam o
+  card) precisam de `e.stopPropagation()` em `onKeyDown` E `onKeyUp` — senao
+  digitar espaco colapsa o card.
+
+---
+
+## 11. Padroes de UI
+
+### 11.1 Chip com dot (capability)
+
+```tsx
+<Flex alignItems="center" gap={4} style={{
   padding: "2px 10px", borderRadius: 8,
-  background: accent + "15",
-  color: accent,
-}}>
-  22 / 32 selected
-</Text>
-```
-
-### Section header com link/acao
-
-```tsx
-<Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
-  <Strong style={{ fontSize: 14, color: text }}>32 Capabilities Available</Strong>
-  <Text style={{ fontSize: 11, color: accent, cursor: "pointer",
-                 textDecoration: "underline", fontWeight: 600 }}
-        onClick={selectAll}>Select All</Text>
+  background: capColor + (dk ? "22" : "15"),
+  border: `1px solid ${capColor}44` }}>
+  <Flex style={{ width: 8, height: 8, borderRadius: "50%", background: capColor }} />
+  <Text style={{ fontSize: 11, fontWeight: 600 }}>{name}</Text>
 </Flex>
 ```
 
-### Progress pill horizontal
+### 11.2 Badge de status de IA (header do card)
+
+Estados: `"AI available"` (idle) · `"AI…"` (loading) · `"AI ✓"` (ok, expandido)
+· `"AI ready"` (ok, colapsado) · `"AI !"` (erro, cor Critical):
 
 ```tsx
-<Flex flexDirection="column" style={{
-  width: "100%", height: 8, borderRadius: 4,
-  background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
-  overflow: "hidden",
-}}>
-  <Flex style={{
-    height: "100%", width: `${pct}%`, borderRadius: 4,
-    background: `linear-gradient(90deg, ${color}99, ${color})`,
-  }} />
+<Text style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px",
+  borderRadius: 6, background: c + (dk ? "20" : "15"), color: c,
+  border: `1px solid ${c}${dk ? "40" : "30"}` }}>{label}</Text>
+```
+
+### 11.3 Card de objetivo/projeto
+
+```tsx
+<Flex flexDirection="column" gap={8} style={{
+  padding: 16, borderRadius: 10, border: `1px solid ${border}`,
+  background: surface,
+  borderLeft: `4px solid ${primaryCapColor}` }}>   // accent lateral
+  {/* header: titulo + meta 11px textTert + acoes a direita */}
+  {/* corpo: objetivo 12px textSec, chips, graficos, plano */}
 </Flex>
 ```
 
-Padrao: gradiente **`color99` -> `color`** (faz a barra parecer "encher" com brilho).
-
-### Score pill (passou/falhou)
+### 11.4 Linha de sugestao selecionavel (picker de objetivos)
 
 ```tsx
-<Text style={{
-  fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
-  background: passed
-    ? (dk ? "rgba(0,200,83,0.12)" : "rgba(0,200,83,0.10)")
-    : (dk ? "rgba(229,57,53,0.12)" : "rgba(229,57,53,0.10)"),
-  color: passed ? Colors.Text.Success.Default : Colors.Text.Critical.Default,
-}}>
-  {passed ? "✓ Met" : "✗ Not met"}
-</Text>
-```
-
-### Recomendacoes (mini-card dentro de criterio)
-
-```tsx
-<Flex flexDirection="column" style={{
-  marginTop: 6, paddingTop: 6,
-  borderTop: `1px solid ${borderSub}`,
-}}>
-  <Flex flexDirection="row" alignItems="center" gap={8}>
-    <Text style={{
-      fontSize: 11, fontWeight: 700,
-      textTransform: "uppercase", letterSpacing: 0.5,
-      color: Colors.Text.Primary.Default,
-    }}>Recommendation</Text>
+<Flex flexDirection="column" gap={2} role="button" tabIndex={0}
+  onClick={prefill}
+  style={{ padding: "6px 10px", borderRadius: 6, cursor: "pointer",
+    border: `1px solid ${selected ? accent : borderSub}`,
+    background: selected ? (dk ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.08)")
+                         : "transparent" }}>
+  <Flex gap={6} alignItems="center">
+    <Text style={{ /* mini-badge uppercase 9px na cor accent */ }}>QUICK WIN</Text>
+    <Text style={{ fontSize: 11, fontWeight: 600 }}>{title}</Text>
   </Flex>
-  <Text>{recommendationText}</Text>
+  <Text style={{ fontSize: 10, color: textTert }}>{detail}</Text>
+</Flex>
+```
+
+### 11.5 Progress pill / barra com gradiente
+
+```tsx
+<Flex style={{ height: 8, borderRadius: 4, background: trackBg, overflow: "hidden" }}>
+  <Flex style={{ height: "100%", width: `${pct}%`, borderRadius: 4,
+    background: `linear-gradient(90deg, ${color}99, ${color})` }} />
 </Flex>
 ```
 
 ---
 
-## 13. Visualizacoes (canvas)
+## 12. Padroes de chat / IA
 
-Pulse usa **HTML Canvas direto** (nao Chart.js) para o radar - performance melhor para 32 pontos animados. Padrao:
+### 12.1 Bolhas de conversa
 
-```tsx
-const c = canvasRef.current;
-const ctx = c.getContext("2d");
-const dpr = window.devicePixelRatio || 1;
-c.width  = size * dpr;
-c.height = size * dpr;
-c.style.width  = size + "px";
-c.style.height = size + "px";
-ctx.scale(dpr, dpr);   // <- nao esquece, senao fica borrado em retina
+- **Usuario**: alinhado a direita, bolha indigo
+  `background: dk ? "rgba(99,102,241,0.18)" : "rgba(99,102,241,0.12)"`,
+  `borderRadius: 12`, `maxWidth: "80%"`.
+- **Assistente**: a esquerda com avatar `<DavisCoPilotIcon />`, bolha neutra
+  `dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"`, markdown renderizado.
+- Auto-scroll: ref na area de mensagens + `useEffect` setando
+  `el.scrollTop = el.scrollHeight` quando a conversa muda.
+- Loading: bolha do assistente com `<SkeletonText lines={3} />`.
+
+### 12.2 Painel de erro acionavel (nunca "unavailable" seco)
+
+```
+Davis error (HTTP 403)              ← 12px bold Critical
+┌ mensagem crua em monospace ┐      ← 11px, mono, fundo sutil, wordBreak
+Forbidden. The OAuth token is missing davis-copilot:conversations:execute.
+Sign out and back in…               ← hint 11px textSec
 ```
 
-Cores em canvas precisam ser **hex strings** (nao tokens Strato) - por isso `SCORE_BANDS` carrega tanto `color` quanto `token`.
+### 12.3 Disclaimer obrigatorio em toda saida de IA
 
-Para grafico simples (linha/area/bar) que nao precisa de animacao custom, use Chart.js:
-
-```tsx
-import { Chart } from "chart.js/auto";
-// integration via useRef + useEffect
 ```
+AI-generated · may contain inaccuracies · verify before acting
+```
+(10px, italic, textTert/subdued)
+
+### 12.4 Renderer de markdown seguro
+
+Subconjunto: `#/##/###`, listas `-`/`1.`, `**bold**`, `` `code` `` inline.
+Sem HTML cru (strip `<[^>]*>`), sem links externos. Implementacao exportada em
+`ui/app/components/DavisInsightSection.tsx` (`renderMarkdown(md, textColor,
+accentColor)`) — importe em vez de duplicar.
+
+### 12.5 Launcher do Assist nativo (conversation starters)
+
+Header com `DynatraceIntelligenceSignetIcon` + "Dynatrace Intelligence";
+gate de disponibilidade via `listAvailableSkills()` (mostrar triggers so se
+`skills` contiver `"conversation"`); chips de starters agrupados por categoria
+(label uppercase 10px); acoes disparam `sendIntent` para
+`dynatrace.davis.copilot` / `ask-question` com contexts
+`supplementary` (≤100K) / `instruction` (≤2.5K) / `document-retrieval` /
+`origin-app`. Ver `ui/app/ai/assistIntent.ts`.
 
 ---
 
-## 14. Footer / toolbar
+## 13. Graficos (sem bibliotecas — SVG/Flex puros)
 
-Pulse renderiza um footer condensado sticky com botoes de acao + DPS cost badge + scale tier banner. Padrao:
+### 13.1 Radar SVG (`ui/app/components/ProjectRadar.tsx`)
 
-```tsx
-<Flex
-  alignItems="center" justifyContent="space-between"
-  gap={12}
-  style={{
-    padding: "8px 16px",
-    borderTop: `1px solid ${Colors.Border.Neutral.Default}`,
-    background: Colors.Background.Surface.Default,
-    position: "sticky", bottom: 0, zIndex: 10,
-  }}
->
-  <DpsCostBadge {...} />
-  <Flex gap={8}>
-    <Button size="condensed" variant="minimal" onClick={...}>
-      Compare
-    </Button>
-  </Flex>
-</Flex>
-```
+- Aneis em 25/50/75/100 (`strokeDasharray "3,3"`, anel 100 solido);
+- Eixos com dot colorido da capability na ponta (`r=4`);
+- Poligono de valores: fill `rgba(99,102,241,0.18/0.25)`, stroke accent;
+- So renderiza com **3+ eixos** (menos que isso e degenerado — caia para lista);
+- Canvas grande (TechRadar): lembrar `devicePixelRatio` scaling.
 
----
+### 13.2 Barras duplas coverage × maturity
 
-## 15. Gating: customer-facing vs SE/dev
+Uma linha por metrica: label 10px (width fixa 64) + track (`trackBg`) +
+fill gradiente na cor da capability + valor 10px bold a direita.
 
-Padrao do Pulse para mostrar controles diagnosticos so para SE:
+### 13.3 Barra empilhada de ownership
 
-```tsx
-import { useDevMode } from "./hooks/useDevMode";
-const { isDev } = useDevMode();
+Segmentos na MESMA cor da capability com opacidade decrescente
+(`opacity: 1 - i * 0.22`, `minWidth: 3`), `title` com tooltip nativo,
+legenda abaixo com quadradinhos 7px + "nome · contagem".
 
-// ?dev=1 na URL OU localStorage.cca.dev=true
-{isDev && <Button onClick={downloadPerfJson}>Perf JSON</Button>}
-```
+### 13.4 Timeline de semanas
 
-Cliente final ve apenas:
-- Radar / capabilities cards
-- ScaleTier banner (info de sampling)
-- DPS cost badge (transparencia de custo)
-- Botoes de acao customer-friendly (Run / Compare / Export PDF)
-
-SE com `?dev=1` ve adicionalmente:
-- Download perf JSON
-- Force refresh (bypass cache)
-- Demo / scenario controls (removidos em v2.5.3, mas o padrao continua)
+Por bloco: label "Weeks X–Y" (width fixa) + track relativo com barra absoluta
+`left: (start-1)/max*100%`, `width: (end-start+1)/max*100%`, gradiente accent;
+contagem de milestones a direita; titulos listados abaixo (10px).
 
 ---
 
-## 16. Estrutura de pastas recomendada
+## 14. Dados oficiais da plataforma (fontes para selects/discovery)
+
+| Dado | SDK | Scope |
+|---|---|---|
+| Ownership teams | `settingsObjectsClient.getSettingsObjects({schemaIds:"builtin:ownership.teams"})` | `settings:objects:read` |
+| Segments | `filterSegmentsClient.getLeanFilterSegments()` | `storage:filter-segments:read` |
+| Ownership discovery | DQL `fetch dt.entity.X \| expand tag = tags \| filter startsWith(tag,"dt.owner:") \| summarize countDistinct(id), by:{tag}` | `storage:entities:read` |
+| Davis conversation | `publicClient.recommenderConversation` / `listAvailableSkills` | `davis-copilot:conversations:execute` |
+
+Padrao de hook: lazy (`active` flag), `started` guard, degradacao silenciosa
+para lista vazia + hint na UI de onde definir o dado oficialmente.
+
+---
+
+## 15. Persistencia (Document Store)
+
+Padrao unico para caches/projetos (`useProjects`, `DavisCache`, `QueryCache`):
+- 1 doc por dominio (`id` = `name` = `type`, ex: "pulse-projects");
+- `schemaVersion` guard na leitura;
+- optimistic locking (`optimisticLockingVersion` no update; create no 404);
+- **degradacao silenciosa**: erro de storage nunca quebra a UI (estado
+  continua em memoria).
+
+---
+
+## 16. Dev mode / gating
+
+`useDevMode` — 3 caminhos, qualquer um ativa:
+1. **`hostname === "localhost"`** (dt-app dev) → automatico, zero setup;
+2. `?dev=1` na URL;
+3. `localStorage.cca.dev = "1"`.
+
+Producao (`*.apps.dynatrace.com`) nunca casa com localhost → superficie de
+IA/diagnostico fica invisivel para o cliente sem esforco.
+
+---
+
+## 17. Estados vazios e loading
+
+- **Empty state**: centralizado, `DynatraceIntelligenceSignetIcon size="large"`,
+  titulo 14px bold, texto 12px textSec (maxWidth ~460), CTA emphasized.
+- **Loading**: `Skeleton`/`SkeletonText` (em Suspense fallback, bolhas de chat,
+  cards durante analise). Nunca spinner custom.
+- **Aviso contextual**: linha 11-12px na cor `Charts.Status.Warning` (ex: "run
+  the assessment first…").
+
+---
+
+## 18. Estrutura de pastas
 
 ```
 ui/app/
-  App.tsx                       # entry, Page + Routes + ErrorBoundary
-  appVersion.ts                 # APP_VERSION export (sincronizar com app.config.json)
-  pages/
-    MyMainPage.tsx              # 1 arquivo por rota
-  components/
-    Tooltip.tsx                 # wrappers proprios do Strato
-    SomeBadge.tsx
-    SomeBanner.tsx
-  hooks/
-    useDevMode.ts               # gating SE
-    useScaleTier.ts             # auto-detect tamanho
-    useMyData.ts                # data fetching (DQL + cache + perf)
-  utils/
-    colors.ts                   # SCORE_BANDS + helpers
-  data/                         # constantes de dominio (textos, mapeamentos)
-  perf/                         # instrumentacao (types, buildReport, queryCache)
-  queries.ts                    # DQL definitions
-  scale-tier.ts                 # tier-detection logic
+  App.tsx                    # Page + Routes (lazy) + ErrorBoundary
+  queries.ts                 # dominios + cores das capabilities
+  ai/                        # prompts, intents, starters, analises
+    assistIntent.ts            # sendIntent p/ Assist nativo
+    conversationStarters.ts    # starters por pagina + por time
+    projectAnalysis.ts         # analise de objetivos (LLM + deteccao)
+    reportPrompt.ts            # contexto do assessment p/ prompts
+  hooks/                     # dados (DQL, Doc Store, fontes oficiais)
+    useProjects.ts, useOwnershipTeams.ts, useSegments.ts,
+    useOwnershipDiscovery.ts, useDavisRecommendations.ts, useDevMode.ts
+  components/                # UI reutilizavel
+    ProjectRadar.tsx, ProjectDetailModal.tsx, AiReportModal.tsx,
+    DavisInsightSection.tsx (exporta renderMarkdown), TechRadar.tsx, …
+  pages/                     # 1 arquivo por rota
+  utils/                     # colors.ts (bandas), objectiveSuggestions.ts
+  perf/                      # instrumentacao + caches
 ```
 
 ---
 
-## 17. Checklist rapido para um novo app
+## 19. Checklist para novo app
 
-1. **Setup**:
-   - `npm i @dynatrace/strato-components @dynatrace/strato-components-preview @dynatrace/strato-design-tokens`
-   - Configurar `app.config.json` com scopes minimos necessarios
-
-2. **Topo da App**:
-   ```tsx
-   <ErrorBoundary>
-     <Page><Page.Main>
-       <Suspense fallback={<Skeleton .../>}>
-         <Routes>...</Routes>
-       </Suspense>
-     </Page.Main></Page>
-   </ErrorBoundary>
-   ```
-
-3. **Sempre usar tokens** para cor de texto/fundo/borda. Hex so para canvas/SVG ou cores de dominio (capability colors).
-
-4. **Detectar tema** com `useCurrentTheme()` so quando renderizar fora do Strato.
-
-5. **Layout**: `Grid` 380px+1fr para split sidebar/main, `Flex column` para conteudo, `Container color="primary"` para callouts.
-
-6. **Spacing em multiplos de 4** (4, 8, 12, 16, 20, 24).
-
-7. **Tipografia**: usar `Text`/`Strong`/`Heading`. Tamanhos 10/11/12/13/14 conforme tabela.
-
-8. **Loading**: `Skeleton` + `SkeletonText` em Suspense fallback.
-
-9. **Erros**: `ErrorBoundary` + `Colors.Text.Critical.Default` em mensagens.
-
-10. **Gating dev**: hook `useDevMode` + `?dev=1` + `localStorage.<app>.dev`.
-
-11. **Badge de custo / transparencia** (se aplicavel): sempre customer-facing, no toolbar.
+1. Instalar strato-components(+preview), design-tokens, strato-icons e os SDKs
+   da secao 1; declarar scopes minimos no `app.config.json`.
+2. `<ErrorBoundary><Page><Page.Main><Suspense fallback={Skeleton…}><Routes>`.
+3. Tokens para toda cor de texto/fundo/borda; hex so em canvas/SVG/dominio.
+4. `gap` apenas com tokens validos (nada de 10); variants de Button validos.
+5. Footer de Modal manual (nao existe `Modal.Footer`).
+6. Inputs em contexto clicavel: `stopPropagation` em keyDown/keyUp.
+7. IA: pergunta natural (guardrail), erro acionavel, disclaimer, markdown seguro,
+   nomes amigaveis (nunca ids internos tipo `i15`).
+8. Assist nativo via `sendIntent` + gate `listAvailableSkills`.
+9. Persistencia Doc Store com schemaVersion + optimistic locking + degradacao.
+10. Dev gating por localhost/`?dev=1`/localStorage.
 
 ---
 
-## 18. Arquivos do Pulse de referencia
+## 20. Anti-patterns (visto na pratica)
 
-Quando precisar copiar um padrao, abra direto:
-
-| Arquivo | O que copiar |
-|---|---|
-| `ui/app/App.tsx` | esqueleto Page/Routes/Suspense/ErrorBoundary |
-| `ui/app/utils/colors.ts` | SCORE_BANDS + scoreBand() |
-| `ui/app/pages/CoverageAssessment.tsx` | Grid 380/1fr + theme colors object |
-| `ui/app/components/CapabilityCards.tsx` | row interativo com tooltip + expand |
-| `ui/app/components/DpsCostBadge.tsx` | badge customer-facing no toolbar |
-| `ui/app/components/ScaleTierBanner.tsx` | banner de info com fallback de tema |
-| `ui/app/components/TechRadar.tsx` | canvas + dpr scaling + paint loop |
-| `ui/app/components/Tooltip.tsx` | wrapper proprio de Tooltip |
-| `ui/app/hooks/useDevMode.ts` | gating ?dev=1 |
-| `ui/app/components/ErrorBoundary.tsx` | error boundary customizado |
+- `gap={10}` → erro de tipo (token invalido).
+- `variant="minimal"` em Button → nao existe.
+- `Modal.Footer` → nao existe no 1.x.
+- Emoji em botoes/labels.
+- IDs internos de checks (`i15`) em texto de IA — sempre nome amigavel.
+- Prompt imperativo ("Produce…/Give me…") → guardrail do Davis rejeita; use
+  forma de pergunta ("What should I include…?").
+- Input sem `stopPropagation` dentro de card com toggle por Space.
+- Cor hardcoded espalhada — centralize (CAP_COLOR, utils/colors.ts).
+- Chamada de LLM automatica em mount/expand — sempre acao explicita do usuario.
 
 ---
 
-## 19. Anti-patterns (evitar)
-
-- `style={{ color: "#fff" }}` em texto - sempre use `Colors.Text.*`
-- `<div>` cru para layout - prefira `<Flex>` ou `<Grid>`
-- `<b>`/`<strong>` HTML - use `<Strong>` do Strato
-- `fontFamily: "Arial"` etc. - Strato injeta a fonte certa, nao sobrescreva
-- Cores hardcoded em multiplos componentes - centralize num `colors.ts` ou um objeto `useMemo`
-- `gap="8px"` - use numero (`gap={8}`)
-- Esquecer `dpr` ao desenhar em canvas (fica borrado em retina)
-- Misturar `padding: 20` e `padding: "1.25rem"` - escolha uma unidade (px) e mantenha
-- Loading sem fallback - todo `React.lazy` deve estar em `<Suspense fallback={<Skeleton/>}>`
-
----
-
-**Documento gerado a partir do estado atual de v2.5.3. Atualize quando bumpar versoes do Strato ou mudar a paleta.**
+*v2 gerado a partir do estado da branch `feat/davis-insights`. Atualize ao
+mudar paleta, versoes do Strato ou padroes de IA.*
