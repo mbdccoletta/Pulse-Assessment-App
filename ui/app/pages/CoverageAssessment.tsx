@@ -407,13 +407,13 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 </Button.Suffix>
               )}
             </Button>
-            {/* Production: original First Day Results — static PDF in EN/PT/ES.
+            {/* Production: Reports — static First Day Results PDF in EN/PT/ES.
                 The customer tenant never sees Davis-powered surfaces. */}
             {!isDev && (
               <Menu>
                 <Menu.Trigger>
                   <Button loading={exporting} size="condensed">
-                    First Day Results
+                    Reports
                   </Button>
                 </Menu.Trigger>
                 <Menu.Content>
@@ -1676,7 +1676,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
             <Menu>
               <Menu.Trigger>
                 <Button loading={exporting} size="condensed">
-                  First Day Results
+                  Reports
                 </Button>
               </Menu.Trigger>
               <Menu.Content>

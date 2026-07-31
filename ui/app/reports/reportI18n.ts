@@ -293,7 +293,7 @@ export const REPORT_EN: ReportStrings = {
   footer: (tenant, date) => `Dynatrace Platform — First Day Results  |  ${tenant}  |  ${date}`,
   page: (i, total) => `Page ${i} / ${total}`,
 
-  btnLabel: "First Day Results",
+  btnLabel: "Reports",
   btnEn: "English",
   btnPt: "Portugues",
 };
