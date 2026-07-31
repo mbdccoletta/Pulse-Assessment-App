@@ -63,7 +63,18 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
             <Text style={{ fontSize: 11, opacity: 0.6, marginTop: 5 }}>Click to expand details</Text>
           </Flex>
         } maxWidth={320} containerStyle={{ flex: 1 }}>
-          <Text>{cr.label}</Text>
+          <Flex alignItems="center" gap={6}>
+            <Text>{cr.label}</Text>
+            {cr.proxied && (
+              <Text style={{
+                fontSize: 10, fontWeight: 700, flexShrink: 0,
+                color: Colors.Text.Warning.Default,
+                background: Colors.Background.Container.Warning.Default,
+                border: `1px solid ${Colors.Border.Warning.Default}`,
+                borderRadius: 6, padding: "0px 5px",
+              }}>≈ proxy</Text>
+            )}
+          </Flex>
         </Tooltip>
         <Text style={{
           fontWeight: 600,

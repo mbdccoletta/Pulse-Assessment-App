@@ -28,6 +28,10 @@ export interface Criterion {
    *  (confirmed in the v2.5.0 perf report) for zero information gain.
    *  Mutually exclusive with queryB; useCoverageData honors queryB first. */
   denominatorConstant?: number;
+  /** Set by applyTraceProxyMode (../trace-proxy.ts) when this criterion's
+   *  span query was replaced with a metric/topology proxy. Surfaces as the
+   *  "≈ proxy" chip on criteria rows and in the perf/PDF disclosures. */
+  proxied?: boolean;
   thresholds: Threshold[];
 }
 

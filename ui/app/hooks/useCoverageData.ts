@@ -31,7 +31,7 @@ export interface CapabilityResult {
   /** Original score from DQL queries (before consolidation adjustment). */
   rawScore: number;
   details: string[];
-  criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean }[];
+  criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; proxied: boolean }[];
   maturity: MaturityResult;
   /** Consolidation factor (0–100). 100 = all data in DT, 30 = only 30% of estate in DT. */
   consolidation: number;
@@ -724,6 +724,7 @@ export function useCoverageData(
             thresholds: thDesc,
             tier,
             isRatio: !!criterion.queryB || criterion.denominatorConstant != null,
+            proxied: !!criterion.proxied,
           });
           if (!isError && value > 0) details.push(`${criterion.label}: ${value}`);
         }

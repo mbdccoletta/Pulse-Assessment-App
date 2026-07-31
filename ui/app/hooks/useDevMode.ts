@@ -70,6 +70,13 @@ function isLocalDevServer(): boolean {
   }
 }
 
+/** Non-hook variant for modules that need the dev answer outside React
+ *  (e.g., usePreflight's simulated-entitlement guard). Same three paths
+ *  as the hook, evaluated at call time. */
+export function isDevEnvironment(): boolean {
+  return isLocalDevServer() || readUrlFlag() || readStorageFlag();
+}
+
 export interface UseDevModeResult {
   /** True when diagnostic controls should be visible. */
   isDev: boolean;

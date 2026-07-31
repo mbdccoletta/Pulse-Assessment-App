@@ -172,3 +172,32 @@ run a reduced assessment (~60–70 checks re-expressed).
 (91 unaffected + ~15 proxied) on tenants without Traces on Grail;
 AI Observability cannot be measured without spans and must be excluded
 transparently — which itself becomes the enablement conversation.
+
+---
+
+## 6. Implementation addendum (Option A built — post-validation)
+
+Option A was implemented after side-by-side validation on bwm98081
+(97 services, 2h window). Measured fidelity changed the final split from
+the §A.2 estimate of ~15 proxied to **9 proxied + 11 excluded**:
+
+| Check | Span truth | Proxy value | Outcome |
+|---|---|---|---|
+| a1 traced services | 83 (85.6%) | request-metric services 90 (92.8%) | proxied — same band |
+| a3 root-span services | 75 (77.3%) | request-metric services 90 (92.8%) | proxied — band-equivalent |
+| a4 OTel services | 64 (66.0%) | UNIFIED-type services 60 (61.9%) | proxied — low fidelity, Δ-4pts |
+| a8/s4 DB services | 6 (6.2%) | DATABASE_SERVICE callers 1 (1.0%) | proxied — low here, better on OneAgent estates |
+| a9 messaging services | 10 (10.3%) | messaging-type + callers 2–4 | proxied — undercounts, same pass |
+| a10 multi-service | 27.0% of traces | 40.2% of services w/ outgoing calls | proxied — service-level reframe |
+| a13 DB call depth | n/m | topology ≥2 DB entities | proxied — same topology basis as a8 |
+| s8 failing services | 7 (7.2%) | failure_count>0 services 11 (11.3%) | proxied — Δ+4pts |
+| s10 HTTP surface | 51 (52.6%) | entity types 11 (11.3%) | **excluded** — no honest proxy |
+| i18, ai1–ai9 | — | — | **excluded** as designed |
+
+Every proxied check keeps the same pass/fail outcome at its operative
+(lowest) threshold. Implementation lives in `ui/app/trace-proxy.ts`
+(proxy map + capability transform), `usePreflight.ts` (entitlement-aware
+spans probe + dev simulation via `?noTraces=1` / `localStorage.cca.noTraces`),
+`TraceProxyBanner.tsx`, and the "≈ proxy" chips on criteria rows.
+The mode activates only via the preflight's **Continue in Trace Proxy
+Mode** action — tenants with the entitlement see zero behavior change.

@@ -29,6 +29,8 @@ import { APP_VERSION } from "../appVersion";
 import { type ReportLang } from "../reports/reportI18n";
 import { generateFirstDayReport } from "../reports/generateFirstDayReport";
 import { usePreflight, type PreflightCheck } from "../hooks/usePreflight";
+import { applyTraceProxyMode } from "../trace-proxy";
+import { TraceProxyBanner } from "../components/TraceProxyBanner";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
 import { CovMatRadar, renderRadarToDataURL, type CovMatRadarHandle } from "../components/CovMatRadar";
 import { CapabilityScatter, renderScatterToDataURL } from "../components/CapabilityScatter";
@@ -132,15 +134,40 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
     });
   }, []);
 
-  const startFiltered = useCallback(() => {
-    // If nothing excluded → full assessment (pass nothing)
-    if (excludedCaps.size === 0) {
-      start();
-    } else {
-      const filtered = CAPABILITIES.filter(c => !excludedCaps.has(c.name));
-      start(filtered.length > 0 ? filtered : undefined);
+  /** Trace Proxy Mode — set when preflight found every source fine except
+   *  the tenant-level Traces on Grail entitlement and the user chose to
+   *  continue. Span checks run against metric/topology proxies; unproxiable
+   *  ones (incl. all of AI Observability) leave the scoring denominator.
+   *  See ../trace-proxy.ts and docs/STUDY-CLASSIC-SAAS-NO-GRAIL-TRACES.md. */
+  const [traceProxyMode, setTraceProxyMode] = useState(false);
+
+  const startFiltered = useCallback((useProxy?: boolean) => {
+    // useProxy overrides the state for the click that ENABLES the mode —
+    // setTraceProxyMode hasn't re-rendered this closure yet at that point.
+    const proxy = useProxy ?? traceProxyMode;
+    const selected = excludedCaps.size === 0
+      ? CAPABILITIES
+      : CAPABILITIES.filter(c => !excludedCaps.has(c.name));
+    if (!proxy) {
+      // If nothing excluded → full assessment (pass nothing)
+      start(excludedCaps.size === 0 ? undefined : (selected.length > 0 ? selected : undefined));
+      return;
     }
-  }, [start, excludedCaps]);
+    const { caps } = applyTraceProxyMode(selected.length > 0 ? selected : CAPABILITIES);
+    // Guard: a selection reduced to zero capabilities (e.g. only AI
+    // Observability picked) falls back to the full proxied catalog —
+    // start(undefined) would run the UNtransformed catalog and hit spans.
+    start(caps.length > 0 ? caps : applyTraceProxyMode(CAPABILITIES).caps);
+  }, [start, excludedCaps, traceProxyMode]);
+
+  /** Banner metadata for the current run's selection; null when off. */
+  const traceProxyInfo = useMemo(() => {
+    if (!traceProxyMode) return null;
+    const selected = excludedCaps.size === 0
+      ? CAPABILITIES
+      : CAPABILITIES.filter(c => !excludedCaps.has(c.name));
+    return applyTraceProxyMode(selected.length > 0 ? selected : CAPABILITIES).info;
+  }, [traceProxyMode, excludedCaps]);
 
   const t0 = useRef<number>(0);
   const dk = useCurrentTheme() === "dark";
@@ -272,6 +299,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
             accent={accent} bgSubtle={bgSubtle} bgPrimary={bgPrimary}
             border={border} borderPri={borderPri}
             tenant={tenant} start={startFiltered} resume={resume}
+            onEnableProxyMode={() => setTraceProxyMode(true)}
             totalScore={totalScore} hasResults={capabilities.length > 0}
             exporting={exporting}
             onGenerateReport={(lang: ReportLang) => generateClientReport(lang)}
@@ -450,6 +478,15 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
           {scale && (
             <Flex style={{ padding: "0 16px", marginTop: 8, flexShrink: 0 }}>
               <ScaleTierBanner scale={scale} />
+            </Flex>
+          )}
+          {/* Trace Proxy Mode banner — renders only after the user continued
+              without the Traces on Grail entitlement. Same disclosure
+              contract as the Scale Tier banner: proxied scores are never
+              shown without saying so. */}
+          {traceProxyInfo && (
+            <Flex style={{ padding: "0 16px", marginTop: 8, flexShrink: 0 }}>
+              <TraceProxyBanner info={traceProxyInfo} />
             </Flex>
           )}
           {/* Main content: chart left, cards right — stacks vertically on mobile */}
@@ -1342,7 +1379,18 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
           background: passed ? Colors.Text.Success.Default : Colors.Text.Critical.Default,
         }} />
         <Tooltip text={criterionTooltipContent(cr.id, cr.description, cr.tier)} containerStyle={{ flex: 1 }} maxWidth={340}>
-          <Text style={{ color: passed ? text : textSec }}>{cr.label}</Text>
+          <Flex alignItems="center" gap={6}>
+            <Text style={{ color: passed ? text : textSec }}>{cr.label}</Text>
+            {cr.proxied && (
+              <Text style={{
+                fontSize: 10, fontWeight: 700, flexShrink: 0,
+                color: Colors.Text.Warning.Default,
+                background: Colors.Background.Container.Warning.Default,
+                border: `1px solid ${Colors.Border.Warning.Default}`,
+                borderRadius: 6, padding: "0px 5px",
+              }}>≈ proxy</Text>
+            )}
+          </Flex>
         </Tooltip>
         {cr.value > 0 && (
           <Text style={{ fontSize: 12, color: textTert, fontWeight: 600 }}>{cr.isRatio ? `${cr.value}%` : cr.value.toLocaleString()}</Text>
@@ -1461,10 +1509,11 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
 }
 
 /* ── Left panel — memoized to prevent re-renders during card interactions ── */
-const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, totalScore, hasResults, exporting, onGenerateReport, selectedCount, totalCount, consolidation, onConsolidationChange, excludedCaps }: {
+const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, onEnableProxyMode, totalScore, hasResults, exporting, onGenerateReport, selectedCount, totalCount, consolidation, onConsolidationChange, excludedCaps }: {
   dk: boolean; text: string; textSec: string; textTert: string;
   accent: string; bgSubtle: string; bgPrimary: string; border: string; borderPri: string;
-  tenant: string; start: () => void; resume: () => void;
+  tenant: string; start: (useProxy?: boolean) => void; resume: () => void;
+  onEnableProxyMode: () => void;
   totalScore: number; hasResults: boolean;
   exporting: boolean;
   onGenerateReport: (lang: ReportLang) => void;
@@ -1521,28 +1570,28 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
           excludedCaps={excludedCaps}
         />
         {/* Preflight validation results */}
-        {(preflight.running || preflight.hasFails) && (
+        {(preflight.running || preflight.hasFails || preflight.spansNotEntitled) && (
           <Flex flexDirection="column" style={{
             width: "100%", maxWidth: 340, marginBottom: 12, borderRadius: 10,
             background: dk ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.03)",
-            border: `1px solid ${preflight.hasFails ? Colors.Border.Critical.Default : border}`,
+            border: `1px solid ${preflight.hasFails ? Colors.Border.Critical.Default : preflight.spansNotEntitled ? Colors.Border.Warning.Default : border}`,
             overflow: "hidden",
           }}>
             <Flex alignItems="center" gap={8} style={{ padding: "12px 16px", fontSize: 12, fontWeight: 700,
-              color: preflight.hasFails ? Colors.Text.Critical.Default : accent,
+              color: preflight.hasFails ? Colors.Text.Critical.Default : preflight.spansNotEntitled ? Colors.Text.Warning.Default : accent,
               borderBottom: `1px solid ${border}` }}>
-              {preflight.running ? "⏳" : preflight.hasFails ? "⚠" : "✓"} Pre-flight Validation
+              {preflight.running ? "⏳" : preflight.hasFails || preflight.spansNotEntitled ? "⚠" : "✓"} Pre-flight Validation
             </Flex>
             <Flex flexDirection="column" style={{ padding: "8px 16px" }}>
               {preflight.checks.map(c => (
                 <Flex key={c.id} alignItems="flex-start" gap={8} style={{ padding: "6px 0", borderBottom: `1px solid ${border}20` }}>
                   <Text style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0, marginTop: 1 }}>
-                    {c.status === "pending" ? "○" : c.status === "running" ? "◌" : c.status === "ok" ? "✓" : "✗"}
+                    {c.status === "pending" ? "○" : c.status === "running" ? "◌" : c.status === "ok" ? "✓" : c.status === "not-entitled" ? "⚠" : "✗"}
                   </Text>
                   <Flex flexDirection="column" style={{ flex: 1, minWidth: 0 }}>
                     <Flex flexDirection="column" style={{
                       fontSize: 12, fontWeight: 600,
-                      color: c.status === "ok" ? Colors.Text.Success.Default : c.status === "fail" ? Colors.Text.Critical.Default : textSec,
+                      color: c.status === "ok" ? Colors.Text.Success.Default : c.status === "fail" ? Colors.Text.Critical.Default : c.status === "not-entitled" ? Colors.Text.Warning.Default : textSec,
                     }}>
                       {c.label}
                     </Flex>
@@ -1556,10 +1605,43 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
                         Required scope: <Code style={{ fontSize: 10, padding: "1px 4px", borderRadius: 3, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }}>{c.scope}</Code>
                       </Flex>
                     )}
+                    {c.status === "not-entitled" && (
+                      <Flex flexDirection="column" style={{ fontSize: 11, color: Colors.Text.Warning.Default, marginTop: 2, lineHeight: 1.4 }}>
+                        Traces on Grail is not enabled on this environment — a tenant entitlement, not an app scope. Granting scopes will not fix this.
+                      </Flex>
+                    )}
                   </Flex>
                 </Flex>
               ))}
             </Flex>
+            {preflight.spansNotEntitled && !preflight.hasFails && (
+              <Flex flexDirection="column" style={{
+                padding: "12px 16px", borderTop: `1px solid ${border}`,
+                fontSize: 11, color: textSec, lineHeight: 1.6,
+                background: dk ? "rgba(243,166,51,0.06)" : "rgba(243,166,51,0.05)",
+              }}>
+                <Strong style={{ color: Colors.Text.Warning.Default }}>Trace Proxy Mode available.</Strong> All other data sources are
+                accessible. Span-based checks can run against service metrics and topology instead (marked “≈ proxy”);
+                checks with no honest equivalent — including all of <Strong style={{ color: text }}>AI Observability</Strong> — are
+                excluded from scoring rather than counted as failures.
+                <Flex gap={8} style={{ marginTop: 8 }}>
+                  <Button
+                    onClick={() => {
+                      preflight.markValidated();
+                      preflight.reset();
+                      onEnableProxyMode();
+                      start(true);
+                    }}
+                    size="condensed" variant="emphasized" color="primary"
+                  >
+                    Continue in Trace Proxy Mode
+                  </Button>
+                  <Button onClick={() => preflight.reset()} size="condensed">
+                    Dismiss
+                  </Button>
+                </Flex>
+              </Flex>
+            )}
             {preflight.hasFails && (
               <Flex flexDirection="column" style={{
                 padding: "12px 16px", borderTop: `1px solid ${border}`,
