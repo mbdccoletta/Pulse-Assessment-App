@@ -167,6 +167,7 @@ function renderInline(text: string, textColor: string, accentColor: string): Rea
 export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, onSendFollowUp, onRequestInsight }) => {
   const dk = useCurrentTheme() === "dark";
   const [draft, setDraft] = useState("");
+  const [open, setOpen] = useState(true);
 
   if (!state || state.status === "skipped") return null;
 
@@ -178,7 +179,7 @@ export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, on
 
   // ── Header (always shown for non-skipped states) ──
   const Header = (
-    <Flex flexDirection="row" alignItems="center" gap={8} style={{ marginBottom: 6 }}>
+    <Flex flexDirection="row" alignItems="center" gap={8} style={{ marginBottom: open ? 6 : 0 }}>
       <Text style={{
         fontSize: 11, fontWeight: 700, textTransform: "uppercase",
         letterSpacing: 0.5, color: accentColor,
@@ -191,15 +192,50 @@ export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, on
       }}>
         Davis CoPilot
       </Text>
+      <Text style={{ fontSize: 11, fontWeight: 700, color: accentColor, marginLeft: "auto" }}>
+        {open ? "▾" : "▸"}
+      </Text>
     </Flex>
   );
 
+  // Clicking the panel folds the insight away instead of collapsing the whole
+  // capability card underneath it — the card owns a click handler that would
+  // otherwise swallow everything here. Clicks that land on a control, or that
+  // finish a text selection, are left alone.
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const el = e.target as HTMLElement | null;
+    // The panel itself carries role="button", so only a control *inside* it
+    // should suppress the toggle.
+    const control = el?.closest?.("button, input, textarea, a, select, [role='button']");
+    if (control && control !== e.currentTarget) return;
+    if ((window.getSelection()?.toString() ?? "") !== "") return;
+    setOpen(o => !o);
+  };
+
   return (
-    <Flex flexDirection="column" style={{
-      marginTop: 8, padding: "8px 10px", borderRadius: 6,
-      border: `1px solid ${borderColor}`, background: bgColor,
-    }}>
+    <Flex flexDirection="column"
+      onClick={toggle}
+      role="button"
+      tabIndex={0}
+      aria-expanded={open}
+      aria-label={`AI insight for ${capabilityName}`}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); }
+      }}
+      style={{
+        marginTop: 8, padding: "8px 10px", borderRadius: 6,
+        border: `1px solid ${borderColor}`, background: bgColor,
+        cursor: "pointer",
+      }}>
       {Header}
+      {!open && (
+        <Text style={{ fontSize: 11, color: subColor, fontStyle: "italic" }}>
+          {state.status === "loading" ? "Generating..." : "Click to reopen"}
+        </Text>
+      )}
+      {open && (<>
 
       {/* Idle state — no Davis call attempted yet. Render a CTA button
           so the user explicitly opts in (and spends quota) only when
@@ -381,6 +417,7 @@ export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, on
           )}
         </Flex>
       )}
+      </>)}
     </Flex>
   );
 };

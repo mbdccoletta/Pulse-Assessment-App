@@ -29,6 +29,7 @@ import { Text, Strong } from "@dynatrace/strato-components/typography";
 import { DynatraceIntelligenceSignetIcon, ArrowUpIcon } from "@dynatrace/strato-icons";
 import type { ReportContext } from "../ai/reportPrompt";
 import { openDynatraceAssist, useConversationSkillAvailable } from "../ai/assistIntent";
+// (intent errors are rendered inline — see intentError below)
 import { PAGE_STARTERS, TEAM_REPORTS, type AssistPage, type StarterGroup } from "../ai/conversationStarters";
 
 interface Props {
@@ -43,6 +44,7 @@ interface Props {
 export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx, page = "coverage" }) => {
   const dk = useCurrentTheme() === "dark";
   const [draft, setDraft] = useState("");
+  const [intentError, setIntentError] = useState<{ message: string; hint: string } | null>(null);
 
   const textColor = Colors.Text.Neutral.Default;
   const subColor = Colors.Text.Neutral.Subdued;
@@ -61,7 +63,11 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx, page = "c
    *  execute:false so the user can review/edit the prefilled prompt in the
    *  native UI; typed questions auto-execute (the user wrote them). */
   const launch = (prompt: string, execute: boolean) => {
-    openDynatraceAssist({ prompt, ctx, execute });
+    // Intents need the app embedded in the Dynatrace shell; on the local
+    // dev server they are rejected ("detached mode"). Show why instead of
+    // closing as if it had worked.
+    const err = openDynatraceAssist({ prompt, ctx, execute });
+    if (err) { setIntentError(err); return; }
     close();
   };
 
@@ -95,6 +101,21 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx, page = "c
     <Modal show={show} onDismiss={close} title="Assist" size="large">
       <Flex flexDirection="column" gap={16} style={{ minWidth: 620, maxWidth: 860 }}>
 
+        {/* Intent dispatch failure — most often the local dev server, which
+            hosts the app detached from the Dynatrace shell. */}
+        {intentError && (
+          <Flex flexDirection="column" gap={4} style={{
+            padding: "8px 12px", borderRadius: 6,
+            border: `1px solid ${Colors.Border.Critical.Default}`,
+            background: dk ? "rgba(229,57,53,0.08)" : "rgba(229,57,53,0.05)",
+          }}>
+            <Text style={{ fontSize: 12, color: Colors.Text.Critical.Default }}>
+              <Strong>Assist:</Strong> {intentError.message}
+            </Text>
+            <Text style={{ fontSize: 11, color: subColor }}>{intentError.hint}</Text>
+          </Flex>
+        )}
+
         {/* ── Header: Dynatrace Intelligence identity + context ── */}
         <Flex flexDirection="row" alignItems="center" gap={8}
           style={{ paddingBottom: 10, borderBottom: `1px solid ${borderColor}` }}>
@@ -105,7 +126,7 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx, page = "c
             </Text>
             <Text style={{ fontSize: 11, color: subColor }}>
               Tenant <Strong style={{ color: textColor }}>{ctx.tenant}</Strong> ·{" "}
-              {ctx.overallCoverage}% coverage · {ctx.overallMaturity}/100 maturity
+              {ctx.overallCoverage}% coverage · {ctx.overallMaturity}/100 utilization
             </Text>
           </Flex>
         </Flex>

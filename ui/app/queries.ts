@@ -289,7 +289,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
-        id: "a12", label: "Service tagging maturity (%)",
+        id: "a12", label: "Service tagging utilization (%)",
         description: "Percentage of services with at least one tag assigned — tags enable release tracking, ownership, and filtering.",
         query: "fetch dt.entity.service | fieldsAdd t = tags | expand t | summarize count = countDistinct(id)",
         queryB: "fetch dt.entity.service | summarize count()",

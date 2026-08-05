@@ -34,6 +34,10 @@ interface Props {
    *  auto-fires this for the capability so the user gets an insight without
    *  an extra click (still gated by per-capability idempotence in the hook). */
   onRequestInsight?: (capabilityName: string) => Promise<void>;
+  /** Optional Explain action — renders an "Explain" button on every card
+   *  that opens Dynatrace Assist with a question about this capability's
+   *  results. Provided only in dev (Assist surfaces are dev-only). */
+  onExplain?: (capabilityName: string) => void;
 }
 
 const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: boolean }> = ({ cr, dk }) => {
@@ -80,7 +84,9 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
           fontWeight: 600,
           color: cr.error ? Colors.Text.Critical.Default : cr.points > 0 ? Colors.Text.Success.Default : Colors.Text.Neutral.Disabled,
         }}>
-          {cr.error ? "ERR" : cr.points > 0 ? `${cr.value} → ✓` : `${cr.value} → ✗`}
+          {/* Met / not met only — the measured number stays in the
+              expanded detail, where the threshold and DQL give it meaning. */}
+          {cr.error ? "ERR" : cr.points > 0 ? "✓" : "✗"}
         </Text>
       </Flex>
       {open && (
@@ -145,7 +151,7 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
   );
 };
 
-export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations, onSendFollowUp, onRequestInsight }) => {
+export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations, onSendFollowUp, onRequestInsight, onExplain }) => {
   const dk = useCurrentTheme() === "dark";
 
   // NB: NO auto-fire on expand. The user explicitly opted out of implicit
@@ -176,18 +182,43 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
               boxShadow: "none",
               opacity: activeIdx !== null && !act ? 0.35 : 1,
             }}>
-            <Flex flexDirection="row" alignItems="center" justifyContent="space-between" style={{ marginBottom: 6 }}>
-              <Flex flexDirection="row" alignItems="center" gap={8}>
+            <Flex flexDirection="row" alignItems="center" justifyContent="space-between" gap={8} style={{ marginBottom: 6 }}>
+              {/* Name shrinks (minWidth 0) so the chips on the right keep
+                  their intrinsic width instead of wrapping mid-word. */}
+              <Flex flexDirection="row" alignItems="center" gap={8} style={{ minWidth: 0, flexShrink: 1 }}>
                 <Flex flexDirection="column" style={{
                   width: 10, height: 10, borderRadius: "50%", background: cap.color,
-                  boxShadow: act ? `0 0 10px ${cap.color}70` : "none",
+                  boxShadow: act ? `0 0 10px ${cap.color}70` : "none", flexShrink: 0,
                 }} />
                 <Text style={{ fontSize: 14, fontWeight: act ? 700 : 500, color: Colors.Text.Neutral.Default }}>
                     {cap.name}
                   </Text>
               </Flex>
-              <Flex flexDirection="row" alignItems="center" gap={6}>
-                <Text style={{ fontSize: 16, fontWeight: 700, color: cap.color, fontFamily: "system-ui, sans-serif" }}>
+              <Flex flexDirection="row" alignItems="center" gap={6} style={{ flexShrink: 0 }}>
+                {/* Explain — opens Dynatrace Assist scoped to this capability.
+                    stopPropagation everywhere so the card doesn't toggle. */}
+                {onExplain && (
+                  <Text
+                    role="button" tabIndex={0}
+                    aria-label={`Explain ${cap.name} with Dynatrace Assist`}
+                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); onExplain(cap.name); }}
+                    onKeyDown={(e: React.KeyboardEvent) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onExplain(cap.name); }
+                    }}
+                    style={{
+                      fontSize: 10, fontWeight: 700, cursor: "pointer",
+                      padding: "2px 8px", borderRadius: 6, userSelect: "none",
+                      whiteSpace: "nowrap", flexShrink: 0,
+                      color: Colors.Text.Primary.Default,
+                      background: Colors.Text.Primary.Default + (dk ? "20" : "15"),
+                      border: `1px solid ${Colors.Text.Primary.Default}${dk ? "40" : "30"}`,
+                    }}
+                  >
+                    Explain
+                  </Text>
+                )}
+                <Text style={{ fontSize: 16, fontWeight: 700, color: cap.color, fontFamily: "system-ui, sans-serif", whiteSpace: "nowrap", flexShrink: 0 }}>
                   {Math.round(cap.score * anim)}%
                 </Text>
                 {cap.consolidation < 100 && cap.rawScore > 0 && (
@@ -209,11 +240,19 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                 <Text style={{
                   fontSize: 11, padding: "2px 8px", borderRadius: 6,
                   background: ml.color + (dk ? "25" : "18"), color: ml.color, fontWeight: 600,
+                  whiteSpace: "nowrap", flexShrink: 0,
                 }}>{ml.label}</Text>
+                {/* Active-user counts live on the Utilization cards only:
+                    "is anyone looking at this data?" belongs next to how
+                    deeply a capability is used, not next to its coverage. */}
                 {/* AI Insight indicator — visible on collapsed cards too. The
                     label reflects whether the user has triggered the Davis
                     call yet, so they know what clicking the card will do. */}
-                {davisRecommendations?.[cap.name] && davisRecommendations[cap.name]!.status !== "skipped" && (
+                {davisRecommendations?.[cap.name] && davisRecommendations[cap.name]!.status !== "skipped" &&
+                 // When the Explain button is present it already signals that
+                 // AI is available, so the idle chip is dropped — it only ate
+                 // horizontal space and forced the capability name to wrap.
+                 !(onExplain && davisRecommendations[cap.name]!.status === "idle") && (
                   (() => {
                     const aiState = davisRecommendations[cap.name]!;
                     const aiText = aiState.status === "loading" ? "AI…"
@@ -230,6 +269,7 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                         background: aiColor + (dk ? "20" : "15"),
                         color: aiColor,
                         border: `1px solid ${aiColor}${dk ? "40" : "30"}`,
+                        whiteSpace: "nowrap", flexShrink: 0,
                       }} aria-label={`AI insight ${aiState.status}`}>
                         {aiText}
                       </Text>

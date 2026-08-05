@@ -25,7 +25,7 @@ import { CRITERION_ACTIONS } from "../remediationActions";
  *  v3: compact text + inline failed-criteria table. Triggered guardrail.
  *  v2: structured supplementary JSON + verbose prompt. Returned FAILED.
  *  v1: original generic prompt. */
-export const PROMPT_VERSION = "v6";
+export const PROMPT_VERSION = "v7";
 
 /** Shape of the criterion data we feed to the model. Kept minimal but rich
  *  enough that Davis can write a specific, data-grounded recommendation
@@ -121,7 +121,7 @@ export function buildCapabilityPrompt(cap: CapabilityResult): {
   const criteriaLines = failed.map(f => {
     const name = clamp(f.label, 60).replace(/\s*\(%\)\s*$/, ""); // strip trailing "(%)"
     return `- "${name}" (${f.tier} tier) — ${clamp(f.description, 120)} ` +
-      `Currently ${f.currentValue}%, needs ≥${f.passingThreshold}% (gap ${f.gap.toFixed(0)} points). ` +
+      `Currently ${f.currentValue}%, needs ≥${f.passingThreshold}% (gap ${f.gap.toFixed(0)}%). ` +
       `Suggested fix: ${clamp(f.remediationHint, 140)}`;
   }).join("\n");
 
@@ -132,13 +132,16 @@ export function buildCapabilityPrompt(cap: CapabilityResult): {
     `below their passing thresholds (each line gives the check's name, what it ` +
     `measures, the current value, the gap, and a suggested fix):\n\n` +
     `${criteriaLines}\n\n` +
-    `What are the 3 most impactful Dynatrace actions I should recommend to lift ` +
-    `this capability's score? Please prioritise foundation-tier fixes first since ` +
-    `they gate the maturity formula, then the highest-leverage single action, then ` +
-    `the easiest enablement. For each action, refer to the checks it addresses by ` +
-    `their names above, quote the current value and gap in plain language, give a ` +
-    `concrete example of how to do it in Dynatrace (the specific Settings path, ` +
-    `integration, or attribute), and estimate the score lift.`;
+    `First, how would you summarise in two or three sentences what these results ` +
+    `say about how the customer is using this capability today — what is already ` +
+    `working and what is missing? Then, what are the 3 most impactful Dynatrace ` +
+    `actions I should recommend to lift this capability's score? Please prioritise ` +
+    `foundation-tier fixes first since they gate the utilization formula, then the ` +
+    `highest-leverage single action, then the easiest enablement. For each action, ` +
+    `refer to the checks it addresses by their names above, quote the current value ` +
+    `and gap in plain language, give a concrete example of how to do it in ` +
+    `Dynatrace (the specific Settings path, integration, or attribute), and ` +
+    `estimate the coverage lift as a percentage.`;
 
   // No supplementary — everything is in `text` as a natural question.
   const supplementary = "";
@@ -146,7 +149,11 @@ export function buildCapabilityPrompt(cap: CapabilityResult): {
   // ── INSTRUCTION (tone + accuracy + worked examples) ─────────────────
   const instruction =
     `Write in a clear, friendly, professional tone — like an experienced SE ` +
-    `explaining next steps to a colleague. Answer with three numbered sections: ` +
+    `explaining next steps to a colleague. Start with a "## Summary" section: ` +
+    `two or three plain-language sentences reading the results — what the ` +
+    `customer already does well in this capability and what is missing. No ` +
+    `jargon, no percentages recap beyond the one or two numbers that matter. ` +
+    `Then answer with three numbered sections: ` +
     `"## 1. <action title>", "## 2. <action title>", "## 3. <action title>". ` +
     `Under each heading write one short paragraph (3-5 sentences). Bold the lead ` +
     `action verb.\n` +

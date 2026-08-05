@@ -34,7 +34,7 @@ export const CRITERION_IMPORTANCE: Record<string, string> = {
   a9: "Messaging system spans track async communication reliability — unmonitored queues cause silent data loss and processing delays.",
   a10: "Multi-service traces validate distributed tracing depth — requests spanning multiple services prove end-to-end visibility.",
   a11: "Service-to-process mapping enables cross-layer correlation — connecting application services to their underlying infrastructure for root cause analysis.",
-  a12: "Service tagging maturity indicates governance and organization — tagged services enable filtering, ownership assignment, and release tracking.",
+  a12: "Service tagging utilization indicates governance and organization — tagged services enable filtering, ownership assignment, and release tracking.",
   a13: "Database call depth measures how many services interact with multiple DB systems — services using 2+ databases (e.g., PostgreSQL + Redis) have deeper monitoring that catches cross-system latency and failure cascades.",
   // Digital Experience
   d1: "RUM captures real user experience — page load times, errors, and interactions. Without it, you only see synthetic performance, not reality.",

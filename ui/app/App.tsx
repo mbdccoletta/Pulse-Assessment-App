@@ -18,9 +18,6 @@ const ComparisonPage = React.lazy(() =>
 const AiInsightsPage = React.lazy(() =>
   import("./pages/AiInsightsPage").then(m => ({ default: m.AiInsightsPage }))
 );
-const ProjectsPage = React.lazy(() =>
-  import("./pages/ProjectsPage").then(m => ({ default: m.ProjectsPage }))
-);
 
 export const App = () => {
   const history = useAssessmentHistory();
@@ -57,9 +54,8 @@ export const App = () => {
           }>
             <Routes>
               <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} scale={scale} isDev={isDev} />} />
-              <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} coverageData={coverageData} saveSnapshot={history.saveSnapshot} />} />
+              <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} saveSnapshot={history.saveSnapshot} />} />
               <Route path="/ai-insights" element={<AiInsightsPage coverageData={coverageData} scale={scale} isDev={isDev} />} />
-              <Route path="/projects" element={<ProjectsPage coverageData={coverageData} isDev={isDev} />} />
             </Routes>
           </Suspense>
         </Page.Main>

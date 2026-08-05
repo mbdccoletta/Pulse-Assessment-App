@@ -39,10 +39,26 @@ interface ScaleTierBannerProps {
 
 const TIER_ORDER: ScaleTier[] = ['exact', 'large', 'xlarge'];
 
+/** Cost mode runs at every tier, so its disclosure cannot live inside the
+ *  tier banner (which hides itself on 'exact'). It is a single quiet line —
+ *  the numbers are estimates and everyone reading a score should know it. */
+export const CostModeNote: React.FC<{ className?: string }> = ({ className }) => (
+  <Text
+    className={className}
+    textStyle="small"
+    style={{ color: Colors.Text.Neutral.Subdued, display: 'block', marginBottom: 8 }}
+  >
+    Economy mode is on: ratio checks read a 1-in-1000 sample and breadth checks use a
+    shorter window, so coverage values are close estimates rather than exact counts
+    (measured: within ~1.5 points on ratios, ~6% lower on distinct counts). It cuts a
+    full run from ~370 GB to ~41 GB of Grail scan — roughly US$ 3.70 down to US$ 0.40.
+  </Text>
+);
+
 export const ScaleTierBanner: React.FC<ScaleTierBannerProps> = ({ scale, className }) => {
   // Default tier is invisible — the goal is zero presentation impact for the
   // common case (small/medium tenants). Above-threshold tenants get the disclosure.
-  if (scale.tier === 'exact') return null;
+  if (scale.tier === 'exact') return <CostModeNote className={className} />;
 
   const cfg = TIER_CONFIG[scale.tier];
   const isOverridden = scale.override !== null && scale.override !== scale.autoTier;
@@ -90,6 +106,7 @@ export const ScaleTierBanner: React.FC<ScaleTierBannerProps> = ({ scale, classNa
           </Flex>
         </Flex>
         <Text textStyle="small">{cfg.description}</Text>
+        <CostModeNote />
       </Flex>
     </Surface>
   );

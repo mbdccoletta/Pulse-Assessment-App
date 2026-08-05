@@ -39,7 +39,7 @@ export const PAGE_STARTERS: Record<AssistPage, StarterGroup[]> = {
       starters: [
         {
           title: "What should I prioritize?",
-          body: "Given this assessment, what are the top 3 actions I should prioritize to maximise impact? Order by impact-to-effort. For each, name the capability and the checks it addresses (by their names), quote the current value and gap, note whether it's a Foundation fix that unlocks the maturity formula, and estimate the score lift.",
+          body: "Given this assessment, what are the top 3 actions I should prioritize to maximise impact? Order by impact-to-effort. For each, name the capability and the checks it addresses (by their names), quote the current value and gap, note whether it's a Foundation fix that unlocks the utilization formula, and estimate the score lift.",
         },
         {
           title: "Where are my biggest gaps?",
@@ -52,22 +52,22 @@ export const PAGE_STARTERS: Record<AssistPage, StarterGroup[]> = {
       ],
     },
   ],
-  // Maturity view — tier progression, gates, levels.
+  // Utilization view — tier progression, gates, levels.
   maturity: [
     {
-      category: "Maturity analysis",
+      category: "Utilization analysis",
       starters: [
         {
-          title: "How do I raise maturity?",
-          body: "How can I advance the Maturity scores across the 9 capabilities? Remember the progressive formula (Foundation 60%, Best Practice 25% only if Foundation reaches 80%, Excellence 15% only if BP reaches 60%). For each capability, tell me the specific tier gate that needs to be cleared next and the concrete action to clear it. Prioritise Foundation gaps first since they unlock the whole formula.",
+          title: "How do I raise utilization?",
+          body: "How can I advance the Utilization scores across the 9 capabilities? Remember the progressive formula (Foundation 60%, Best Practice 25% only if Foundation reaches 80%, Excellence 15% only if BP reaches 60%). For each capability, tell me the specific tier gate that needs to be cleared next and the concrete action to clear it. Prioritise Foundation gaps first since they unlock the whole formula.",
         },
         {
           title: "Which Foundation gates are blocking me?",
-          body: "Which capabilities have failing Foundation-tier checks that are capping their Maturity at L1 regardless of Best Practice or Excellence progress? List them, name the specific Foundation checks that are failing, and give the concrete fix for each so the tier unlocks.",
+          body: "Which capabilities have failing Foundation-tier checks that are capping their Utilization at L1 regardless of Best Practice or Excellence progress? List them, name the specific Foundation checks that are failing, and give the concrete fix for each so the tier unlocks.",
         },
         {
           title: "Plan each capability to the next level",
-          body: "For each capability, what is the shortest path to advance it one maturity level (L0→L1, L1→L2, or L2→L3)? Give the specific checks to pass and the Dynatrace actions to pass them, in the order the progressive gates require.",
+          body: "For each capability, what is the shortest path to advance it one utilization level (L0→L1, L1→L2, or L2→L3)? Give the specific checks to pass and the Dynatrace actions to pass them, in the order the progressive gates require.",
         },
       ],
     },
@@ -79,11 +79,11 @@ export const PAGE_STARTERS: Record<AssistPage, StarterGroup[]> = {
       starters: [
         {
           title: "Executive summary",
-          body: "What should I include in a one-page executive summary of this assessment for the customer's CIO/CTO? Structure it around the two headline numbers — overall Coverage and overall Maturity — in plain business language, cover the 2-3 strongest and weakest capabilities, and end with a single recommended 90-day focus. Avoid technical jargon.",
+          body: "What should I include in a one-page executive summary of this assessment for the customer's CIO/CTO? Structure it around the two headline numbers — overall Coverage and overall Utilization — in plain business language, cover the 2-3 strongest and weakest capabilities, and end with a single recommended 90-day focus. Avoid technical jargon.",
         },
         {
           title: "Board-level narrative",
-          body: "What is the story this assessment tells about the customer's observability posture, framed for a board or leadership conversation? Compare the Coverage and Maturity scores to a healthy enterprise Dynatrace adoption, call out investment vs. underinvestment, and give me 3 talking points the champion can take upward.",
+          body: "What is the story this assessment tells about the customer's observability posture, framed for a board or leadership conversation? Compare the Coverage and Utilization scores to a healthy enterprise Dynatrace adoption, call out investment vs. underinvestment, and give me 3 talking points the champion can take upward.",
         },
       ],
     },
@@ -99,7 +99,7 @@ export const PAGE_STARTERS: Record<AssistPage, StarterGroup[]> = {
         },
         {
           title: "Summarise progress for a status update",
-          body: "What are the key points for a short progress update I can send to the customer, summarising how their observability coverage and maturity changed between these two snapshots? Please lead with the wins, acknowledge any regressions honestly, and end with the recommended next focus.",
+          body: "What are the key points for a short progress update I can send to the customer, summarising how their observability coverage and utilization changed between these two snapshots? Please lead with the wins, acknowledge any regressions honestly, and end with the recommended next focus.",
         },
         {
           title: "What regressed and why?",
@@ -120,7 +120,7 @@ export const TEAM_REPORTS: StarterGroup[] = [
     starters: [
       {
         title: "CIO one-pager",
-        body: "What should I include in a one-page executive briefing for a CIO about this assessment? Please open with overall Coverage and Maturity in plain language, then cover 3 short sections: what's strong, what's at risk, and the recommended 90-day investment. Short paragraphs and a few bullet points, no jargon.",
+        body: "What should I include in a one-page executive briefing for a CIO about this assessment? Please open with overall Coverage and Utilization in plain language, then cover 3 short sections: what's strong, what's at risk, and the recommended 90-day investment. Short paragraphs and a few bullet points, no jargon.",
       },
       {
         title: "Board talking points",
