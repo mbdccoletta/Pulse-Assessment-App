@@ -110,7 +110,7 @@ export interface PerfReport {
 
   /** Identifies the runtime context. */
   environment: {
-    /** The short tenant identifier (e.g. "bwm98081"). */
+    /** The short tenant identifier (e.g. "abc12345"). */
     tenant: string;
     /** Date as YYYY-MM-DD on which the run started. */
     date: string;

@@ -12,7 +12,7 @@
 //   - EXCLUDED when none does (never faked, never counted as a failure —
 //     they leave the scoring denominator entirely).
 //
-// Fidelity was validated side-by-side on bwm98081 (which has both spans
+// Fidelity was validated side-by-side on a reference tenant (which has both spans
 // and metrics, 97 services, 2h window):
 //   a1  traced services      spans 83  vs request-metric services 90  (Δ+7pts)
 //   a3  root-span services   spans 75  vs request-metric services 90  (Δ+15, same band)

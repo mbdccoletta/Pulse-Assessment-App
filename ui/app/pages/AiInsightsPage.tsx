@@ -47,7 +47,7 @@ interface Props {
   isDev: boolean;
 }
 
-/** Map maturity level number → human label + accent token. */
+/** Map utilization level number → human label + accent token. */
 function levelMeta(level: 0 | 1 | 2 | 3): { label: string; color: string } {
   switch (level) {
     case 0: return { label: "L0 · Not Adopted", color: Colors.Text.Critical.Default };
@@ -266,7 +266,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale, isDev }) 
                     padding: "2px 8px", borderRadius: 4,
                     background: accent + "15", color: accent,
                   }}>
-                    Maturity {cap.maturity.maturityScore}
+                    Utilization {cap.maturity.maturityScore}
                   </Text>
                 </Flex>
               </Flex>

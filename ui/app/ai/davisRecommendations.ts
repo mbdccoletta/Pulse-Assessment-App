@@ -68,7 +68,7 @@ export interface DavisError {
 }
 
 /** Convert any thrown error into a structured DavisError. */
-function classifyError(err: unknown): DavisError {
+export function classifyError(err: unknown): DavisError {
   // SDK errors carry response.status and body.
   const e = err as {
     response?: { status?: number };

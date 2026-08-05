@@ -29,7 +29,7 @@ function isEntitlementError(detail: string): boolean {
 }
 
 /** Dev-only simulation of a tenant without Traces on Grail, so Trace Proxy
- *  Mode can be tested on bwm98081 (which HAS spans). Never active outside
+ *  Mode can be tested on any tenant (which HAS spans). Never active outside
  *  the dev environment — a customer tenant cannot trip this. */
 function simulateNoTraces(): boolean {
   if (!isDevEnvironment()) return false;

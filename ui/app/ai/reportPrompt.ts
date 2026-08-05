@@ -106,7 +106,7 @@ export function buildAssessmentContext(ctx: ReportContext): string {
   return (
     `I just ran a Dynatrace observability coverage assessment (Pulse ` +
     `Assessment app) for a customer, tenant ${ctx.tenant}, on ${ctx.date}. ` +
-    `Overall coverage is ${ctx.overallCoverage}% and overall maturity is ` +
+    `Overall coverage is ${ctx.overallCoverage}% and overall utilization is ` +
     `${ctx.overallMaturity}/100. The capability scores are:\n${capLines}` +
     (ctx.comparisonNote
       ? `\nChange since the previous snapshot:\n${clamp(ctx.comparisonNote, 900)}`
@@ -153,7 +153,7 @@ export function buildReportPrompt(ctx: ReportContext, userPrompt: string): Repor
     `Settings > Cloud and virtualization > AWS, add the connection so logs carry ` +
     `the cloud.region attribute". Name the actual UI path, integration, or attribute.\n` +
     `- State the expected outcome in plain numbers (e.g. "this should lift ` +
-    `Infrastructure coverage by about 4 points and move it from L1 to L2").\n` +
+    `Infrastructure coverage by about 4% and move it from L1 to L2").\n` +
     `- Prefer worked examples over abstract advice.\n\n` +
     `Avoid code fences and emoji. Aim for a complete answer — do not truncate. ` +
     `If the user's request implies a specific length or format (executive summary, ` +

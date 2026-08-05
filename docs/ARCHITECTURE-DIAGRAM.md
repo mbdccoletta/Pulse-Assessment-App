@@ -314,7 +314,7 @@ flowchart TD
     style K fill:#10B981,color:#fff
 ```
 
-**Numeros reais (v2.5.3, bwm98081)**:
+**Numeros reais (v2.5.3, reference tenant)**:
 - Cold run: 113 queries executadas, ~173 GB scanned, $1.05-$1.61
 - Warm run (cache 100%): 113/113 cached, 0 GB scanned, $0
 - Score: identico nos dois casos

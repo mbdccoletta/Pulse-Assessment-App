@@ -73,27 +73,53 @@ export interface OpenAssistOptions {
   extraContext?: string;
 }
 
+/** Why an intent could not be dispatched, in words the UI can show. */
+export interface AssistIntentError {
+  message: string;
+  hint: string;
+}
+
 /**
  * Open the native Dynatrace Assist with a conversation starter.
- * Fire-and-forget: the platform renders the Assist modal; follow-ups,
- * history, and (future) agentic execution are handled natively.
+ * The platform renders the Assist modal; follow-ups, history, and (future)
+ * agentic execution are handled natively.
+ *
+ * Returns null on success, or a describable error. The common failure is
+ * running under `dt-app dev`: the local dev server hosts the app DETACHED
+ * from the Dynatrace shell, and intents require the embedded runtime —
+ * so this only works on a deployed app inside the platform UI.
  */
-export function openDynatraceAssist({ prompt, ctx, execute = false, extraContext }: OpenAssistOptions): void {
+export function openDynatraceAssist({ prompt, ctx, execute = false, extraContext }: OpenAssistOptions): AssistIntentError | null {
   const supplementary =
     buildAssessmentContext(ctx) + (extraContext ? `\n\n${extraContext}` : "");
-  sendIntent(
-    {
-      prompt: prompt.slice(0, 10_000),
-      execute,
-      contexts: [
-        { type: "supplementary", value: supplementary.slice(0, 100_000) },
-        { type: "instruction", value: ASSIST_INSTRUCTION.slice(0, 2_500) },
-        { type: "document-retrieval", value: "dynatrace" },
-        { type: "origin-app", value: ORIGIN_APP_ID },
-      ],
-    },
-    { recommendedAppId: DAVIS_COPILOT_APP_ID, recommendedIntentId: ASK_QUESTION_INTENT_ID },
-  );
+  try {
+    sendIntent(
+      {
+        prompt: prompt.slice(0, 10_000),
+        execute,
+        contexts: [
+          { type: "supplementary", value: supplementary.slice(0, 100_000) },
+          { type: "instruction", value: ASSIST_INSTRUCTION.slice(0, 2_500) },
+          { type: "document-retrieval", value: "dynatrace" },
+          { type: "origin-app", value: ORIGIN_APP_ID },
+        ],
+      },
+      { recommendedAppId: DAVIS_COPILOT_APP_ID, recommendedIntentId: ASK_QUESTION_INTENT_ID },
+    );
+    return null;
+  } catch (err) {
+    const message = (err as Error)?.message ?? String(err);
+    if (/detached/i.test(message)) {
+      return {
+        message: "Intents are not available on the local dev server.",
+        hint: "The app runs detached from the Dynatrace shell under `dt-app dev`, and intents need the embedded runtime. Use Generate PDF here, or open the deployed app in the tenant to hand the question to Assist.",
+      };
+    }
+    return {
+      message: message.slice(0, 200),
+      hint: "The intent could not be dispatched to the Dynatrace Assist app.",
+    };
+  }
 }
 
 /**

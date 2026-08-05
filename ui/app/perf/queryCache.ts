@@ -4,7 +4,7 @@
 //
 // Why a cache ────────────────────────────────────────────────────────────
 // Pulse Assessment runs the same ~110 DQL queries every time the user opens
-// the app or clicks Refresh. On the bwm98081 baseline that's $1.61 of DPS
+// the app or clicks Refresh. On the reference baseline that's $1.61 of DPS
 // per click; at 80k hosts in xLarge mode it's $34. Users routinely run the
 // assessment multiple times a day to track progress on remediations or to
 // re-export the PDF. Each re-run scans the same logs/spans/events as the

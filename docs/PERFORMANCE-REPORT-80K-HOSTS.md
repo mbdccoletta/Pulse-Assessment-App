@@ -1,8 +1,8 @@
 # Pulse Assessment — Performance Report for xlarge Production (80k hosts)
 
 **Date:** 2026-05-22
-**Author:** Marcelo Coletta — `marcelo.coletta@dynatrace.com`
-**Method:** Stress test on `bwm98081` (54 hosts / 82 services / 737 processes) using a 27-query representative sample (out of 107 unique queries), then linear extrapolation to 80,000 hosts.
+**Author:** Marcelo Coletta
+**Method:** Stress test on `<reference-tenant>` (54 hosts / 82 services / 737 processes) using a 27-query representative sample (out of 107 unique queries), then linear extrapolation to 80,000 hosts.
 **App version under test:** Pulse Assessment v2.4.2
 
 ---
@@ -11,7 +11,7 @@
 
 | Scenario | Total scanned | DPS cost (≈) | Verdict |
 |---|---:|---:|---|
-| Measured @ bwm98081 (54 hosts) | 122 GB | $0.79 – $1.22 | ✅ Viable, matches README baseline (~142 GB) |
+| Measured @ reference tenant (54 hosts) | 122 GB | $0.79 – $1.22 | ✅ Viable, matches README baseline (~142 GB) |
 | **Extrapolated @ 80k hosts** | **~176 TB** | **$1,170 – $1,800** | 🔴 **Not viable in current form** |
 
 **Bottom line:** The app code is **already well-engineered** for its target scale — queries are correctly deduplicated (107 unique from 201 raw), concurrency is capped (`CONCURRENCY = 10`), filter columns are ordered cost-optimally, and aggregations are bounded. The 80k-host cost wall is therefore **structural to the problem domain**, not an implementation defect: any DQL-based assessment that needs ground-truth `countDistinct(...)` over all log/span records in a 2-hour window will scan ingest-proportional volume.
@@ -31,9 +31,9 @@ Three additional mitigations would drop cost to ~$32/run but **change measured v
 
 ### Target environment characterization (not available)
 
-The "xlarge production environment" with **~80,000 hosts** and **thousands of services** could not be tested directly. The MCP gateway is connected to `bwm98081`, which has:
+The "xlarge production environment" with **~80,000 hosts** and **thousands of services** could not be tested directly. The MCP gateway is connected to `<reference-tenant>`, which has:
 
-| Entity | Count @ bwm98081 |
+| Entity | Count @ reference tenant |
 |---|---:|
 | Hosts | 54 |
 | Services | 82 |

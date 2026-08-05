@@ -18,16 +18,18 @@ import { ExpandableChartModal, ExpandChartButton } from "../components/Expandabl
 import { ScaleTierBanner } from "../components/ScaleTierBanner";
 import { DpsCostBadge } from "../components/DpsCostBadge";
 import type { UseScaleTierResult } from "../hooks/useScaleTier";
-import { useDavisRecommendations } from "../hooks/useDavisRecommendations";
-import { AiReportModal } from "../components/AiReportModal";
+import { useDavisRecommendations, type DavisRecommendationMap, type DavisRecommendationState } from "../hooks/useDavisRecommendations";
+import { useAppAdoption } from "../hooks/useAppAdoption";
+import { DavisInsightSection } from "../components/DavisInsightSection";
 import { CAPABILITIES } from "../queries";
 import { CAP_SUMMARIES } from "../data/capSummaries";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
 import { CRITERION_REMEDIATION } from "../data/criterionRemediation";
 import { APP_ICON } from "../data/appIcon";
 import { APP_VERSION } from "../appVersion";
-import { type ReportLang } from "../reports/reportI18n";
-import { generateFirstDayReport } from "../reports/generateFirstDayReport";
+import { generatePersonaReport, type ReportPersona, type PersonaLang } from "../reports/personaReports";
+import { CustomReportModal, type CustomReportRequest } from "../components/CustomReportModal";
+import { SmartReportModal } from "../components/SmartReportModal";
 import { usePreflight, type PreflightCheck } from "../hooks/usePreflight";
 import { applyTraceProxyMode } from "../trace-proxy";
 import { TraceProxyBanner } from "../components/TraceProxyBanner";
@@ -116,8 +118,10 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   const wasLoadingRef = useRef(false);
   const [excludedCaps, setExcludedCaps] = useState<Set<string>>(new Set());
   const [showGuide, setShowGuide] = useState(false);
-  /** AI Report modal — replaces the old First Day Results language picker. */
-  const [showReportModal, setShowReportModal] = useState(false);
+  /** Dynamic report builder — user-composed sections/capabilities/language. */
+  const [showCustomReport, setShowCustomReport] = useState(false);
+  /** Smart report via Dynatrace Assist — dev-only, like every AI surface. */
+  const [showSmartReport, setShowSmartReport] = useState(false);
 
   // Davis CoPilot dynamic recommendations — DEV ONLY. The Davis surface
   // (AI Insights, Generate Report, in-card AI section, /ai-insights page)
@@ -125,6 +129,23 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   // localStorage.cca.dev is set. enabled=isDev keeps the hook idle so no
   // SDK calls fire from the production tenant.
   const davisHandle = useDavisRecommendations(capabilities, { enabled: !!isDev });
+
+  /** Platform adoption — how many people actually open the apps serving
+   *  each capability. Loads once results exist; reported next to coverage
+   *  and in the reports, and never folded into a score. */
+  const adoption = useAppAdoption(capabilities.length > 0);
+
+  /** Explain — reveals the AI section inside the capability card (dev-only;
+   *  the card chip only renders when this handler is passed down).
+   *
+   *  It does NOT call Davis. The card opens showing the "Generate insight"
+   *  button, and only that explicit second click spends quota — no AI
+   *  request ever fires without the user asking for it. */
+  const explainCapability = useCallback((capName: string) => {
+    const idx = capabilities.findIndex(c => c.name === capName);
+    if (idx < 0) return;
+    setActiveIdx(idx);
+  }, [capabilities]);
 
   const toggleCap = useCallback((name: string) => {
     setExcludedCaps(prev => {
@@ -173,18 +194,61 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   const dk = useCurrentTheme() === "dark";
 
 
-  /* ── First Day Results Report (Value & Impact) ── */
-  const generateClientReport = useCallback((lang: ReportLang = "en") => {
+  /* ── Persona reports (Executive / Tactical / Technical) ── */
+  const generatePersona = useCallback((persona: ReportPersona, lang: PersonaLang) => {
     if (exporting || capabilities.length === 0) return;
     setExporting(true);
     setTimeout(() => {
       try {
-        generateFirstDayReport({ capabilities, totalScore, tenant, date, stats, entityCounts }, lang);
+        generatePersonaReport(persona, {
+          capabilities,
+          totalScore,
+          overallMaturityLevel,
+          tenant,
+          date,
+          stats,
+          entityCounts: entityCounts
+            ? { hosts: entityCounts.hosts, services: entityCounts.services, applications: entityCounts.applications, k8sClusters: entityCounts.k8sClusters }
+            : null,
+          history: history.snapshots.map(s => ({ timestamp: s.timestamp, totalScore: s.totalScore })),
+          adoption: adoption.unavailable ? undefined : { windowDays: adoption.windowDays, totalUsers: adoption.totalUsers, byCapability: adoption.byCapability },
+        }, lang);
       } finally {
         setExporting(false);
       }
     }, 0);
-  }, [capabilities, exporting, tenant, date, stats, entityCounts, totalScore]);
+  }, [capabilities, exporting, totalScore, overallMaturityLevel, tenant, date, stats, entityCounts, history.snapshots]);
+
+  /* ── Dynamic report: user-composed sections/capabilities/language ── */
+  const generateCustomReport = useCallback((req: CustomReportRequest) => {
+    if (exporting || capabilities.length === 0) return;
+    const selected = capabilities.filter(c => req.caps.includes(c.name));
+    if (selected.length === 0) return;
+    // Totals recomputed over the SELECTED capabilities so a report scoped
+    // to e.g. 3 pillars doesn't inherit the 9-pillar averages.
+    const scopedScore = Math.round(selected.reduce((s, c) => s + c.score, 0) / selected.length);
+    const scopedUtilization = Math.round(selected.reduce((s, c) => s + c.effectiveMaturityScore, 0) / selected.length);
+    setExporting(true);
+    setTimeout(() => {
+      try {
+        generatePersonaReport("custom", {
+          capabilities: selected,
+          totalScore: scopedScore,
+          overallMaturityLevel: scopedUtilization,
+          tenant,
+          date,
+          stats,
+          entityCounts: entityCounts
+            ? { hosts: entityCounts.hosts, services: entityCounts.services, applications: entityCounts.applications, k8sClusters: entityCounts.k8sClusters }
+            : null,
+          history: history.snapshots.map(s => ({ timestamp: s.timestamp, totalScore: s.totalScore })),
+          adoption: adoption.unavailable ? undefined : { windowDays: adoption.windowDays, totalUsers: adoption.totalUsers, byCapability: adoption.byCapability },
+        }, req.lang, { title: req.title, sections: req.sections });
+      } finally {
+        setExporting(false);
+      }
+    }, 0);
+  }, [capabilities, exporting, tenant, date, stats, entityCounts, history.snapshots]);
 
   // Save snapshot only when an assessment run finishes (loading transitions true → false).
   // In demo mode we DELIBERATELY skip the save: canned scenario values would
@@ -302,7 +366,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
             onEnableProxyMode={() => setTraceProxyMode(true)}
             totalScore={totalScore} hasResults={capabilities.length > 0}
             exporting={exporting}
-            onGenerateReport={(lang: ReportLang) => generateClientReport(lang)}
+            onGeneratePersona={generatePersona}
+            onOpenCustomReport={() => setShowCustomReport(true)}
+            onOpenSmartReport={isDev ? () => setShowSmartReport(true) : undefined}
             selectedCount={CAPABILITIES.length - excludedCaps.size}
             totalCount={CAPABILITIES.length}
             consolidation={consolidation}
@@ -390,7 +456,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
             <Flex flexDirection="column" onClick={(e) => e.stopPropagation()} style={{ marginLeft: 4 }}>
               <ToggleButtonGroup value={viewMode} onChange={(val: string) => setViewMode(val as ViewMode)}>
                 <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
-                <ToggleButtonGroupItem value="maturity">Maturity</ToggleButtonGroupItem>
+                <ToggleButtonGroupItem value="maturity">Utilization</ToggleButtonGroupItem>
                 <ToggleButtonGroupItem value="recommendations">Executive Summary</ToggleButtonGroupItem>
               </ToggleButtonGroup>
             </Flex>
@@ -407,9 +473,11 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 </Button.Suffix>
               )}
             </Button>
-            {/* Production: Reports — static First Day Results PDF in EN/PT/ES.
-                The customer tenant never sees Davis-powered surfaces. */}
-            {!isDev && (
+            {/* Reports — persona PDFs (Executive / Tactical / Technical)
+                and the Custom builder are client-side jsPDF and ship to
+                every tenant. The Smart (Assist) item is the ONLY
+                Davis-powered entry and stays dev-only. */}
+            {(
               <Menu>
                 <Menu.Trigger>
                   <Button loading={exporting} size="condensed">
@@ -417,34 +485,26 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                   </Button>
                 </Menu.Trigger>
                 <Menu.Content>
-                  <Menu.Item onSelect={() => generateClientReport("en")}>Download English (EN)</Menu.Item>
-                  <Menu.Item onSelect={() => generateClientReport("pt")}>Download Portugues (PT)</Menu.Item>
-                  <Menu.Item onSelect={() => generateClientReport("es")}>Download Espanol (ES)</Menu.Item>
+                  {([
+                    ["executive", "Executive"],
+                    ["tactical", "Tactical"],
+                    ["technical", "Technical"],
+                  ] as [ReportPersona, string][]).map(([p, label]) => (
+                    <Menu.Sub key={p}>
+                      <Menu.SubTrigger>{label}</Menu.SubTrigger>
+                      <Menu.SubContent>
+                        <Menu.Item onSelect={() => generatePersona(p, "en")}>English (EN)</Menu.Item>
+                        <Menu.Item onSelect={() => generatePersona(p, "pt")}>Portugues (PT)</Menu.Item>
+                        <Menu.Item onSelect={() => generatePersona(p, "es")}>Espanol (ES)</Menu.Item>
+                      </Menu.SubContent>
+                    </Menu.Sub>
+                  ))}
+                  {isDev && (
+                    <Menu.Item onSelect={() => setShowSmartReport(true)}>Smart (Assist)…</Menu.Item>
+                  )}
+                  <Menu.Item onSelect={() => setShowCustomReport(true)}>Custom…</Menu.Item>
                 </Menu.Content>
               </Menu>
-            )}
-            {/* Dev only: Davis-powered Assist. Opens advanced prompts for
-                opportunities, action priorities, executive (coverage &
-                maturity) and technical reports. */}
-            {isDev && (
-              <Button
-                size="condensed"
-                variant="emphasized"
-                color="primary"
-                onClick={() => setShowReportModal(true)}
-                aria-label="Open Assist — Davis CoPilot advanced prompts for this assessment"
-              >
-                Assist
-              </Button>
-            )}
-            {isDev && (
-              <Button
-                size="condensed"
-                onClick={() => navigate("/projects")}
-                aria-label="Open assessment-grounded objectives"
-              >
-                Objectives
-              </Button>
             )}
             <Text style={{ marginLeft: "auto", fontSize: 12, color: textSec }}>
               Tenant: <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
@@ -554,12 +614,12 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? "50vh" : undefined,
             }}>
-              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={isDev ? davisHandle.byCapability : undefined} onSendFollowUp={isDev ? davisHandle.sendFollowUp : undefined} onRequestInsight={isDev ? davisHandle.requestInsight : undefined} />
+              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={isDev ? davisHandle.byCapability : undefined} onSendFollowUp={isDev ? davisHandle.sendFollowUp : undefined} onRequestInsight={isDev ? davisHandle.requestInsight : undefined} onExplain={isDev ? explainCapability : undefined} />
             </Flex>
           </>) : viewMode === "maturity" ? (
-            <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} isMobile={isMobile} />
+            <MaturityView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} isMobile={isMobile} adoptionByCapability={adoption.unavailable ? undefined : adoption.byCapability} adoptionTotalUsers={adoption.totalUsers} davisRecommendations={isDev ? davisHandle.byCapability : undefined} onSendFollowUp={isDev ? davisHandle.sendFollowUp : undefined} onRequestInsight={isDev ? davisHandle.requestInsight : undefined} onExplain={isDev ? () => { /* card expands itself; no Davis call here */ } : undefined} />
           ) : (
-            <RecommendationsView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} totalScore={totalScore} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} history={history} onDrilldown={setViewMode} onRadarMount={(h) => { radarHandleRef.current = h; }} isMobile={isMobile} />
+            <RecommendationsView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} totalScore={totalScore} overallMaturityLevel={overallMaturityLevel} collapseKey={collapseKey} history={history} onDrilldown={setViewMode} onRadarMount={(h) => { radarHandleRef.current = h; }} isMobile={isMobile} adoption={adoption.unavailable ? undefined : { byCapability: adoption.byCapability, totalUsers: adoption.totalUsers, windowDays: adoption.windowDays }} />
           )}
           </Flex>
 
@@ -569,7 +629,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
             <Flex alignItems="center" gap={6} style={{ padding: "6px 20px", cursor: "pointer", userSelect: "none" }}
               onClick={(e) => { e.stopPropagation(); setShowGuide(g => !g); }}>
               <Text style={{ fontSize: 12, fontWeight: 800, color: text, letterSpacing: 0.2 }}>
-                How to Analyze — {viewMode === "coverage" ? "Coverage" : "Maturity"} View
+                How to Analyze — {viewMode === "coverage" ? "Coverage" : "Utilization"} View
               </Text>
               <Text style={{ fontSize: 10, color: textSec, transition: "transform 0.2s", transform: showGuide ? "rotate(180deg)" : "rotate(0deg)" }}>▼</Text>
             </Flex>
@@ -646,7 +706,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               }}>
                 <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>What You're Seeing</Flex>
                 <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
-                  Each card shows a <Strong style={{ color: text }}>weighted maturity score</Strong> (0–100%) per capability. The score combines three tiers: <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation</Strong> (60% weight), <Strong style={{ color: Colors.Charts.Status.Warning.Default }}>Best Practice</Strong> (25%), and <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}>Excellence</Strong> (15%). Cards are sorted from lowest to highest maturity.
+                  Each card shows a <Strong style={{ color: text }}>weighted Utilization score</Strong> (0–100%) per capability. The score combines three tiers: <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation</Strong> (60% weight), <Strong style={{ color: Colors.Charts.Status.Warning.Default }}>Best Practice</Strong> (25%), and <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}>Excellence</Strong> (15%). Cards are sorted from lowest to highest Utilization.
                 </Text>
               </Flex>
 
@@ -659,7 +719,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.65 }}>
                   <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation (60%)</Strong> — the essentials (hosts, services, basic data flow).
                   <Strong style={{ color: Colors.Charts.Status.Warning.Default }}> Best Practice (25%)</Strong> — deeper adoption (trace correlation, advanced metrics).
-                  <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}> Excellence (15%)</Strong> — advanced maturity (multi-service traces, guardrails, cost tracking).
+                  <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}> Excellence (15%)</Strong> — advanced Utilization (multi-service traces, guardrails, cost tracking).
                 </Text>
               </Flex>
 
@@ -668,13 +728,13 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                 border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
               }}>
-                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Maturity Bands</Flex>
+                <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Utilization Bands</Flex>
                 <Flex flexDirection="column" gap={4} style={{ fontSize: 12, lineHeight: 1.6 }}>
                   <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Status.Critical.Default, fontWeight: 700 }}>N/A</Text> <Text style={{ color: textSec }}>0–19% — Minimal or no adoption</Text></Flex>
                   <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Categorical.Color14.Default, fontWeight: 700 }}>Low</Text> <Text style={{ color: textSec }}>20–39% — Early stage, significant gaps</Text></Flex>
                   <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Status.Warning.Default, fontWeight: 700 }}>Moderate</Text> <Text style={{ color: textSec }}>40–59% — Partial adoption, key areas configured</Text></Flex>
                   <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Categorical.Color07.Default, fontWeight: 700 }}>Good</Text> <Text style={{ color: textSec }}>60–79% — Strong adoption, room to optimize</Text></Flex>
-                  <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Status.Ideal.Default, fontWeight: 700 }}>Excellent</Text> <Text style={{ color: textSec }}>80–100% — Comprehensive maturity</Text></Flex>
+                  <Flex alignItems="center" gap={4}><Text style={{ color: Colors.Charts.Status.Ideal.Default, fontWeight: 700 }}>Excellent</Text> <Text style={{ color: textSec }}>80–100% — Comprehensive Utilization</Text></Flex>
                 </Flex>
               </Flex>
 
@@ -705,12 +765,21 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
         </Flex>
       )}
 
-      {/* AI Report Modal — dev only. Not mounted in production. */}
+      {/* Dynamic report builder — production surface, pure client-side. */}
+      <CustomReportModal
+        open={showCustomReport}
+        onClose={() => setShowCustomReport(false)}
+        capabilityNames={capabilities.map(c => c.name)}
+        onGenerate={generateCustomReport}
+        dk={dk}
+      />
+
+      {/* Smart report via Dynatrace Assist — dev only, never mounted in
+          production. Reached from the Reports menu. */}
       {isDev && (
-        <AiReportModal
-          show={showReportModal}
-          onDismiss={() => setShowReportModal(false)}
-          page={viewMode === "maturity" ? "maturity" : viewMode === "recommendations" ? "executive" : "coverage"}
+        <SmartReportModal
+          open={showSmartReport}
+          onClose={() => setShowSmartReport(false)}
           ctx={{
             tenant: tenant ?? "(unknown)",
             date: date ?? "",
@@ -718,6 +787,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
             overallMaturity: overallMaturityLevel,
             capabilities,
           }}
+          dk={dk}
         />
       )}
 
@@ -725,7 +795,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   );
 };
 
-/* ── MATURITY VIEW ── */
+/* ── UTILIZATION VIEW ── */
 const maturityAnimStyle = `
 @keyframes matFadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes matBarFill { from { width: 0%; } }
@@ -733,10 +803,20 @@ const maturityAnimStyle = `
 @keyframes matCountUp { from { opacity: 0; } to { opacity: 1; } }
 `;
 
-function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturityLevel, collapseKey, isMobile }: {
+function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturityLevel, collapseKey, isMobile, davisRecommendations, onSendFollowUp, onRequestInsight, onExplain, adoptionByCapability, adoptionTotalUsers }: {
   capabilities: CapabilityResult[];
   dk: boolean; text: string; textSec: string; textTert: string;
   overallMaturityLevel: number; collapseKey: number; isMobile: boolean;
+  /** Davis surfaces — provided only in dev, like on the coverage cards. */
+  davisRecommendations?: DavisRecommendationMap;
+  onSendFollowUp?: (capabilityName: string, text: string) => Promise<void>;
+  onRequestInsight?: (capabilityName: string) => Promise<void>;
+  onExplain?: (capabilityName: string) => void;
+  /** Active users per capability (see ../hooks/useAppAdoption). */
+  adoptionByCapability?: Record<string, { users: number; rate: number; apps: { appId: string; users: number }[] }>;
+  /** Active users across the whole platform — the denominator behind each
+   *  capability's adoption rate. */
+  adoptionTotalUsers?: number;
 }) {
   const matBand = sharedBandLabel(overallMaturityLevel);
   const matColor = maturityBandColor(overallMaturityLevel);
@@ -771,7 +851,7 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
 
         {/* Overall bar */}
         <Flex flexDirection="column" gap={4} style={{ flex: 1 }}>
-          <Text style={{ fontSize: 12, fontWeight: 600, color: textSec, letterSpacing: 0.5 }}>Overall Maturity Level</Text>
+          <Text style={{ fontSize: 12, fontWeight: 600, color: textSec, letterSpacing: 0.5 }}>Overall Utilization Level</Text>
           <Flex flexDirection="column" style={{ height: 8, borderRadius: 4, overflow: "hidden", background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}>
             <Flex flexDirection="column" style={{
               height: "100%", borderRadius: 4,
@@ -809,7 +889,7 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
       <Grid gridTemplateColumns={`repeat(auto-fill, minmax(${isMobile ? "260px" : "340px"}, 1fr))`} gap={16}>
         {sorted.map((cap, i) => (
           <Flex flexDirection="column" key={cap.name} style={{ animation: `matFadeUp 0.4s ease both ${0.15 + i * 0.06}s` }}>
-            <MaturityCard cap={cap} dk={dk} text={text} textSec={textSec} textTert={textTert} collapseKey={collapseKey} />
+            <MaturityCard cap={cap} dk={dk} text={text} textSec={textSec} textTert={textTert} collapseKey={collapseKey} davisState={davisRecommendations?.[cap.name]} onSendFollowUp={onSendFollowUp} onRequestInsight={onRequestInsight} onExplain={onExplain} adoption={adoptionByCapability ? { users: adoptionByCapability[cap.name]?.users ?? 0, rate: adoptionByCapability[cap.name]?.rate ?? 0, totalUsers: adoptionTotalUsers ?? 0, apps: adoptionByCapability[cap.name]?.apps ?? [] } : undefined} />
           </Flex>
         ))}
       </Grid>
@@ -823,7 +903,7 @@ function MaturityView({ capabilities, dk, text, textSec, textTert, overallMaturi
       }}>
         <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: text, marginBottom: 6 }}>Suggested Approach</Flex>
         <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.7 }}>
-          <Strong style={{ color: text }}>1.</Strong> Identify capabilities with <Strong style={{ color: Colors.Text.Critical.Default }}>low maturity scores</Strong> — these need the most attention.{" "}
+          <Strong style={{ color: text }}>1.</Strong> Identify capabilities with <Strong style={{ color: Colors.Text.Critical.Default }}>low Utilization scores</Strong> — these need the most attention.{" "}
           <Strong style={{ color: text }}>2.</Strong> For each, complete the <Strong style={{ color: Colors.Charts.Categorical.Color01.Default }}>Foundation</Strong> tier first — it carries <Strong style={{ color: text }}>60% weight</Strong>.{" "}
           <Strong style={{ color: text }}>3.</Strong> Then advance to <Strong style={{ color: Colors.Charts.Status.Warning.Default }}>Best Practice</Strong> (25% weight) and <Strong style={{ color: Colors.Charts.Status.Ideal.Default }}>Excellence</Strong> (15% weight).{" "}
           <Strong style={{ color: text }}>4.</Strong> Click any card to see <Strong style={{ color: text }}>which specific criteria</Strong> are missing in each tier.
@@ -849,7 +929,7 @@ const recAnimStyle = `
 }
 `;
 
-function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalScore, overallMaturityLevel, collapseKey, history, onDrilldown, onRadarMount, isMobile }: {
+function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalScore, overallMaturityLevel, collapseKey, history, onDrilldown, onRadarMount, isMobile, adoption }: {
   capabilities: CapabilityResult[];
   dk: boolean; text: string; textSec: string; textTert: string;
   totalScore: number; overallMaturityLevel: number; collapseKey: number;
@@ -857,6 +937,13 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   onDrilldown: (mode: ViewMode) => void;
   onRadarMount: (handle: CovMatRadarHandle | null) => void;
   isMobile: boolean;
+  /** Who actually opens the apps behind each capability. Absent when the
+   *  adoption query is unavailable on this tenant. */
+  adoption?: {
+    byCapability: Record<string, { users: number; rate: number }>;
+    totalUsers: number;
+    windowDays: number;
+  };
 }) {
   const borderSub = dk ? "rgba(91,106,207,0.25)" : "rgba(0,0,0,0.08)";
   const card = dk ? "rgba(20,22,40,0.85)" : "rgba(248,249,252,0.9)";
@@ -865,8 +952,20 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   const MAT_C = Colors.Charts.Categorical.Color08.Default;
   const covBandC = maturityBandColor(totalScore);
   const matBandC = maturityBandColor(overallMaturityLevel);
+  const adoptionC = Colors.Charts.Categorical.Color12.Default;
   const labelC = Colors.Text.Neutral.Subdued;
   const bandLabel = sharedBandLabel;
+
+  // Adoption headline: the average share of active platform users who open an
+  // app serving a given capability. Coverage says the data is there and
+  // Utilization says it is used deeply; this says whether anyone is looking.
+  const adoptionPct = useMemo(() => {
+    if (!adoption || adoption.totalUsers === 0) return null;
+    const rates = capabilities.map(c => adoption.byCapability[c.name]?.rate ?? 0);
+    if (rates.length === 0) return null;
+    return Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
+  }, [adoption, capabilities]);
+
 
   // ── Criterion → Tier map ──
   const tierMap = useMemo(() => {
@@ -956,7 +1055,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
         Executive Summary
       </Flex>
       <Flex flexDirection="column" style={{ fontSize: 11, color: textSec, marginBottom: 6, lineHeight: 1.4, animation: "recFadeUp 0.3s ease both 0.05s" }}>
-        Overall assessment of observability coverage and maturity across {capabilities.length} capabilities · {totalCriteria} criteria evaluated
+        Overall assessment of observability coverage and Utilization across {capabilities.length} capabilities · {totalCriteria} criteria evaluated
       </Flex>
 
       {/* ═══ SECTION 1: Highlights ═══ */}
@@ -989,11 +1088,11 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
           <Flex style={{ width: 1, height: 24, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 12px", flexShrink: 0 }} />
 
-          {/* Maturity score */}
+          {/* Utilization score */}
           <Flex alignItems="center" gap={8} style={{ flex: "1 1 200px", padding: "2px 0" }}>
             <Flex style={{ width: 3, height: 24, borderRadius: 2, background: matBandC, boxShadow: dk ? `0 0 6px ${matBandC}40` : "none" }} />
             <Flex flexDirection="column">
-              <Text style={{ fontSize: 11, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 0 }}>MATURITY</Text>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 0 }}>UTILIZATION</Text>
               <Flex alignItems="baseline" gap={4}>
                 <Text style={{ fontSize: 20, fontWeight: 900, color: matBandC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{overallMaturityLevel}%</Text>
                 <Text style={{ fontSize: 11, fontWeight: 600, color: matBandC, opacity: 0.8 }}>{bandLabel(overallMaturityLevel)}</Text>
@@ -1006,6 +1105,32 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
             </Flex>
             <MiniBar pct={overallMaturityLevel} color={matBandC} dk={dk} />
           </Flex>
+
+          {/* Adoption — sits beside Utilization because it answers the other
+              half of the same question: the platform is used deeply, but by
+              how much of the team? Never feeds a score. */}
+          {adoptionPct !== null && (
+            <>
+              <Flex style={{ width: 1, height: 24, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 12px", flexShrink: 0 }} />
+              <Flex alignItems="center" gap={8} style={{ flex: "1 1 200px", padding: "2px 0" }}>
+                <Flex style={{ width: 3, height: 24, borderRadius: 2, background: adoptionC, boxShadow: dk ? `0 0 6px ${adoptionC}40` : "none" }} />
+                <Flex flexDirection="column">
+                  <Text style={{ fontSize: 11, fontWeight: 700, color: labelC, letterSpacing: 0.4, marginBottom: 0 }}>ADOPTION</Text>
+                  <Flex alignItems="baseline" gap={4}>
+                    <Text style={{ fontSize: 20, fontWeight: 900, color: adoptionC, fontFamily: "system-ui, sans-serif", lineHeight: 1 }}>{adoptionPct}%</Text>
+                    {/* The headline is an AVERAGE across capabilities, so the
+                        subtext names the population it averages over — pairing
+                        it with a single capability's user count read as a
+                        contradiction. */}
+                    <Text style={{ fontSize: 11, fontWeight: 600, color: labelC }}>
+                      avg · {adoption!.totalUsers} active users · {adoption!.windowDays}d
+                    </Text>
+                  </Flex>
+                </Flex>
+                <MiniBar pct={adoptionPct} color={adoptionC} dk={dk} />
+              </Flex>
+            </>
+          )}
 
           <Flex style={{ width: 1, height: 24, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", margin: "0 12px", flexShrink: 0 }} />
 
@@ -1087,7 +1212,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
               {bestMatCap && bestMatCap.name !== bestCap?.name && (
                 <Flex alignItems="center" justifyContent="space-between" style={{ padding: "3px 10px", borderRadius: 6, background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", borderLeft: bestMatCap.consolidation < 100 ? `2px solid ${Colors.Charts.Status.Warning.Default}` : undefined }}>
                   <Flex alignItems="center" gap={6}>
-                    <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, textTransform: "uppercase" as const, letterSpacing: 0.3 }}>Top Maturity</Text>
+                    <Text style={{ fontSize: 10, fontWeight: 700, color: labelC, textTransform: "uppercase" as const, letterSpacing: 0.3 }}>Top Utilization</Text>
                     <Text style={{ fontSize: 11, fontWeight: 700, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{bestMatCap.name}</Text>
                     {bestMatCap.consolidation < 100 && <Text style={{ fontSize: 9, fontWeight: 600, color: Colors.Charts.Status.Warning.Default }}>{bestMatCap.consolidation}% DT</Text>}
                   </Flex>
@@ -1164,7 +1289,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
 
       {/* ═══ SECTIONS 2 & 3: Charts side by side ═══ */}
       <Flex gap={12} flexWrap="wrap" style={{ marginBottom: 0 }}>
-        {/* ── Combo Bar-Line Chart — Coverage vs Maturity ── */}
+        {/* ── Radar — Coverage only ── */}
         <Flex flexDirection="column" data-rec-card style={{ flex: "1 1 300px", minWidth: 0,
           borderRadius: 12, border: `1px solid ${borderSub}`, background: card,
           padding: "6px 14px 6px",
@@ -1172,19 +1297,19 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
           animation: "recFadeUp 0.4s ease both 0.75s" }}>
           <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
             <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.5 }}>
-              Coverage vs Maturity by Capability
+              Coverage by Capability
             </Flex>
             <ExpandChartButton onClick={() => setExpandedChart("radar")} />
           </Flex>
-          <Flex flexDirection="column" style={{ height: "clamp(260px, 38vh, 400px)", minHeight: 260 }}>
-            <CovMatRadar ref={(h: CovMatRadarHandle | null) => { onRadarMount(h); }} data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.effectiveMaturityScore, color: c.color, rawCoverage: c.consolidation < 100 ? c.rawScore : undefined, rawMaturity: c.consolidation < 100 ? c.maturity.maturityScore : undefined }))} />
+          <Flex flexDirection="column" style={{ height: "clamp(300px, 44vh, 460px)", minHeight: 300 }}>
+            <CovMatRadar coverageOnly ref={(h: CovMatRadarHandle | null) => { onRadarMount(h); }} data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.effectiveMaturityScore, color: c.color, rawCoverage: c.consolidation < 100 ? c.rawScore : undefined, rawMaturity: c.consolidation < 100 ? c.maturity.maturityScore : undefined }))} />
           </Flex>
         </Flex>
 
         {/* ── Expanded Radar Chart Modal ── */}
-        <ExpandableChartModal open={expandedChart === "radar"} onClose={() => setExpandedChart(null)} title="Coverage vs Maturity by Capability">
+        <ExpandableChartModal open={expandedChart === "radar"} onClose={() => setExpandedChart(null)} title="Coverage by Capability">
           <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
-            <CovMatRadar data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.effectiveMaturityScore, color: c.color, rawCoverage: c.consolidation < 100 ? c.rawScore : undefined, rawMaturity: c.consolidation < 100 ? c.maturity.maturityScore : undefined }))} />
+            <CovMatRadar coverageOnly data={sorted.map(c => ({ name: c.name, coverage: c.score, maturity: c.effectiveMaturityScore, color: c.color, rawCoverage: c.consolidation < 100 ? c.rawScore : undefined, rawMaturity: c.consolidation < 100 ? c.maturity.maturityScore : undefined }))} />
           </Flex>
         </ExpandableChartModal>
 
@@ -1196,43 +1321,44 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
           animation: "recFadeUp 0.4s ease both 0.85s" }}>
         <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 4 }}>
           <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: labelC, letterSpacing: 0.5 }}>
-            Capability Map — Coverage × Maturity
+            Capability Map — Coverage × Utilization
           </Flex>
           <ExpandChartButton onClick={() => setExpandedChart("bubble")} />
         </Flex>
-        <Flex flexDirection="column" style={{ height: "clamp(260px, 38vh, 400px)", minHeight: 260 }}>
-          <CapabilityScatter data={scatterPoints} dotRadius={10} showLegend={false} />
+        <Flex flexDirection="column" style={{ height: "clamp(300px, 44vh, 460px)", minHeight: 300 }}>
+          <CapabilityScatter data={scatterPoints} dotRadius={5} />
         </Flex>
       </Flex>
       </Flex>
 
       {/* ── Expanded Scatter Chart Modal ── */}
-      <ExpandableChartModal open={expandedChart === "bubble"} onClose={() => setExpandedChart(null)} title="Capability Map — Coverage × Maturity">
+      <ExpandableChartModal open={expandedChart === "bubble"} onClose={() => setExpandedChart(null)} title="Capability Map — Coverage × Utilization">
         <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
-          <CapabilityScatter data={scatterPoints} dotRadius={12} showLegend={false} />
+          <CapabilityScatter data={scatterPoints} dotRadius={7} />
         </Flex>
       </ExpandableChartModal>
 
-      {/* ═══ Unified Legend ═══ */}
-      <Flex alignItems="center" justifyContent="center" flexWrap="wrap" style={{ gap: "6px 16px", marginBottom: 0, marginTop: 8, padding: "6px 16px",
-        borderRadius: 10, border: `1px solid ${borderSub}`, background: card, boxShadow: cardGlow }}>
-        {/* Capability dots */}
-        {capabilities.map(c => (
-          <Flex key={c.name} alignItems="center" gap={4}>
-            <Flex style={{ width: 9, height: 9, borderRadius: "50%", background: c.color, boxShadow: dk ? `0 0 4px ${c.color}80` : "none" }} />
-            <Text style={{ fontSize: 12, fontWeight: 600, color: labelC }}>{c.name}</Text>
-          </Flex>
-        ))}
-      </Flex>
+      {/* No colour-to-capability legend here: both charts name their
+          capabilities directly — around the radar and on the X axis of the
+          capability map — so the strip only repeated what was already read. */}
 
     </Flex>
   );
 }
 
-/* ── Single Maturity Card ── */
-function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
+/* ── Single Utilization Card ── */
+function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey, davisState, onSendFollowUp, onRequestInsight, onExplain, adoption }: {
   cap: CapabilityResult;
   dk: boolean; text: string; textSec: string; textTert: string; collapseKey: number;
+  /** Davis surfaces — provided only in dev. */
+  davisState?: DavisRecommendationState;
+  onSendFollowUp?: (capabilityName: string, text: string) => Promise<void>;
+  onRequestInsight?: (capabilityName: string) => Promise<void>;
+  onExplain?: (capabilityName: string) => void;
+  /** Platform adoption for this capability: active users, the apps
+   *  behind the number, and the busiest capability's count so the bar
+   *  is comparable across cards. Never scored. */
+  adoption?: { users: number; rate: number; totalUsers: number; apps: { appId: string; users: number }[] };
 }) {
   const [expanded, setExpanded] = useState(false);
   useEffect(() => { setExpanded(false); }, [collapseKey]);
@@ -1254,19 +1380,53 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
       onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 6px 20px ${cap.color}22`; e.currentTarget.style.transform = "translateY(-2px)"; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "translateY(0)"; }}
     >
-      {/* Header */}
-      <Flex alignItems="center" gap={8} style={{ marginBottom: 12 }}>
-        <Text style={{ fontSize: 14, fontWeight: 700, color: text, flex: 1 }}>{cap.name}</Text>
-        <Text style={{
-          fontSize: 12, fontWeight: 800, padding: "2px 12px", borderRadius: 6,
-          background: scoreColor + (dk ? "25" : "15"),
-          color: scoreColor, fontFamily: "system-ui, sans-serif",
-        }}>{effectiveMat}%</Text>
-        <Text style={{
-          fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
-          color: scoreColor, opacity: 0.8,
-        }}>{m.maturityBand}</Text>
-        <Text style={{ fontSize: 12, color: textSec, fontWeight: 600 }}>{expanded ? "▾" : "▸"}</Text>
+      {/* Header — two rows. The capability name owns the full width (long
+          names like "Infrastructure Observability" broke mid-word when they
+          had to share the line), chips sit underneath. */}
+      <Flex flexDirection="column" gap={6} style={{ marginBottom: 12 }}>
+        <Flex alignItems="flex-start" justifyContent="space-between" gap={8}>
+          <Text style={{
+            fontSize: 14, fontWeight: 700, color: text,
+            overflowWrap: "normal", wordBreak: "normal",
+          }}>{cap.name}</Text>
+          <Text style={{ fontSize: 12, color: textSec, fontWeight: 600, flexShrink: 0 }}>{expanded ? "▾" : "▸"}</Text>
+        </Flex>
+        <Flex alignItems="center" gap={6} flexWrap="wrap">
+          {/* Explain — opens the card's AI section (no Davis call until the
+              user presses "Generate insight" inside it). */}
+          {onExplain && (
+            <Text
+              role="button" tabIndex={0}
+              aria-label={`Explain ${cap.name} results`}
+              onClick={(e: React.MouseEvent) => { e.stopPropagation(); setExpanded(true); onExplain(cap.name); }}
+              onKeyDown={(e: React.KeyboardEvent) => {
+                e.stopPropagation();
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded(true); onExplain(cap.name); }
+              }}
+              style={{
+                fontSize: 10, fontWeight: 700, cursor: "pointer",
+                padding: "2px 8px", borderRadius: 6, userSelect: "none",
+                whiteSpace: "nowrap", flexShrink: 0,
+                color: Colors.Text.Primary.Default,
+                background: Colors.Text.Primary.Default + (dk ? "20" : "15"),
+                border: `1px solid ${Colors.Text.Primary.Default}${dk ? "40" : "30"}`,
+              }}
+            >
+              Explain
+            </Text>
+          )}
+          <Text style={{
+            fontSize: 12, fontWeight: 800, padding: "2px 12px", borderRadius: 6,
+            background: scoreColor + (dk ? "25" : "15"),
+            color: scoreColor, fontFamily: "system-ui, sans-serif",
+            whiteSpace: "nowrap", flexShrink: 0,
+          }}>{effectiveMat}%</Text>
+          <Text style={{
+            fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
+            color: scoreColor, opacity: 0.8,
+            whiteSpace: "nowrap", flexShrink: 0,
+          }}>{m.maturityBand}</Text>
+        </Flex>
       </Flex>
 
       {/* Consolidation banner */}
@@ -1327,9 +1487,67 @@ function MaturityCard({ cap, dk, text, textSec, textTert, collapseKey }: {
         );
       })}
 
+      {/* Adoption — the fourth reading on this card: the three tiers above
+          say how deeply the DATA is used; this says how many people open
+          the Dynatrace apps serving this capability. Informational only:
+          it is never part of the Utilization score. */}
+      {adoption && (() => {
+        const users = adoption.users;
+        // Bar = share of ALL active platform users, so every card is read on
+        // the same absolute scale instead of against the busiest one.
+        const pct = adoption.rate;
+        const color = users === 0
+          ? Colors.Charts.Status.Warning.Default
+          : Colors.Charts.Categorical.Color08?.Default ?? Colors.Text.Primary.Default;
+        const appNames = adoption.apps.slice(0, 2).map(a => a.appId).join(", ");
+        return (
+          <Flex flexDirection="column" style={{
+            marginTop: 8, paddingTop: 8,
+            borderTop: `1px solid ${dk ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
+          }}>
+            <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
+              <Text style={{ fontSize: 12, fontWeight: 600, color: textSec }}>
+                Adoption <Text style={{ fontWeight: 400, color: textTert }}>(last 30d)</Text>
+              </Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: users === 0 ? Colors.Charts.Status.Warning.Default : text }}>
+                {users === 0 ? "no users" : `${users} of ${adoption.totalUsers} (${pct}%)`}
+              </Text>
+            </Flex>
+            <Flex flexDirection="column" style={{
+              height: 5, borderRadius: 3, overflow: "hidden",
+              background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+            }}>
+              <Flex flexDirection="column" style={{
+                height: "100%", borderRadius: 3,
+                width: `${users === 0 ? 0 : Math.max(4, pct)}%`,
+                background: color,
+                animation: "matBarFill 0.7s ease both 0.9s",
+              }} />
+            </Flex>
+            <Text style={{ fontSize: 10, color: textTert, marginTop: 3 }}>
+              {users === 0
+                ? "Nobody opened the apps that serve this capability."
+                : appNames
+                  ? `via ${appNames}`
+                  : ""}
+            </Text>
+          </Flex>
+        );
+      })()}
+
       {/* Expanded: show criteria by tier with drilldown */}
       {expanded && (
         <Flex flexDirection="column" style={{ marginTop: 12, borderTop: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingTop: 12 }}>
+          {/* Davis insight first — same placement contract as the coverage
+              cards: the LLM summary + suggestions lead, criteria follow. */}
+          {davisState !== undefined && (
+            <DavisInsightSection
+              state={davisState}
+              capabilityName={cap.name}
+              onSendFollowUp={onSendFollowUp}
+              onRequestInsight={onRequestInsight}
+            />
+          )}
           {TIER_META.map(t => {
             const criteria = cap.criteriaResults.filter(cr => cr.tier === t.key);
             if (criteria.length === 0) return null;
@@ -1392,9 +1610,12 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
             )}
           </Flex>
         </Tooltip>
-        {cr.value > 0 && (
-          <Text style={{ fontSize: 12, color: textTert, fontWeight: 600 }}>{cr.isRatio ? `${cr.value}%` : cr.value.toLocaleString()}</Text>
-        )}
+        {/* Met / not met only — the measured number stays in the expanded
+            detail, next to the threshold that gives it meaning. */}
+        <Text style={{
+          fontSize: 12, fontWeight: 700,
+          color: cr.error ? Colors.Text.Critical.Default : passed ? Colors.Text.Success.Default : Colors.Text.Neutral.Disabled,
+        }}>{cr.error ? "ERR" : passed ? "✓" : "✗"}</Text>
         <Text style={{ fontSize: 12, color: textTert, fontWeight: 600 }}>{open ? "▾" : "▸"}</Text>
       </Flex>
 
@@ -1509,14 +1730,18 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
 }
 
 /* ── Left panel — memoized to prevent re-renders during card interactions ── */
-const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, onEnableProxyMode, totalScore, hasResults, exporting, onGenerateReport, selectedCount, totalCount, consolidation, onConsolidationChange, excludedCaps }: {
+const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, textTert, accent, bgSubtle, bgPrimary, border, borderPri, tenant, start, resume, onEnableProxyMode, totalScore, hasResults, exporting, onGeneratePersona, onOpenCustomReport, onOpenSmartReport, selectedCount, totalCount, consolidation, onConsolidationChange, excludedCaps }: {
   dk: boolean; text: string; textSec: string; textTert: string;
   accent: string; bgSubtle: string; bgPrimary: string; border: string; borderPri: string;
   tenant: string; start: (useProxy?: boolean) => void; resume: () => void;
   onEnableProxyMode: () => void;
   totalScore: number; hasResults: boolean;
   exporting: boolean;
-  onGenerateReport: (lang: ReportLang) => void;
+  onGeneratePersona: (persona: ReportPersona, lang: PersonaLang) => void;
+  onOpenCustomReport: () => void;
+  /** Dev-only Smart (Assist) entry — omitted in production, like the
+   *  matching item on the results toolbar. */
+  onOpenSmartReport?: () => void;
   selectedCount: number; totalCount: number;
   consolidation: Record<string, number>;
   onConsolidationChange: (factors: Record<string, number>) => void;
@@ -1680,9 +1905,24 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
                 </Button>
               </Menu.Trigger>
               <Menu.Content>
-                <Menu.Item onSelect={() => onGenerateReport("en")}>Download English (EN)</Menu.Item>
-                <Menu.Item onSelect={() => onGenerateReport("pt")}>Download Portugues (PT)</Menu.Item>
-                <Menu.Item onSelect={() => onGenerateReport("es")}>Download Espanol (ES)</Menu.Item>
+                {([
+                  ["executive", "Executive"],
+                  ["tactical", "Tactical"],
+                  ["technical", "Technical"],
+                ] as [ReportPersona, string][]).map(([p, label]) => (
+                  <Menu.Sub key={p}>
+                    <Menu.SubTrigger>{label}</Menu.SubTrigger>
+                    <Menu.SubContent>
+                      <Menu.Item onSelect={() => onGeneratePersona(p, "en")}>English (EN)</Menu.Item>
+                      <Menu.Item onSelect={() => onGeneratePersona(p, "pt")}>Portugues (PT)</Menu.Item>
+                      <Menu.Item onSelect={() => onGeneratePersona(p, "es")}>Espanol (ES)</Menu.Item>
+                    </Menu.SubContent>
+                  </Menu.Sub>
+                ))}
+                {onOpenSmartReport && (
+                  <Menu.Item onSelect={onOpenSmartReport}>Smart (Assist)…</Menu.Item>
+                )}
+                <Menu.Item onSelect={onOpenCustomReport}>Custom…</Menu.Item>
               </Menu.Content>
             </Menu>
           </Flex>
@@ -1724,15 +1964,15 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
             </Text>
           </Flex>
           <Flex flexDirection="column" style={{ padding: "8px 12px", borderRadius: 6, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}` }}>
-            <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Success.Default, marginBottom: 2 }}>Maturity</Flex>
+            <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Success.Default, marginBottom: 2 }}>Utilization</Flex>
             <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>
-              Cards showing <Strong style={{ color: text }}>how deeply</Strong> each capability is used across 3 weighted tiers (Foundation → Best Practice → Excellence). Shows a <Strong style={{ color: text }}>0–100% maturity score</Strong> per capability using the same color scale as coverage.
+              Cards showing <Strong style={{ color: text }}>how deeply</Strong> each capability is used across 3 weighted tiers (Foundation → Best Practice → Excellence). Shows a <Strong style={{ color: text }}>0–100% utilization score</Strong> per capability using the same color scale as coverage.
             </Text>
           </Flex>
           <Flex flexDirection="column" style={{ padding: "8px 12px", borderRadius: 6, background: dk ? "rgba(91,106,207,0.08)" : "rgba(91,106,207,0.04)", border: `1px solid ${dk ? "rgba(91,106,207,0.15)" : "rgba(91,106,207,0.1)"}` }}>
             <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Primary.Default, marginBottom: 2 }}>Executive Summary</Flex>
             <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>
-              Consolidated dashboard with <Strong style={{ color: text }}>coverage vs maturity comparison</Strong>, gap analysis, achievements, and interactive charts for a complete overview.
+              Consolidated dashboard with <Strong style={{ color: text }}>coverage vs utilization comparison</Strong>, gap analysis, achievements, and interactive charts for a complete overview.
             </Text>
           </Flex>
         </Flex>

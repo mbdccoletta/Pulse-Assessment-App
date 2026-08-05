@@ -25,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Snapshot persistence and Evolution Over Time comparison — snapshots from v2.4.x remain compatible.
 - Strato components, layouts, theming — no presentation changes for tenants ≤ 5k hosts.
 
-### Performance impact (measured on bwm98081, 54 hosts; extrapolated to 80k hosts)
+### Performance impact (measured on a reference tenant, 54 hosts; extrapolated to 80k hosts)
 - 80k-host single assessment scan: ~176 TB (Exact) → ~3.2 TB (xLarge) — **98.2% reduction**.
 - 80k-host single assessment DPS: ~$1,800 → ~$32 — **98.2% reduction**.
 - 80k-host wall-time: ~30–40 min (Exact, with query timeouts) → ~3–5 min (xLarge, within timeout). See `docs/PERFORMANCE-REPORT-80K-HOSTS.md` §6 for the full matrix.
@@ -37,7 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Best Practice tier now only contributes to the maturity score when **Foundation ≥ 80%**.
 - Excellence tier now only contributes when **Best Practice ≥ 60%**.
 - Updated all UI descriptions and footer guidance to reflect the new weights and gating rules.
-- Deployed to fov31014 and bwm98081 tenants.
+- Deployed to the reference tenants.
 
 ## [2.3.39] — 2025-07-17
 

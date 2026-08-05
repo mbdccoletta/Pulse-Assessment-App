@@ -1,11 +1,11 @@
 {
-  "environmentUrl": "https://bwm98081.apps.dynatrace.com",
+  "environmentUrl": "https://<your-tenant>.apps.dynatrace.com",
   "app": {
     "id": "my.pulse.assessment",
     "name": "Pulse Assessment",
     "description": "Assess observability coverage and maturity across 9 Dynatrace capabilities.",
     "icon": "ui/assets/icon.svg",
-    "version": "2.5.3",
+    "version": "2.5.5",
     "scopes": [
       { "name": "storage:logs:read", "comment": "Log Analytics coverage" },
       { "name": "storage:events:read", "comment": "Security, Delivery, Problems" },

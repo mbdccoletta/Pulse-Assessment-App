@@ -154,7 +154,7 @@ attributes (`gen_ai.system`, `gen_ai.provider.name`, `gen_ai.request.*`,
 | ai1–ai9 | `fetch spans` (gen_ai.* attributes) |
 
 > **CRITICAL window note**: AI Obs uses `from:now()-72h`, NOT 2h. GenAI
-> workloads are bursty — a 2h window missed real spans on bwm98081 (244,964
+> workloads are bursty — a 2h window missed real spans on the reference tenant (244,964
 > gen_ai spans in 72h, 0 in 2h). This was the v2.5.x AI-Obs bug fix. Do not
 > narrow this window back to 2h.
 

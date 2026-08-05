@@ -8,14 +8,12 @@ import { Flex, Grid, Surface, Container } from "@dynatrace/strato-components/lay
 import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-components-preview/buttons";
 import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
-import { useDevMode } from "../hooks/useDevMode";
-import { AiReportModal } from "../components/AiReportModal";
 import { CovMatRadar } from "../components/CovMatRadar";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_TIERS } from "../data/criterionTiers";
 import { CAPABILITIES } from "../queries";
 import type { AssessmentSnapshot } from "../hooks/useAssessmentHistory";
-import type { CoverageData, CapabilityResult } from "../hooks/useCoverageData";
+import type { CapabilityResult } from "../hooks/useCoverageData";
 import { FOUNDATION_WEIGHT, BEST_PRACTICE_WEIGHT, EXCELLENCE_WEIGHT } from "../hooks/useCoverageData";
 
 /** Lookup: criterion ID → true if it uses cross-entity ratio (queryB). Derived from static CAPABILITIES definition. */
@@ -54,7 +52,6 @@ interface CapDiff {
 
 interface Props {
   snapshots: AssessmentSnapshot[];
-  coverageData: CoverageData;
   saveSnapshot: (capabilities: CapabilityResult[], totalScore: number, tenant: string) => void;
 }
 
@@ -106,10 +103,9 @@ function computeMaturity(criteria: { id: string; points: number; error: boolean 
   return Math.round(fPct * FOUNDATION_WEIGHT + effB * BEST_PRACTICE_WEIGHT + effE * EXCELLENCE_WEIGHT);
 }
 
-export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveSnapshot }) => {
+export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => {
   const dk = useCurrentTheme() === "dark";
   const navigate = useNavigate();
-  const { isDev } = useDevMode();
 
   // Last 12 snapshots available for comparison
   const available = useMemo(() => snapshots.slice(0, 12), [snapshots]);
@@ -120,7 +116,6 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
   const [showListB, setShowListB] = useState(false);
   const [dimension, setDimension] = useState<"coverage" | "maturity">("coverage");
   const [expandedRadar, setExpandedRadar] = useState(false);
-  const [showAssist, setShowAssist] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -293,19 +288,6 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
         <Tooltip text="Return to the main assessment page." position="bottom">
         <Button onClick={() => navigate("/")} size="condensed">← Back</Button>
         </Tooltip>
-        {isDev && (
-          <Tooltip text="Ask Davis CoPilot about how this assessment changed over time." position="bottom">
-            <Button
-              onClick={() => setShowAssist(true)}
-              size="condensed"
-              variant="emphasized"
-              color="primary"
-              aria-label="Open Assist for the Evolution view"
-            >
-              Assist
-            </Button>
-          </Tooltip>
-        )}
         <Text style={{ fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" }}>Evolution</Text>
         <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
           {snapPickerBtn("A", snapA, showListA, () => { setShowListA(v => !v); setShowListB(false); }, Colors.Charts.Categorical.Color01.Default)}
@@ -332,7 +314,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
               <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.totalDelta) }}>{comparison.totalDelta > 0 ? "+" : ""}{comparison.totalDelta}%</Text>
             </Flex>
             <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
-              <Text style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Mat</Text>
+              <Text style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Util</Text>
               <Text style={{ fontSize: 14, fontWeight: 800 }}>{comparison.baselineMaturity}→{comparison.currentMaturity}%</Text>
               <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.maturityDelta) }}>{comparison.maturityDelta > 0 ? "+" : ""}{comparison.maturityDelta}%</Text>
             </Flex>
@@ -354,10 +336,10 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
             }}>
               <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
                 <Flex alignItems="center" gap={8} flexWrap="wrap">
-                  <Text style={{ fontSize: 14, fontWeight: 800, color: text, letterSpacing: 0.2 }}>{dimension === "coverage" ? "Coverage" : "Maturity"} Comparison</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 800, color: text, letterSpacing: 0.2 }}>{dimension === "coverage" ? "Coverage" : "Utilization"} Comparison</Text>
                   <ToggleButtonGroup value={dimension} onChange={(val: string) => setDimension(val as "coverage" | "maturity")}>
                     <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
-                    <ToggleButtonGroupItem value="maturity">Maturity</ToggleButtonGroupItem>
+                    <ToggleButtonGroupItem value="maturity">Utilization</ToggleButtonGroupItem>
                   </ToggleButtonGroup>
                 </Flex>
                 <ExpandChartButton onClick={() => setExpandedRadar(true)} />
@@ -409,7 +391,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
           </Flex>
 
           {/* Expanded Radar Modal */}
-          <ExpandableChartModal open={expandedRadar} onClose={() => setExpandedRadar(false)} title={`${dimension === "coverage" ? "Coverage" : "Maturity"} Comparison`}>
+          <ExpandableChartModal open={expandedRadar} onClose={() => setExpandedRadar(false)} title={`${dimension === "coverage" ? "Coverage" : "Utilization"} Comparison`}>
             <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
               <CovMatRadar
                 data={comparison.capDiffs.map(c => ({
@@ -428,32 +410,6 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
         </Flex>
       )}
 
-      {/* Assist (dev-only) — grounded in the snapshot-to-snapshot delta so
-          the "what changed" starters actually work. */}
-      {isDev && snapA && (
-        <AiReportModal
-          show={showAssist}
-          onDismiss={() => setShowAssist(false)}
-          page="comparison"
-          ctx={{
-            tenant: coverageData.tenant ?? "(unknown)",
-            date: new Date(snapA.timestamp).toISOString().slice(0, 10),
-            overallCoverage: snapA.totalScore,
-            overallMaturity: comparison?.currentMaturity ?? 0,
-            capabilities: snapA.capabilities,
-            comparisonNote: comparison
-              ? `Comparing the current snapshot to a previous one taken ${new Date(comparison.baseline.timestamp).toISOString().slice(0,10)}. `
-                + `Overall coverage moved ${comparison.totalDelta >= 0 ? "+" : ""}${comparison.totalDelta} points `
-                + `(${comparison.baseline.totalScore}% → ${comparison.current.totalScore}%); `
-                + `overall maturity ${comparison.maturityDelta >= 0 ? "+" : ""}${comparison.maturityDelta} `
-                + `(${comparison.baselineMaturity} → ${comparison.currentMaturity}). Per capability: `
-                + comparison.capDiffs
-                    .map(c => `${c.name} coverage ${c.prevScore}%→${c.currScore}% (${c.delta >= 0 ? "+" : ""}${c.delta})`)
-                    .join("; ") + "."
-              : undefined,
-          }}
-        />
-      )}
     </Flex>
   );
 };
@@ -587,9 +543,9 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
                 </Flex>
               );
             })}
-            {/* ── Improvement opportunities / Healthy — grouped by tier when maturity ── */}
+            {/* ── Improvement opportunities / Healthy — grouped by tier when utilization ── */}
             {isMat ? (
-              /* MATURITY VIEW: group all non-changed criteria by tier */
+              /* UTILIZATION VIEW: group all non-changed criteria by tier */
               tierOrder.map((tier) => {
                 const tiered = [...improvable, ...healthy].filter((cr) => (CRITERION_TIERS[cr.id] || "foundation") === tier);
                 if (tiered.length === 0) return null;

@@ -6,7 +6,7 @@
 //   - bestPractice:  Good practices for deeper adoption (~4-5 per capability)
 //   - excellence:    Advanced/mature usage patterns (~2-3 per capability)
 //
-// Maturity levels per capability:
+// Utilization levels per capability:
 //   L0 (Not Adopted):  Foundation < 50%
 //   L1 (Foundation):   Foundation ≥ 50%
 //   L2 (Operational):  Foundation 100% + Best Practice ≥ 50%

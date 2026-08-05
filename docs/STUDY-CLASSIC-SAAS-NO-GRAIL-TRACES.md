@@ -112,7 +112,7 @@ Net effect: **~15 of 20 span checks keep producing comparable results;
 - Effort: ~2–3 days (proxy DQL authoring + validation on an S1 tenant,
   preflight branch, banner/markers, docs) — after the freeze is lifted.
 - Risks: proxy drift vs true span numbers (validate side-by-side on a
-  tenant that has BOTH, e.g. bwm98081: run span query and proxy query,
+  tenant that has BOTH, e.g. <reference-tenant>: run span query and proxy query,
   accept if delta ≤5 pts per check); topology relations vary by
   instrumentation (OneAgent vs pure OTel).
 
@@ -132,7 +132,7 @@ run a reduced assessment (~60–70 checks re-expressed).
 ### Option C — Zero-app-change paths available TODAY
 
 1. **Run on a Grail tenant**: not applicable cross-customer (data is
-   per-tenant) — only valid for internal demos (bwm98081 verified).
+   per-tenant) — only valid for internal demos (verified on a reference tenant).
 2. **"Pulse Lite" companion asset** (separate notebook/dashboard pack,
    no app changes): hand-picked subset of the 91 non-span checks as DQL
    tiles for S1/S2 tenants, produced as a field-asset-library notebook.
@@ -146,7 +146,7 @@ run a reduced assessment (~60–70 checks re-expressed).
 
 1. Identify one **S1 tenant** (the environment from the screenshot
    qualifies) — confirm signature via `fetch spans | limit 1`.
-2. On **bwm98081** (has spans): run each proxy DQL **and** its span
+2. On **the reference tenant** (has spans): run each proxy DQL **and** its span
    original side-by-side; record deltas. Acceptance: |delta| ≤ 5 pts per
    check; document any check that exceeds it (downgrade to excluded).
 3. On the S1 tenant: run the 91 non-span checks manually (notebook) to
@@ -160,7 +160,7 @@ run a reduced assessment (~60–70 checks re-expressed).
 ## 5. Recommendation
 
 - **Phase 1 (now, no code):** adopt the qualification checklist in
-  §2 for every customer conversation; use bwm98081 for demos; optionally
+  §2 for every customer conversation; use a reference tenant for demos; optionally
   produce the "Pulse Lite" notebook asset for S1/S2 customers.
 - **Phase 2 (next release window):** implement Option A (Trace Proxy
   Mode) — it makes the app work *normally minus AI Observability* for
@@ -177,7 +177,7 @@ transparently — which itself becomes the enablement conversation.
 
 ## 6. Implementation addendum (Option A built — post-validation)
 
-Option A was implemented after side-by-side validation on bwm98081
+Option A was implemented after side-by-side validation on the reference tenant
 (97 services, 2h window). Measured fidelity changed the final split from
 the §A.2 estimate of ~15 proxied to **9 proxied + 11 excluded**:
 
