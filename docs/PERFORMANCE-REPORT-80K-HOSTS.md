@@ -5,6 +5,13 @@
 **Method:** Stress test on `<reference-tenant>` (54 hosts / 82 services / 737 processes) using a 27-query representative sample (out of 107 unique queries), then linear extrapolation to 80,000 hosts.
 **App version under test:** Pulse Assessment v2.4.2
 
+> **Superseded in part (v2.5.5).** The scan volumes below predate Economy Mode.
+> They remain valid as the *unoptimized* baseline and for the extrapolation
+> method, but a current run scans roughly **9x less**: a full assessment was
+> re-measured at 370 GB before Economy Mode and ~41 GB after, on a reference
+> tenant, by reading `dt.system.events` rather than by estimation. See the cost
+> section in `README.md` and "Cost and Fidelity Controls" in `ARCHITECTURE.md`.
+
 ---
 
 ## Executive Summary

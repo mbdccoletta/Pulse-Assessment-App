@@ -7,7 +7,7 @@ result is a numerator divided by a denominator → coverage %.
 Source of truth: `ui/app/queries.ts`. This doc is a consolidated index — when
 queries.ts changes, re-run the extraction (see bottom) and update this file.
 
-Version: v2.5.3 (criteria set unchanged in feat/davis-insights branch).
+Version: v2.5.5 (criteria set unchanged in feat/davis-insights branch; see "What actually reaches Grail" for how Economy Mode rewrites the executed windows).
 
 ---
 
@@ -71,7 +71,7 @@ Version: v2.5.3 (criteria set unchanged in feat/davis-insights branch).
 | a9 | Messaging span coverage | `fetch spans` |
 | a10 | Multi-service trace depth | `fetch spans` |
 | a11 | Service-process mapping | entity `dt.entity.service` |
-| a12 | Service tagging maturity | entity `dt.entity.service` |
+| a12 | Service tagging utilization | entity `dt.entity.service` |
 | a13 | Database call depth | `fetch spans` |
 
 ---
@@ -203,6 +203,27 @@ Each query scopes its source to a window. Distribution across all criteria:
 The window IS part of "the metric being validated" — a host with CPU metrics
 in the last 2h counts as covered; one silent for >2h does not. Narrowing or
 widening a window changes the score, so treat windows as load-bearing.
+
+### What actually reaches Grail (v2.5.5)
+
+The table above is the **catalog**. Since Economy Mode, the *executed* window
+can differ, and the difference is deliberate (`ui/app/scale-tier.ts`):
+
+- Criteria that are a ratio of two plain counts keep their authored window and
+  get `samplingRatio: 1000` instead — the sampling cancels in the ratio, so the
+  score is preserved while the scan drops ~1600x.
+- Criteria using `countDistinct` or `by:` grouping cannot be sampled (measured:
+  distinct log sources 63 → 28), so they get a **narrower window** instead:
+  short windows collapse to 15 minutes, long ones are capped at 4 hours.
+- Where two sides of one criterion read different windows on purpose (l10, 24h
+  of log sources vs 2h), both are divided by the same factor so the ratio they
+  encode survives.
+
+Consequence for anyone reading a score: distinct counts come out ~6% lower than
+the catalog window would give, and ratios move by under 1.5 percentage points.
+The app says so on screen. If you need catalog-exact numbers, read the executed
+DQL from the perf report — every query is logged with the string that actually
+ran.
 
 ---
 

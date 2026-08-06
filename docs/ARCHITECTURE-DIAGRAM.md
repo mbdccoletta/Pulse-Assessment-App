@@ -1,6 +1,6 @@
 # Pulse Assessment - Architecture & Logic Diagrams
 
-Diagramas em **Mermaid** cobrindo a logica do app v2.5.3. Visualizam no GitHub, GitLab, VS Code (preview), Obsidian, ou qualquer renderer Markdown.
+Diagramas em **Mermaid** cobrindo a logica do app v2.5.5. Visualizam no GitHub, GitLab, VS Code (preview), Obsidian, ou qualquer renderer Markdown.
 
 Para exportar como imagem: `npx @mermaid-js/mermaid-cli -i ARCHITECTURE-DIAGRAM.md -o diagram.png`.
 
@@ -29,7 +29,7 @@ flowchart TD
     M --> N[Compare vs thresholds<br/>pass = 1, fail = 0]
     N --> O[Aggregate per capability]
     O --> P[Compute Coverage score<br/>pass / total x 100]
-    O --> Q[Compute Maturity score<br/>weighted by tier]
+    O --> Q[Compute Utilization score<br/>weighted by tier]
     P --> R[Render radar + cards]
     Q --> R
     R --> S[Save snapshot to<br/>Document Store]
@@ -169,7 +169,7 @@ thresholds = [{min: 90}, {min: 50}, {min: 1}]
 
 ---
 
-## 4. Coverage vs Maturity - dois caminhos de agregacao
+## 4. Coverage vs Utilization - dois caminhos de agregacao
 
 Mesmos 94 criterios, duas formulas diferentes.
 
@@ -203,8 +203,8 @@ flowchart TD
     R --> T[maturityScore =<br/>fPct x 60 +<br/>effB x 25 +<br/>effE x 15]
     S --> T
 
-    T --> U[Maturity Band<br/>≥80 Excellent<br/>≥60 Good<br/>≥40 Moderate<br/>≥20 Low<br/>&lt;20 N/A]
-    T --> V[Maturity Level<br/>L0/L1/L2/L3]
+    T --> U[Utilization Band<br/>≥80 Excellent<br/>≥60 Good<br/>≥40 Moderate<br/>≥20 Low<br/>&lt;20 N/A]
+    T --> V[Utilization Level<br/>L0/L1/L2/L3]
 
     K --> V
     L --> V
@@ -221,7 +221,7 @@ flowchart TD
     style W fill:#10B981,color:#fff
 ```
 
-**Regra progressiva** (chave da formula): Best Practice so conta se Foundation >= 80%. Excellence so conta se Best Practice >= 60%. Isso evita que cliente "pule passos" e tenha maturity inflada por criterios avancados sem ter o basico.
+**Regra progressiva** (chave da formula): Best Practice so conta se Foundation >= 80%. Excellence so conta se Best Practice >= 60%. Isso evita que cliente "pule passos" e tenha utilization inflada por criterios avancados sem ter o basico.
 
 ---
 
@@ -314,10 +314,12 @@ flowchart TD
     style K fill:#10B981,color:#fff
 ```
 
-**Numeros reais (v2.5.3, reference tenant)**:
-- Cold run: 113 queries executadas, ~173 GB scanned, $1.05-$1.61
-- Warm run (cache 100%): 113/113 cached, 0 GB scanned, $0
-- Score: identico nos dois casos
+**Numeros reais (v2.5.5, reference tenant, medidos em `dt.system.events`)**:
+- Cold run **antes** do Economy Mode: ~370 GB scanned, ~$3.70
+- Cold run **com** Economy Mode: ~41 GB scanned, ~$0.41
+- Warm run (cache 24h): 0 GB scanned, $0
+- Score: identico entre cold e warm; com Economy Mode os valores viram
+  estimativas proximas (razoes +-1,5 pp, contagens distintas ~6% menores)
 
 ---
 
@@ -443,7 +445,7 @@ flowchart LR
     D --> E[ratio = A/B x 100]
     E --> F[pass / fail vs threshold]
     F --> G[Coverage avg]
-    F --> H[Maturity tier-weighted]
+    F --> H[Utilization tier-weighted]
     G --> I[Radar UI]
     H --> I
 
@@ -454,7 +456,7 @@ flowchart LR
     style I fill:#8B5CF6,color:#fff
 ```
 
-> **Em uma linha:** *94 razoes DQL contra o proprio tenant, sampled por tier, cacheadas 24h, comparadas a thresholds hardcoded, agregadas como media (coverage) ou ponderacao progressiva (maturity).*
+> **Em uma linha:** *94 razoes DQL contra o proprio tenant, sampled por tier, cacheadas 24h, comparadas a thresholds hardcoded, agregadas como media (coverage) ou ponderacao progressiva (utilization).*
 
 ---
 
@@ -470,4 +472,4 @@ flowchart LR
    ```
 5. **Online** - cole em https://mermaid.live para editar interativamente
 
-Versao: v2.5.3 | Atualize quando mudar regras de Scale Tier, formula de maturity, ou estrutura de capabilities.
+Versao: v2.5.5 | Atualize quando mudar regras de Scale Tier / Economy Mode, formula de utilization, ou estrutura de capabilities.

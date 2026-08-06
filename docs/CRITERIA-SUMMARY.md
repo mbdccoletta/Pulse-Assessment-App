@@ -4,7 +4,7 @@ A clear, plain-language reference for every check the assessment runs.
 94 checks across 9 capabilities. Source of truth: `ui/app/queries.ts`
 (labels, descriptions, thresholds) + `ui/app/data/criterionTiers.ts` (tiers).
 
-Version: v2.5.3 · matches the criteria set on the feat/davis-insights branch.
+Version: v2.5.5 · matches the criteria set on the feat/davis-insights branch.
 
 ---
 
@@ -27,7 +27,7 @@ Two independent things then happen:
 | **Tier** | fixed classification in code (not the value) | Foundation / Best Practice / Excellence |
 
 - **Coverage score** = passed ÷ total × 100 (per capability; simple average).
-- **Maturity score** = tier-weighted, progressively gated:
+- **Utilization score** = tier-weighted, progressively gated:
   `Foundation×60% + BestPractice×25% (if Foundation ≥ 80%) + Excellence×15% (if BP ≥ 60%)`.
 
 The three tiers represent an adoption journey:
@@ -35,7 +35,7 @@ The three tiers represent an adoption journey:
 correct usage" · **Excellence** = "advanced / mature patterns".
 
 > Note on thresholds: most checks pass at **≥1%** — the assessment rewards
-> *any* adoption of a signal and lets the tier weighting drive the maturity
+> *any* adoption of a signal and lets the tier weighting drive the utilization
 > story. A handful use higher bars (e.g. diversity checks at ≥20-50%) where a
 > minimum spread is the whole point of the check.
 
@@ -87,7 +87,7 @@ Distributed tracing and service RED metrics.
 | E | Database span coverage | Services with database operation spans | ≥1% |
 | E | Messaging span coverage | Services with messaging spans (Kafka/RabbitMQ/SQS) | ≥1% |
 | E | Multi-service trace depth | Traces spanning 2+ services | ≥1% |
-| E | Service tagging maturity | Services with at least one tag | ≥1% |
+| E | Service tagging utilization | Services with at least one tag | ≥1% |
 | E | Database call depth | DB services touching 2+ database systems | ≥1% |
 
 ## 3. Digital Experience — 11 checks (F:3 · BP:5 · E:3)
@@ -242,7 +242,7 @@ Deployment tracking and release-readiness signals.
 
 - `docs/DATA-SOURCES.md` — which Grail source (metrics / logs / spans / events /
   bizevents / entities / Davis) each check queries.
-- `docs/SCORING-CALCULATIONS.md` — the full coverage-vs-maturity math with worked
+- `docs/SCORING-CALCULATIONS.md` — the full coverage-vs-utilization math with worked
   examples and the progressive-gate rule.
 
 ## Regenerate

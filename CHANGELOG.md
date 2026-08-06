@@ -4,6 +4,39 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.5] — 2026-08-05
+
+### Added — Economy Mode (Grail/DPS cost)
+- **`scale-tier.ts`** gained a cost transform that runs at **every** tier, including `exact`. A full run was measured at 370 GB of scan (~$3.70, ~$60/month over 30 days on a reference tenant, read from `dt.system.events`); it now runs at **~41 GB (~$0.41)**.
+  - `samplingRatio: 1000` is applied **only** where sampling provably cancels out: both sides of the criterion must be plain counts over the same table and the same window. Measured on 2h of logs — scan 4.99 GB → ~0.003 GB, ratio drift under 1.5 percentage points.
+  - Everything else gets a **narrower window** instead, because `countDistinct` collapses under sampling (distinct log sources 63 → 28; AI providers 4 → 1). Short windows go to 15 minutes, long ones are capped at 4 hours.
+  - Criteria whose two sides deliberately read different windows (l10, 24h vs 2h) are divided by the same factor so the ratio they encode survives.
+  - A `scanLimitGBytes` ceiling is added to every hot query; the deliberate `-1` on l11 is preserved.
+- **`CostModeNote`** — on-screen disclosure that values are close estimates, rendered next to the scores at every tier.
+- **App adoption in the Executive headline** — average share of active platform users who open the apps behind each capability, beside Coverage and Utilization. Never feeds a score.
+
+### Changed — terminology
+- Every user-visible **"Maturity" is now "Utilization"**, including chart labels, hub captions, tooltips, the criteria list and the Assist prompts. Internal identifiers (`maturityScore`, `cap.maturity`) and the persisted snapshot keys were deliberately left alone so saved history stays readable.
+- Criterion a12 renamed from "Service tagging maturity" to "Service tagging utilization".
+
+### Changed — Executive Summary
+- The radar now plots **Coverage only** — the Utilization series, its hub number and its legend entry are gone — and grows from 28% to 34% of the canvas.
+- The Capability Map is no longer a scatter: capabilities sit on the X axis with **coverage bars plus a utilization line**. Value labels resolve collisions deterministically and are never drawn below the axis; names word-wrap and fall back to short forms rather than breaking mid-word.
+- The colour-to-capability legend strip was removed — both charts name their capabilities directly.
+
+### Changed — cards and menus
+- Criterion rows show **met / not met** only; the measured value stays in the expanded detail next to the threshold that gives it meaning.
+- The AI Insight panel folds on click **without collapsing its capability card**; clicks on its controls and text selections are ignored.
+- Active-user counts left the Coverage cards — adoption belongs next to Utilization.
+- `Custom…` is now the last item in the Reports menu.
+- Assist was removed from the Evolution page.
+
+### Fixed
+- The displayed version (`appVersion.ts`) and the deployed version (`app.config.json`) are now in sync; they had drifted, which is why 2.5.4 was superseded immediately.
+
+### Security / hygiene
+- Tenant identifiers, environment URLs and the author e-mail were replaced with placeholders across code, docs and scripts. **Local dev now needs `--environment-url`** (or a local edit of `app.config.json`).
+
 ## [2.5.0] — 2026-05-22
 
 ### Added — Scale Tier (xlarge tenant support)
@@ -33,8 +66,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [2.3.40] — 2025-07-17
 
 ### Changed
-- **Progressive Maturity Scoring**: Updated tier weights from 50/30/20 to **60/25/15** (Foundation/Best Practice/Excellence).
-- Best Practice tier now only contributes to the maturity score when **Foundation ≥ 80%**.
+- **Progressive Utilization Scoring**: Updated tier weights from 50/30/20 to **60/25/15** (Foundation/Best Practice/Excellence).
+- Best Practice tier now only contributes to the utilization score when **Foundation ≥ 80%**.
 - Excellence tier now only contributes when **Best Practice ≥ 60%**.
 - Updated all UI descriptions and footer guidance to reflect the new weights and gating rules.
 - Deployed to the reference tenants.
@@ -82,10 +115,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Initial public version with full feature set.
 - 9 capabilities, 111 criteria with DQL queries.
-- Coverage and Maturity dual-scoring model.
+- Coverage and Utilization dual-scoring model.
 - Interactive polar radar chart with click-to-drill-down.
-- 3 view modes: Coverage, Maturity, Executive Summary.
-- PDF report generation (Summary, Coverage Detail, Maturity Detail).
+- 3 view modes: Coverage, Utilization, Executive Summary.
+- PDF report generation (Summary, Coverage Detail, Utilization Detail).
 - Assessment snapshot persistence (localStorage + Dynatrace Document Store).
 - Evolution Over Time page with A/B snapshot comparison.
 - Remediation actions and documentation links for all 111 criteria.

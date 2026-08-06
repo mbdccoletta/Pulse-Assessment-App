@@ -1,10 +1,10 @@
 # Pulse Assessment — Developer Handoff
 
-> Pick-up document for the next developer. Captures the state of v2.5.3,
-> what was done during the v2.5.x perf pass, validation evidence, and
-> what's still open. Read this before opening `useCoverageData.ts` cold.
+> Pick-up document for the next developer. Captures the state of v2.5.5,
+> what was done during the v2.5.x perf and cost passes, validation evidence,
+> and what's still open. Read this before opening `useCoverageData.ts` cold.
 
-Current version: **v2.5.3**
+Current version: **v2.5.5**
 
 ---
 
@@ -15,7 +15,7 @@ Current version: **v2.5.3**
 | Item | Value |
 |---|---|
 | Deployed tenant | the team's development tenant on apps.dynatrace.com |
-| Version installed | **2.5.3** |
+| Version installed | **2.5.5** |
 | App id | `my.pulse.assessment` |
 
 The exact tenant URL is configured in `app.config.json#environmentUrl`
@@ -26,9 +26,9 @@ and is not reproduced here. Read that file for the current target.
 | Item | Value |
 |---|---|
 | Repo | personal fork on GitHub |
-| Working branch | `feat/v2.5.0-perf-optimizations` |
-| State | All commits pushed; local in sync with `origin/feat/v2.5.0-perf-optimizations` |
-| Base for next branch | `feat/v2.5.0-perf-optimizations` (until PR is merged into `main`) |
+| Working branch | `feat/davis-insights` |
+| State | All commits pushed; local in sync with `origin/feat/davis-insights` |
+| Base for next branch | `feat/davis-insights` (until PR is merged into `main`) |
 | PR | Not yet opened. |
 
 ### Commit history of v2.5.x (most recent first)
@@ -85,6 +85,33 @@ Gate lives in `ui/app/hooks/useDevMode.ts`.
 
 ---
 
+## 2b. What v2.5.5 added
+
+**Economy Mode** (`scale-tier.ts`). The cost was measured, not guessed: reading
+`dt.system.events` for 30 days showed a full run scanning 370 GB (~$3.70), 5.98
+TiB and ~$60 across the month. Sampling was applied only where it provably
+cancels out, and the window narrowed everywhere else. A run is now ~41 GB. The
+invariants that make this safe are enforced by construction and were checked by
+a dry-run over all 119 catalog queries — read the module header before changing
+any of it.
+
+**Terminology.** Every user-visible "Maturity" became "Utilization". Code
+identifiers and the persisted snapshot keys were left alone on purpose: renaming
+`cap.maturity` would break every snapshot already in the Document Store.
+
+**Adoption** (`useAppAdoption.ts`). Distinct users per app, mapped to
+capabilities, reported as penetration against all active users. Zero scan cost.
+Deliberately parallel to the score — it never feeds it.
+
+**Executive Summary rework.** Coverage-only radar, Capability Map as bars plus a
+utilization line, adoption in the headline row, colour legend removed.
+
+**Scrub.** Tenant ids, environment URLs and the author e-mail were replaced by
+placeholders. They remain in git history — removing them would require a history
+rewrite, which has not been done.
+
+---
+
 ## 3. Architecture: how the new modules connect
 
 ```
@@ -132,7 +159,7 @@ Gate lives in `ui/app/hooks/useDevMode.ts`.
                     └──────────────────┘
 ```
 
-### File map (current — v2.5.3)
+### File map (current — v2.5.5)
 
 | File | Lines | Purpose |
 |---|---:|---|
@@ -153,9 +180,9 @@ Gate lives in `ui/app/hooks/useDevMode.ts`.
 | `ui/app/hooks/useCoverageData.ts` | Two-phase execution, C3 skip set, cache integration, scaleQuery, perf entry capture. **The big diff.** Read carefully before editing. |
 | `ui/app/pages/CoverageAssessment.tsx` | Props: `scale`, `isDev`. Toolbar wires `DpsCostBadge` + (gated by `isDev`) `📥 Perf JSON` and `🗘 Force refresh` buttons. |
 | `ui/app/App.tsx` | Mounts `useScaleTier`, `useDevMode`. Threads them into `CoverageAssessment`. |
-| `app.config.json` | Bumped to `2.5.3`. `environmentUrl` points to the dev tenant — change before deploying elsewhere. |
-| `ui/app/appVersion.ts` | `"2.5.3"`. |
-| `CHANGELOG.md` | v2.5.0 entry. (v2.5.1 / v2.5.2 / v2.5.3 entries are pending — see §7.) |
+| `app.config.json` | Bumped to `2.5.5`. `environmentUrl` is a **placeholder** since the scrub — pass `--environment-url` to `dt-app dev`/`deploy`, or set it locally (do not commit a real tenant). |
+| `ui/app/appVersion.ts` | `"2.5.5"`. Must match `app.config.json` — they drifted once and 2.5.4 had to be superseded immediately. |
+| `CHANGELOG.md` | v2.5.0 and v2.5.5 entries. (v2.5.1 / v2.5.2 / v2.5.3 entries are still pending — see §7.) |
 
 ---
 

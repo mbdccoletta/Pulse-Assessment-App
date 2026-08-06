@@ -9,7 +9,33 @@
 > Everything else — design decisions, measurements, evidence, math
 > — is here.
 
-Document version: 2.0 — written 2026-05-29 against app version 2.5.2.
+Document version: 2.1 — written 2026-05-29 against app version 2.5.2,
+amended 2026-08-05 for v2.5.5.
+
+> **What changed after v2.5.2 and is NOT reflected in the body below.**
+> The body is a historical record and was left intact on purpose; read this
+> list first, because a few of its numbers and names are now superseded.
+>
+> - **Economy Mode** (`scale-tier.ts`) rewrites the executed DQL at every
+>   tier. Cost per full run went from a measured 370 GB / ~$3.70 to ~41 GB /
+>   ~$0.41. Any scan figure below that predates this is the unoptimized
+>   baseline. Sampling is applied only where both sides of a ratio are plain
+>   counts; `countDistinct` gets a narrower window instead, because sampling
+>   collapses it (log sources 63 → 28, AI providers 4 → 1).
+> - **"Maturity" is now "Utilization"** everywhere a user can see it. The code
+>   identifiers (`maturityScore`, `cap.maturity`) and the persisted snapshot
+>   keys were deliberately NOT renamed — renaming them would break every
+>   snapshot already in the Document Store.
+> - **App adoption** (`useAppAdoption.ts`) counts distinct users per app from
+>   `dt.system.events` at zero scan cost, and reports penetration per
+>   capability. It never feeds a score.
+> - **Removed**: the Objectives/Projects screens and their hooks, the First Day
+>   Results report, Assist on the Evolution page, and the colour legend on the
+>   Executive view.
+> - **Added**: persona PDF reports (Executive/Tactical/Technical + Custom +
+>   Smart), Trace Proxy Mode for tenants without Traces on Grail, and a
+>   Coverage-only radar plus a bar/line Capability Map on the Executive view.
+> - Tenant identifiers were scrubbed from the repo; they remain in git history.
 
 ---
 
@@ -45,15 +71,15 @@ Document version: 2.0 — written 2026-05-29 against app version 2.5.2.
 ## 1. What this app does
 
 Pulse Assessment is a native Dynatrace App that scores **observability
-coverage and maturity** across 9 capability areas using ~111 DQL
-criteria. The output is a radar chart + capability cards + a maturity
+coverage and utilization** across 9 capability areas using ~111 DQL
+criteria. The output is a radar chart + capability cards + a utilization
 report card, optionally exported as a PDF.
 
 It's designed for sales engineers, customer success teams, and platform
 owners who need to answer:
 
 - "How well is this tenant *using* Dynatrace?" (Coverage view)
-- "Where is the operating maturity for each capability?" (Maturity view)
+- "Where is the operating utilization for each capability?" (Utilization view)
 - "What's the recommended next investment?" (Executive Summary view)
 - "Have we improved over time?" (Evolution Over Time comparison)
 
@@ -154,7 +180,7 @@ capScore = round(passedCount / cap.criteria.length * 100)
 Drives radar segment fill. Failed criteria (`error: true`) count as
 not-passed.
 
-### 2.4 Capability maturity score
+### 2.4 Capability utilization score
 
 Each criterion is mapped to a tier in `ui/app/data/criterionTiers.ts`:
 
@@ -184,7 +210,7 @@ maturityScore = round(fPct * 60 + effB * 25 + effE * 15)
 **Do not change these weights without product approval.** They're part
 of the published assessment methodology.
 
-Maturity level (visual badge):
+Utilization level (visual badge):
 
 | Level | Label | Condition |
 |---:|---|---|
@@ -193,7 +219,7 @@ Maturity level (visual badge):
 | 2 | Operational | fPct == 1 AND bPct >= 0.5 |
 | 3 | Optimized | fPct == 1 AND bPct == 1 AND ePct >= 0.5 |
 
-Maturity band:
+Utilization band:
 
 | Band | Range |
 |---|---:|
@@ -1348,7 +1374,7 @@ Toggled via `ToggleButtonGroup` in the toolbar:
 | View | Content |
 |---|---|
 | `coverage` | Radar (left) + capability cards (right) |
-| `maturity` | Maturity scorecard with foundation / bestPractice / excellence breakdown |
+| `maturity` | Utilization scorecard with foundation / bestPractice / excellence breakdown |
 | `recommendations` | Executive summary with prioritized actions per importance level |
 
 ### 11.3 Toolbar (top, when results loaded)
@@ -2487,7 +2513,7 @@ runner presence and gate the affected criteria.
 | Criterion | One of ~111 fine-grained measurements, identified by `<prefix><number>` (e.g. `ai3`, `sd10`) |
 | Threshold | Numeric cutoff a criterion's value must meet to pass at a given tier |
 | Coverage | The criterion-pass-rate-based score (0–100%). Mean across capabilities = `totalScore`. |
-| Maturity | Weighted score (Foundation 60% / Best Practice 25% / Excellence 15%) with progressive gating |
+| Utilization | Weighted score (Foundation 60% / Best Practice 25% / Excellence 15%) with progressive gating |
 | Foundation tier | Basic-must-have criteria for a capability |
 | Best Practice tier | Mature operating criteria, counted only if Foundation ≥ 80% |
 | Excellence tier | Stretch goals, counted only if Best Practice ≥ 60% |
