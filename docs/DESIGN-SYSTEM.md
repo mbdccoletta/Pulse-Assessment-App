@@ -8,6 +8,14 @@ Base: branch `feat/davis-insights`. Framework: **React + TypeScript + Strato 1.x
 > v2 adiciona tudo que veio com a era Davis/Objectives: chat do Assist,
 > intents nativos, radar SVG, graficos de barras/timeline, cards de
 > objetivos, selects alimentados por fontes oficiais e badges de IA.
+>
+> **Nota de escopo (v2.5.5):** as telas de Objectives/Projects foram
+> removidas do Pulse Assessment — junto com os hooks de Ownership teams,
+> Segments e ownership discovery. Os padroes seguem documentados aqui de
+> proposito: este arquivo e uma referencia de design para **outros** apps,
+> e esses padroes continuam validos mesmo nao existindo mais neste repo.
+> Onde um trecho descreve algo que so existiu na era Objectives, ele esta
+> marcado com _(removido do Pulse — padrao mantido para reuso)_.
 
 ---
 
@@ -153,7 +161,7 @@ import { Flex, Grid, Surface, Container } from "@dynatrace/strato-components/lay
 - Esqueleto: `<Page><Page.Main>…</Page.Main></Page>` dentro de `<ErrorBoundary>`.
 - Split sidebar: `Grid gridTemplateColumns="380px 1fr"` + `minHeight: 0` +
   `overflow: hidden` no Grid, `overflowY: "auto"` no filho.
-- **Header sticky de pagina** (Objectives/AI pages):
+- **Header sticky de pagina** (Objectives/AI pages) _(removido do Pulse — padrao mantido para reuso)_:
 
 ```tsx
 <Flex flexDirection="row" alignItems="center" justifyContent="space-between"
@@ -375,12 +383,12 @@ gate de disponibilidade via `listAvailableSkills()` (mostrar triggers so se
 - So renderiza com **3+ eixos** (menos que isso e degenerado — caia para lista);
 - Canvas grande (TechRadar): lembrar `devicePixelRatio` scaling.
 
-### 13.2 Barras duplas coverage × maturity
+### 13.2 Barras duplas coverage × utilization
 
 Uma linha por metrica: label 10px (width fixa 64) + track (`trackBg`) +
 fill gradiente na cor da capability + valor 10px bold a direita.
 
-### 13.3 Barra empilhada de ownership
+### 13.3 Barra empilhada de ownership _(removido do Pulse — padrao mantido para reuso)_
 
 Segmentos na MESMA cor da capability com opacidade decrescente
 (`opacity: 1 - i * 0.22`, `minWidth: 3`), `title` com tooltip nativo,
@@ -448,19 +456,26 @@ IA/diagnostico fica invisivel para o cliente sem esforco.
 ui/app/
   App.tsx                    # Page + Routes (lazy) + ErrorBoundary
   queries.ts                 # dominios + cores das capabilities
+  scale-tier.ts              # tiers de escala + modo economico (sampling/janela)
+  trace-proxy.ts             # substitutos de metrica/topologia p/ checks de span
   ai/                        # prompts, intents, starters, analises
     assistIntent.ts            # sendIntent p/ Assist nativo
     conversationStarters.ts    # starters por pagina + por time
-    projectAnalysis.ts         # analise de objetivos (LLM + deteccao)
     reportPrompt.ts            # contexto do assessment p/ prompts
+    smartReport.ts             # relatorio narrativo via Davis CoPilot
   hooks/                     # dados (DQL, Doc Store, fontes oficiais)
-    useProjects.ts, useOwnershipTeams.ts, useSegments.ts,
-    useOwnershipDiscovery.ts, useDavisRecommendations.ts, useDevMode.ts
+    useCoverageData.ts, useAppAdoption.ts, usePreflight.ts,
+    useScaleTier.ts, useDavisRecommendations.ts, useDevMode.ts
   components/                # UI reutilizavel
-    ProjectRadar.tsx, ProjectDetailModal.tsx, AiReportModal.tsx,
-    DavisInsightSection.tsx (exporta renderMarkdown), TechRadar.tsx, …
+    CovMatRadar.tsx (radar, modo coverageOnly), CapabilityScatter.tsx
+    (barras de coverage + linha de utilization), CustomReportModal.tsx,
+    SmartReportModal.tsx, DavisInsightSection.tsx (exporta renderMarkdown),
+    ScaleTierBanner.tsx (+ CostModeNote), TraceProxyBanner.tsx, TechRadar.tsx
+  reports/                   # geradores de PDF por persona (EN/PT/ES)
+    personaReports.ts, aiNarrativePdf.ts
+  data/                      # mapas estaticos (tiers, importancia, apps)
   pages/                     # 1 arquivo por rota
-  utils/                     # colors.ts (bandas), objectiveSuggestions.ts
+  utils/                     # colors.ts (bandas de score)
   perf/                      # instrumentacao + caches
 ```
 

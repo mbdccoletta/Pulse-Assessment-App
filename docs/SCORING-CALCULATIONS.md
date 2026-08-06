@@ -1,6 +1,6 @@
-# Pulse Assessment - Scoring Calculations (Coverage & Maturity)
+# Pulse Assessment - Scoring Calculations (Coverage & Utilization)
 
-Diagramas Mermaid detalhados explicando **exatamente como** Coverage e Maturity sao calculados, com exemplos numericos reais.
+Diagramas Mermaid detalhados explicando **exatamente como** Coverage e Utilization sao calculados, com exemplos numericos reais.
 
 Source-of-truth do codigo:
 - `ui/app/queries.ts` (linhas 284-286) - weights
@@ -8,7 +8,7 @@ Source-of-truth do codigo:
 - `ui/app/hooks/useCoverageData.ts` (linhas 706-766) - formula
 - `ui/app/hooks/useCoverageData.ts` (linhas 852-870) - agregacao final
 
-Versao: v2.5.3
+Versao: v2.5.5
 
 ---
 
@@ -106,7 +106,7 @@ cor radar: #5EB1A9
 
 ---
 
-## 3. Maturity Score (formula ponderada progressiva)
+## 3. Utilization Score (formula ponderada progressiva)
 
 Mesmos criterios, mas **agrupa em 3 tiers** e aplica **pesos com gates progressivos**.
 
@@ -163,7 +163,7 @@ flowchart TD
 
 ### 3.3 Gates progressivos (a magica)
 
-Esta e a **regra-chave** que diferencia Maturity de uma simples media ponderada. BP e Excellence so contam se os anteriores estiverem solidos.
+Esta e a **regra-chave** que diferencia Utilization de uma simples media ponderada. BP e Excellence so contam se os anteriores estiverem solidos.
 
 ```mermaid
 flowchart TD
@@ -193,12 +193,12 @@ flowchart TD
     style J fill:#10B981,color:#fff
 ```
 
-**Por que esses gates?** Porque um cliente pode acidentalmente passar em criterios Excellence (ex: tem OTel ativo) sem ter o basico (ex: nem todos os hosts com CPU). A formula sem gate inflaria a maturity. Os gates forcam:
+**Por que esses gates?** Porque um cliente pode acidentalmente passar em criterios Excellence (ex: tem OTel ativo) sem ter o basico (ex: nem todos os hosts com CPU). A formula sem gate inflaria a utilization. Os gates forcam:
 
 - BP so importa se voce ja tem **80%+ do Foundation**
 - Excellence so importa se voce ja tem **60%+ do BP** (que por sua vez exige Foundation forte)
 
-### 3.4 Maturity Level (L0-L3) - rotulo discreto
+### 3.4 Utilization Level (L0-L3) - rotulo discreto
 
 Independente do maturityScore, atribui um **nivel** discreto. Mais facil de comunicar.
 
@@ -259,7 +259,7 @@ flowchart LR
 
 **Coverage = 55** (banda Moderate, cor amarela)
 
-### Maturity Score
+### Utilization Score
 
 ```mermaid
 flowchart TD
@@ -282,9 +282,9 @@ flowchart TD
     style H fill:#5EB1A9,color:#fff
 ```
 
-**Maturity = 74** (banda Good, mesmo com Excellence 38% - porque o gate cortou).
+**Utilization = 74** (banda Good, mesmo com Excellence 38% - porque o gate cortou).
 
-### Maturity Level
+### Utilization Level
 
 ```mermaid
 flowchart LR
@@ -306,14 +306,14 @@ flowchart LR
 | Total criterios | 22 | tudo que esta sendo medido |
 | Passaram | 12 | metade-ish |
 | **Coverage** | **55** | "55% dos itens passou" |
-| **Maturity** | **74** | "base solida, BP a meio caminho, Excellence ignorado" |
+| **Utilization** | **74** | "base solida, BP a meio caminho, Excellence ignorado" |
 | **Level** | **L2 Operational** | "tem o basico + alguma profundidade" |
 
-Note como **Coverage 55 < Maturity 74**: o cliente tem Foundation 100%, e a formula de Maturity premia isso. Coverage trata todos os criterios como iguais.
+Note como **Coverage 55 < Utilization 74**: o cliente tem Foundation 100%, e a formula de Utilization premia isso. Coverage trata todos os criterios como iguais.
 
 ---
 
-## 5. Coverage vs Maturity - lado a lado
+## 5. Coverage vs Utilization - lado a lado
 
 Quando os dois numeros divergem, o por que.
 
@@ -324,7 +324,7 @@ flowchart TB
     end
 
     SAME --> COV[Coverage path]
-    SAME --> MAT[Maturity path]
+    SAME --> MAT[Utilization path]
 
     subgraph COV[COVERAGE]
         C1[Conta tudo igual]
@@ -332,7 +332,7 @@ flowchart TB
         C3[= 55<br/>banda Moderate]
     end
 
-    subgraph MAT[MATURITY]
+    subgraph MAT[UTILIZATION]
         M1[Foundation x 60% peso]
         M2[BP x 25% peso<br/>se F >= 80%]
         M3[Excellence x 15% peso<br/>se BP >= 60%]
@@ -351,13 +351,13 @@ flowchart TB
 flowchart TD
     A[Distribuicao do<br/>cliente] --> B{Padrao?}
 
-    B -->|Foundation forte<br/>Excellence ignorado| C["Coverage MEDIO<br/>Maturity ALTO<br/><br/>Mensagem: <br/>basico solido, falta avancar"]
+    B -->|Foundation forte<br/>Excellence ignorado| C["Coverage MEDIO<br/>Utilization ALTO<br/><br/>Mensagem: <br/>basico solido, falta avancar"]
 
-    B -->|Excellence alto<br/>Foundation fraco| D["Coverage MEDIO<br/>Maturity BAIXO<br/><br/>Mensagem:<br/>tem coisas avancadas<br/>mas o basico nao esta solido"]
+    B -->|Excellence alto<br/>Foundation fraco| D["Coverage MEDIO<br/>Utilization BAIXO<br/><br/>Mensagem:<br/>tem coisas avancadas<br/>mas o basico nao esta solido"]
 
-    B -->|Tudo proporcional| E["Coverage = Maturity<br/><br/>Mensagem:<br/>adocao uniforme"]
+    B -->|Tudo proporcional| E["Coverage = Utilization<br/><br/>Mensagem:<br/>adocao uniforme"]
 
-    B -->|Tudo 100%| F["Coverage 100<br/>Maturity 100<br/><br/>Mensagem:<br/>L3 Optimized"]
+    B -->|Tudo 100%| F["Coverage 100<br/>Utilization 100<br/><br/>Mensagem:<br/>L3 Optimized"]
 
     style C fill:#5EB1A9,color:#fff
     style D fill:#EF4444,color:#fff
@@ -373,7 +373,7 @@ O numero unico que aparece no header.
 
 ```mermaid
 flowchart TD
-    A[9 capabilities<br/>cada uma com<br/>coverage + maturity] --> B[Excluir capabilities<br/>que o usuario desmarcou]
+    A[9 capabilities<br/>cada uma com<br/>coverage + utilization] --> B[Excluir capabilities<br/>que o usuario desmarcou]
 
     B --> C[Aplicar consolidation factor<br/>opcional - default 100%]
 
@@ -385,7 +385,7 @@ flowchart TD
     E --> G[Coverage medio<br/>sum scores / count]
     F --> G
 
-    C --> H[Maturity medio<br/>sum maturityScores / count]
+    C --> H[Utilization medio<br/>sum maturityScores / count]
 
     G --> I[totalScore<br/>shown in header]
     H --> J[overallMaturityLevel<br/>used for export]
@@ -424,7 +424,7 @@ flowchart LR
 
     subgraph OUT[Outputs]
         COV[Coverage]
-        MAT[Maturity]
+        MAT[Utilization]
         LVL[Level L0-L3]
     end
 
@@ -448,7 +448,7 @@ flowchart LR
     style LVL fill:#10B981,color:#fff
 ```
 
-| O que muda Coverage e Maturity | O que NAO muda |
+| O que muda Coverage e Utilization | O que NAO muda |
 |---|---|
 | Dados reais do Grail (DQL results) | Tema dark/light |
 | Scale Tier (large/xlarge faz sampling) | Cache hit/miss (resultado e igual) |
@@ -468,10 +468,10 @@ flowchart LR
     A[~94 criteria<br/>each: passed or failed] --> B[Per capability]
 
     B --> C["Coverage<br/>simple average<br/>passed/total x 100"]
-    B --> D["Maturity<br/>tier-weighted<br/>F x 60% + BP x 25% + E x 15%<br/>(gated progressive)"]
+    B --> D["Utilization<br/>tier-weighted<br/>F x 60% + BP x 25% + E x 15%<br/>(gated progressive)"]
 
     C --> E[Total Coverage<br/>avg of 9 capabilities]
-    D --> F[Total Maturity<br/>avg of 9 capabilities]
+    D --> F[Total Utilization<br/>avg of 9 capabilities]
 
     E --> G[Header score<br/>radar bands]
     F --> H[Capability cards<br/>L0-L3 badge]
@@ -483,7 +483,7 @@ flowchart LR
     style H fill:#EEA746,color:#fff
 ```
 
-> **Em uma frase:** *Coverage e media simples; Maturity e media ponderada que so libera tiers avancados quando os anteriores estao solidos.*
+> **Em uma frase:** *Coverage e media simples; Utilization e media ponderada que so libera tiers avancados quando os anteriores estao solidos.*
 
 ---
 
