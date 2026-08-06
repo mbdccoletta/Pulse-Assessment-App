@@ -8,7 +8,7 @@
 //
 // Every claim in the text is backed by a chart drawn from the same data:
 //   - capability radar (canvas render reused from TechRadar)
-//   - coverage vs maturity grouped bars
+//   - coverage vs utilization grouped bars
 //   - evolution line over saved snapshots
 //   - tier (FND/BP/EXC) stacked pass bars
 //   - per-check gap bars (current value vs operative threshold)
@@ -27,7 +27,7 @@
 
 import { jsPDF } from "jspdf";
 import { CRITERION_REMEDIATION } from "../data/criterionRemediation";
-import { renderRadarToDataURL } from "../components/CovMatRadar";
+import { renderRadarToDataURL } from "../components/CovUtilRadar";
 import { renderScatterToDataURL, scatterAspectRatio } from "../components/CapabilityScatter";
 
 export type PersonaLang = "en" | "pt" | "es";
@@ -76,20 +76,20 @@ export interface PersonaCapability {
   color: string;
   score: number;
   criteriaResults: PersonaCriterion[];
-  maturity: {
+  utilization: {
     foundation: { total: number; passed: number };
     bestPractice: { total: number; passed: number };
     excellence: { total: number; passed: number };
     levelLabel: string;
-    maturityScore: number;
-    maturityBand: string;
+    utilizationScore: number;
+    utilizationBand: string;
   };
 }
 
 export interface PersonaReportInput {
   capabilities: PersonaCapability[];
   totalScore: number;
-  overallMaturityLevel: number;
+  overallUtilizationLevel: number;
   tenant: string;
   date: string;
   stats: { scannedRecords: number; succeeded: number; total: number; failed: number } | null;
@@ -110,15 +110,15 @@ export interface PersonaReportInput {
 interface S {
   reportOf: string;
   execTitle: string; tactTitle: string; techTitle: string; customTitle: string;
-  coverage: string; maturity: string; criteriaPassing: string; entitiesMonitored: string;
+  coverage: string; utilization: string; criteriaPassing: string; entitiesMonitored: string;
   postureTitle: string; verdictStrong: string; verdictMixed: string; verdictEarly: string;
   analysisTitle: string;
   avgLabel: string; bestLabel: string; worstLabel: string; spreadLabel: string;
   spreadNote: (pts: number) => string;
   tierPassTitle: string;
   tierNote: (fnd: number, bp: number, exc: number) => string;
-  covVsMatTitle: string; legCoverage: string; legMaturity: string;
-  covVsMatNote: string;
+  covVsUtilTitle: string; legCoverage: string; legUtilization: string;
+  covVsUtilNote: string;
   evolutionTitle: string; evolutionNote: (n: number, delta: string) => string;
   strengthsTitle: string; exposuresTitle: string; notActivated: string;
   checksOk: (p: number, t: number) => string;
@@ -178,7 +178,7 @@ const STRINGS: Record<PersonaLang, S> = {
   en: {
     reportOf: "Dynatrace Platform - Pulse Assessment",
     execTitle: "Executive Report", tactTitle: "Tactical Report", techTitle: "Technical Report", customTitle: "Custom Report",
-    coverage: "COVERAGE", maturity: "UTILIZATION", criteriaPassing: "CRITERIA PASSING", entitiesMonitored: "ENTITIES MONITORED",
+    coverage: "COVERAGE", utilization: "UTILIZATION", criteriaPassing: "CRITERIA PASSING", entitiesMonitored: "ENTITIES MONITORED",
     postureTitle: "Observability Posture at a Glance",
     verdictStrong: "Strong foundation: the platform is broadly adopted. Focus shifts from activation to depth and standardization.",
     verdictMixed: "Mixed posture: strong pillars coexist with under-used capabilities. Targeted activation unlocks fast, visible wins.",
@@ -188,9 +188,9 @@ const STRINGS: Record<PersonaLang, S> = {
     spreadNote: (pts) => `${pts}% separate the strongest and weakest capability - the gap itself is the roadmap.`,
     tierPassTitle: "Pass Rate by Utilization Tier",
     tierNote: (f, b, e) => `Foundation ${f}%, Best Practice ${b}%, Excellence ${e}% - Foundation gates the formula: gaps there suppress everything above.`,
-    covVsMatTitle: "Coverage vs Utilization by Capability",
-    legCoverage: "Coverage %", legMaturity: "Utilization /100",
-    covVsMatNote: "Where the Utilization bar trails the coverage bar, the capability is activated but used shallowly - depth, not licensing, is the lever.",
+    covVsUtilTitle: "Coverage vs Utilization by Capability",
+    legCoverage: "Coverage %", legUtilization: "Utilization /100",
+    covVsUtilNote: "Where the Utilization bar trails the coverage bar, the capability is activated but used shallowly - depth, not licensing, is the lever.",
     evolutionTitle: "Score Evolution",
     evolutionNote: (n, d) => `${n} saved snapshots - overall coverage moved ${d}% across the period.`,
     strengthsTitle: "Where the Platform Is Already Paying Off",
@@ -266,7 +266,7 @@ const STRINGS: Record<PersonaLang, S> = {
   pt: {
     reportOf: "Plataforma Dynatrace - Pulse Assessment",
     execTitle: "Relatorio Executivo", tactTitle: "Relatorio Tatico", techTitle: "Relatorio Tecnico", customTitle: "Relatorio Personalizado",
-    coverage: "COBERTURA", maturity: "UTILIZACAO", criteriaPassing: "CRITERIOS OK", entitiesMonitored: "ENTIDADES MONITORADAS",
+    coverage: "COBERTURA", utilization: "UTILIZACAO", criteriaPassing: "CRITERIOS OK", entitiesMonitored: "ENTIDADES MONITORADAS",
     postureTitle: "Postura de Observabilidade em Resumo",
     verdictStrong: "Base solida: a plataforma esta amplamente adotada. O foco passa de ativacao para profundidade e padronizacao.",
     verdictMixed: "Postura mista: pilares fortes convivem com capacidades subutilizadas. Ativacao direcionada gera ganhos rapidos e visiveis.",
@@ -276,9 +276,9 @@ const STRINGS: Record<PersonaLang, S> = {
     spreadNote: (pts) => `${pts}% separam a capacidade mais forte da mais fraca - essa distancia e o proprio roadmap.`,
     tierPassTitle: "Aprovacao por Tier de Utilizacao",
     tierNote: (f, b, e) => `Foundation ${f}%, Best Practice ${b}%, Excellence ${e}% - Foundation trava a formula: gaps ali suprimem tudo acima.`,
-    covVsMatTitle: "Cobertura vs Utilizacao por Capacidade",
-    legCoverage: "Cobertura %", legMaturity: "Utilizacao /100",
-    covVsMatNote: "Onde a barra de Utilizacao fica atras da de cobertura, a capacidade esta ativada mas usada de forma rasa - a alavanca e profundidade, nao licenciamento.",
+    covVsUtilTitle: "Cobertura vs Utilizacao por Capacidade",
+    legCoverage: "Cobertura %", legUtilization: "Utilizacao /100",
+    covVsUtilNote: "Onde a barra de Utilizacao fica atras da de cobertura, a capacidade esta ativada mas usada de forma rasa - a alavanca e profundidade, nao licenciamento.",
     evolutionTitle: "Evolucao do Score",
     evolutionNote: (n, d) => `${n} snapshots salvos - a cobertura geral moveu ${d}% no periodo.`,
     strengthsTitle: "Onde a Plataforma Ja Gera Valor",
@@ -354,7 +354,7 @@ const STRINGS: Record<PersonaLang, S> = {
   es: {
     reportOf: "Plataforma Dynatrace - Pulse Assessment",
     execTitle: "Informe Ejecutivo", tactTitle: "Informe Tactico", techTitle: "Informe Tecnico", customTitle: "Informe Personalizado",
-    coverage: "COBERTURA", maturity: "UTILIZACION", criteriaPassing: "CRITERIOS OK", entitiesMonitored: "ENTIDADES MONITOREADAS",
+    coverage: "COBERTURA", utilization: "UTILIZACION", criteriaPassing: "CRITERIOS OK", entitiesMonitored: "ENTIDADES MONITOREADAS",
     postureTitle: "Postura de Observabilidad en Resumen",
     verdictStrong: "Base solida: la plataforma esta ampliamente adoptada. El foco pasa de activacion a profundidad y estandarizacion.",
     verdictMixed: "Postura mixta: pilares fuertes conviven con capacidades subutilizadas. La activacion dirigida genera logros rapidos y visibles.",
@@ -364,9 +364,9 @@ const STRINGS: Record<PersonaLang, S> = {
     spreadNote: (pts) => `${pts}% separan la capacidad mas fuerte de la mas debil - esa distancia es el propio roadmap.`,
     tierPassTitle: "Aprobacion por Tier de Utilizacion",
     tierNote: (f, b, e) => `Foundation ${f}%, Best Practice ${b}%, Excellence ${e}% - Foundation bloquea la formula: brechas alli suprimen todo lo demas.`,
-    covVsMatTitle: "Cobertura vs Utilizacion por Capacidad",
-    legCoverage: "Cobertura %", legMaturity: "Utilizacion /100",
-    covVsMatNote: "Donde la barra de Utilizacion queda detras de la de cobertura, la capacidad esta activada pero usada superficialmente - la palanca es profundidad, no licenciamiento.",
+    covVsUtilTitle: "Cobertura vs Utilizacion por Capacidad",
+    legCoverage: "Cobertura %", legUtilization: "Utilizacion /100",
+    covVsUtilNote: "Donde la barra de Utilizacion queda detras de la de cobertura, la capacidad esta activada pero usada superficialmente - la palanca es profundidad, no licenciamiento.",
     evolutionTitle: "Evolucion del Score",
     evolutionNote: (n, d) => `${n} snapshots guardados - la cobertura general se movio ${d}% en el periodo.`,
     strengthsTitle: "Donde la Plataforma Ya Genera Valor",
@@ -540,13 +540,13 @@ function failingChecks(caps: PersonaCapability[]): FailingCheck[] {
 }
 
 /** The minimal, cheapest set of checks that unlocks the capability's next
- *  maturity level. Mirrors useCoverageData's level ladder:
+ *  utilization level. Mirrors useCoverageData's level ladder:
  *    L0 Not Adopted -> L1 Foundation   fPct >= 0.5
  *    L1 -> L2 Operational              fPct = 1.0 and bPct >= 0.5
  *    L2 -> L3 Optimized                bPct = 1.0 and ePct >= 0.5
  *  Checks are picked smallest-gap-first inside each required tier. */
 function nextLevelPlan(cap: PersonaCapability): { current: string; next: string | null; needed: { cr: PersonaCriterion; th: number; gap: number }[] } {
-  const m = cap.maturity;
+  const m = cap.utilization;
   const fPct = m.foundation.total ? m.foundation.passed / m.foundation.total : 1;
   const bPct = m.bestPractice.total ? m.bestPractice.passed / m.bestPractice.total : 1;
   const ePct = m.excellence.total ? m.excellence.passed / m.excellence.total : 1;
@@ -595,7 +595,7 @@ export function buildPersonaReport(
   lang: PersonaLang = "en",
   custom?: CustomReportOptions,
 ): jsPDF | null {
-  const { capabilities, totalScore, overallMaturityLevel, tenant, date, stats, entityCounts, history } = input;
+  const { capabilities, totalScore, overallUtilizationLevel, tenant, date, stats, entityCounts, history } = input;
   if (capabilities.length === 0) return null;
   const T = STRINGS[lang];
 
@@ -691,7 +691,7 @@ export function buildPersonaReport(
     pdf.setLineWidth(0.2);
   };
 
-  /** Grouped horizontal bars: coverage vs maturity per capability. */
+  /** Grouped horizontal bars: coverage vs utilization per capability. */
   const covVsMatChart = () => {
     // legend
     ensureSpace(8);
@@ -700,7 +700,7 @@ export function buildPersonaReport(
     pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
     pdf.text(T.legCoverage, M + 4.5, y);
     pdf.setFillColor(180, 130, 255); pdf.rect(M + 30, y - 2.4, 3, 2.4, "F");
-    pdf.text(T.legMaturity, M + 34.5, y);
+    pdf.text(T.legUtilization, M + 34.5, y);
     y += 5;
     const nameW = 60, valW = 12;
     const bx = M + nameW, bw = CW - nameW - valW;
@@ -716,15 +716,15 @@ export function buildPersonaReport(
       pdf.setFillColor(24, 28, 52); pdf.rect(bx, y, bw, 2.4, "F");
       pdf.setFillColor(80, 180, 255);
       if (cap.score > 0) pdf.rect(bx, y, Math.max(1, bw * cap.score / 100), 2.4, "F");
-      // maturity bar
+      // utilization bar
       pdf.setFillColor(24, 28, 52); pdf.rect(bx, y + 3, bw, 2.4, "F");
       pdf.setFillColor(180, 130, 255);
-      if (cap.maturity.maturityScore > 0) pdf.rect(bx, y + 3, Math.max(1, bw * cap.maturity.maturityScore / 100), 2.4, "F");
+      if (cap.utilization.utilizationScore > 0) pdf.rect(bx, y + 3, Math.max(1, bw * cap.utilization.utilizationScore / 100), 2.4, "F");
       pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
       pdf.setTextColor(80, 180, 255);
       pdf.text(`${cap.score}%`, bx + bw + 2, y + 2.2);
       pdf.setTextColor(180, 130, 255);
-      pdf.text(`${cap.maturity.maturityScore}`, bx + bw + 2, y + 5.4);
+      pdf.text(`${cap.utilization.utilizationScore}`, bx + bw + 2, y + 5.4);
       y += 9;
     }
     y += 2;
@@ -767,7 +767,7 @@ export function buildPersonaReport(
 
   /** Stacked FND/BP/EXC bar: width proportional to tier size, solid = passed. */
   const tierStackedBar = (x: number, w: number, cap: PersonaCapability) => {
-    const m = cap.maturity;
+    const m = cap.utilization;
     const tiers: { label: string; passed: number; total: number; color: [number, number, number] }[] = [
       { label: T.tierShort.foundation, ...m.foundation, color: [80, 180, 255] },
       { label: T.tierShort.bestPractice, ...m.bestPractice, color: [180, 130, 255] },
@@ -821,9 +821,9 @@ export function buildPersonaReport(
 
   const tierTotals = capabilities.reduce(
     (acc, c) => {
-      acc.f.passed += c.maturity.foundation.passed; acc.f.total += c.maturity.foundation.total;
-      acc.b.passed += c.maturity.bestPractice.passed; acc.b.total += c.maturity.bestPractice.total;
-      acc.e.passed += c.maturity.excellence.passed; acc.e.total += c.maturity.excellence.total;
+      acc.f.passed += c.utilization.foundation.passed; acc.f.total += c.utilization.foundation.total;
+      acc.b.passed += c.utilization.bestPractice.passed; acc.b.total += c.utilization.bestPractice.total;
+      acc.e.passed += c.utilization.excellence.passed; acc.e.total += c.utilization.excellence.total;
       return acc;
     },
     { f: { passed: 0, total: 0 }, b: { passed: 0, total: 0 }, e: { passed: 0, total: 0 } },
@@ -849,7 +849,7 @@ export function buildPersonaReport(
       : null;
     kpiRow([
       { value: `${totalScore}%`, label: T.coverage, color: [80, 180, 255] },
-      { value: `${overallMaturityLevel}/100`, label: T.maturity, color: [180, 130, 255] },
+      { value: `${overallUtilizationLevel}/100`, label: T.utilization, color: [180, 130, 255] },
       // People on the platform sits with the headline numbers when we have
       // it — the coverage/utilization pair says nothing about audience.
       ...(input.adoption
@@ -864,7 +864,7 @@ export function buildPersonaReport(
   const kpiTactical = () => {
     kpiRow([
       { value: `${totalScore}%`, label: T.coverage, color: [80, 180, 255] },
-      { value: `${overallMaturityLevel}/100`, label: T.maturity, color: [180, 130, 255] },
+      { value: `${overallUtilizationLevel}/100`, label: T.utilization, color: [180, 130, 255] },
       { value: `${failing.length}`, label: "GAPS", color: [255, 140, 120] },
     ]);
   };
@@ -882,7 +882,7 @@ export function buildPersonaReport(
         capabilities.map(c => ({
           name: c.name,
           coverage: c.score,
-          maturity: c.maturity.maturityScore,
+          utilization: c.utilization.utilizationScore,
           color: c.color,
         })),
         760, { darkBg: true, format: "jpeg" },
@@ -901,21 +901,21 @@ export function buildPersonaReport(
     // how far the next stage is.
     const boundariesP = [20, 40, 60, 80];
     const bandNamesP = ["N/A", "Low", "Moderate", "Good", "Excellent"];
-    const curIdxP = boundariesP.filter(b => overallMaturityLevel >= b).length;
-    bodyText(T.stageNow(bandNamesP[curIdxP], overallMaturityLevel), 8.5, [190, 195, 220]);
-    if (curIdxP < 4) bodyText(T.stageNext(bandNamesP[curIdxP + 1], boundariesP[curIdxP] - overallMaturityLevel), 8.5, [190, 195, 220]);
+    const curIdxP = boundariesP.filter(b => overallUtilizationLevel >= b).length;
+    bodyText(T.stageNow(bandNamesP[curIdxP], overallUtilizationLevel), 8.5, [190, 195, 220]);
+    if (curIdxP < 4) bodyText(T.stageNext(bandNamesP[curIdxP + 1], boundariesP[curIdxP] - overallUtilizationLevel), 8.5, [190, 195, 220]);
     y += 5;
   };
 
   const secCovVsUtilization = () => {
-    sectionHeader(T.covVsMatTitle);
+    sectionHeader(T.covVsUtilTitle);
     // The app's Capability Map (Coverage x Utilization bubble chart) — same
     // canvas renderer as the Executive Summary screen. Falls back to the
     // grouped bars when canvas is unavailable (offline harness).
     let embedded = false;
     try {
       const scatter = renderScatterToDataURL(
-        capabilities.map(c => ({ name: c.name, x: c.score, y: c.maturity.maturityScore, color: c.color })),
+        capabilities.map(c => ({ name: c.name, x: c.score, y: c.utilization.utilizationScore, color: c.color })),
         1200, { darkBg: true, format: "jpeg" },
       );
       if (scatter) {
@@ -927,7 +927,7 @@ export function buildPersonaReport(
       }
     } catch { /* canvas unavailable */ }
     if (!embedded) covVsMatChart();
-    bodyText(T.covVsMatNote, 8, TXT_DIM);
+    bodyText(T.covVsUtilNote, 8, TXT_DIM);
     y += 4;
   };
 
@@ -1097,7 +1097,7 @@ export function buildPersonaReport(
       const bx = M, bw = CW;
       for (const b of bands) {
         const x0 = bx + bw * b.from / 100, x1 = bx + bw * b.to / 100;
-        const reached = overallMaturityLevel >= b.from;
+        const reached = overallUtilizationLevel >= b.from;
         pdf.setFillColor(
           Math.round(b.color[0] * (reached ? 1 : 0.28)),
           Math.round(b.color[1] * (reached ? 1 : 0.28)),
@@ -1108,22 +1108,22 @@ export function buildPersonaReport(
         pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
         pdf.text(b.label, (x0 + x1) / 2, y + 10.5, { align: "center" });
       }
-      // marker at current overall maturity
-      const mx = bx + bw * Math.min(100, overallMaturityLevel) / 100;
+      // marker at current overall utilization
+      const mx = bx + bw * Math.min(100, overallUtilizationLevel) / 100;
       pdf.setDrawColor(255, 255, 255); pdf.setLineWidth(0.6);
       pdf.line(mx, y + 1.4, mx, y + 8.6);
       pdf.setFontSize(6.5); pdf.setFont("helvetica", "bold");
       pdf.setTextColor(255, 255, 255);
-      pdf.text(`${overallMaturityLevel}`, mx, y, { align: "center" });
+      pdf.text(`${overallUtilizationLevel}`, mx, y, { align: "center" });
       pdf.setLineWidth(0.2);
       y += 15;
     }
     const boundaries = [20, 40, 60, 80];
     const bandNames = ["N/A", "Low", "Moderate", "Good", "Excellent"];
-    const curIdx = boundaries.filter(b => overallMaturityLevel >= b).length;
-    bodyText(T.stageNow(bandNames[curIdx], overallMaturityLevel), 9, [225, 228, 245]);
+    const curIdx = boundaries.filter(b => overallUtilizationLevel >= b).length;
+    bodyText(T.stageNow(bandNames[curIdx], overallUtilizationLevel), 9, [225, 228, 245]);
     if (curIdx < 4) {
-      bodyText(T.stageNext(bandNames[curIdx + 1], boundaries[curIdx] - overallMaturityLevel), 8.5, [190, 195, 220]);
+      bodyText(T.stageNext(bandNames[curIdx + 1], boundaries[curIdx] - overallUtilizationLevel), 8.5, [190, 195, 220]);
     } else {
       bodyText(T.stageMax, 8.5, [190, 195, 220]);
     }
@@ -1150,7 +1150,7 @@ export function buildPersonaReport(
       bullet(T.winsImpact(topWinsQ.length, winsPtsQ.toFixed(1)), [200, 235, 215]);
     }
     // Move 2 — unlock Foundation gates (they cap everything above).
-    const gateCaps = capabilities.filter(c => c.maturity.foundation.passed < c.maturity.foundation.total);
+    const gateCaps = capabilities.filter(c => c.utilization.foundation.passed < c.utilization.foundation.total);
     if (gateCaps.length > 0) bullet(T.recGates(gateCaps.slice(0, 3).map(c => c.name).join(", ")));
     // Move 3 — lift the weakest pillar, framed by its business risk.
     if (worstCap && worstCap.score < 90) {
@@ -1303,7 +1303,7 @@ export function buildPersonaReport(
       if (cap.score > 0) pdf.roundedRect(bx, y, Math.max(2, bw * cap.score / 100), 4, 1, 1, "F");
       pdf.setFontSize(7); pdf.setFont("helvetica", "normal");
       pdf.setTextColor(190, 195, 220);
-      pdf.text(`${cap.score}%  -  ${clean(cap.maturity.levelLabel)}  -  ${gaps} gaps`, bx + bw + 3, y + 3.4);
+      pdf.text(`${cap.score}%  -  ${clean(cap.utilization.levelLabel)}  -  ${gaps} gaps`, bx + bw + 3, y + 3.4);
       y += 7.5;
     }
     y += 3;
@@ -1363,7 +1363,7 @@ export function buildPersonaReport(
   const secTechDetail = () => {
     for (const cap of capabilities) {
       const rgb = hexToRgb(cap.color);
-      sectionHeader(`${cap.name}  -  ${cap.score}%  -  ${cap.maturity.levelLabel}`, [Math.round(rgb[0] * 0.35), Math.round(rgb[1] * 0.35), Math.round(rgb[2] * 0.35)]);
+      sectionHeader(`${cap.name}  -  ${cap.score}%  -  ${cap.utilization.levelLabel}`, [Math.round(rgb[0] * 0.35), Math.round(rgb[1] * 0.35), Math.round(rgb[2] * 0.35)]);
       tierStackedBar(M, CW, cap);
       // Next-level unlock: the exact minimal check set, cheapest first.
       const plan = nextLevelPlan(cap);

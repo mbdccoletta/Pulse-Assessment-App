@@ -13,14 +13,14 @@ export interface TierResult {
   passed: number;
 }
 
-export interface MaturityResult {
+export interface UtilizationResult {
   foundation: TierResult;
   bestPractice: TierResult;
   excellence: TierResult;
   level: 0 | 1 | 2 | 3;
   levelLabel: string;
-  maturityScore: number;  // 0-100 weighted score
-  maturityBand: string;  // "N/A" | "Low" | "Moderate" | "Good" | "Excellent"
+  utilizationScore: number;  // 0-100 weighted score
+  utilizationBand: string;  // "N/A" | "Low" | "Moderate" | "Good" | "Excellent"
 }
 
 export interface CapabilityResult {
@@ -32,11 +32,11 @@ export interface CapabilityResult {
   rawScore: number;
   details: string[];
   criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; proxied: boolean }[];
-  maturity: MaturityResult;
+  utilization: UtilizationResult;
   /** Consolidation factor (0–100). 100 = all data in DT, 30 = only 30% of estate in DT. */
   consolidation: number;
-  /** Effective maturity score (adjusted by consolidation when active). */
-  effectiveMaturityScore: number;
+  /** Effective utilization score (adjusted by consolidation when active). */
+  effectiveUtilizationScore: number;
 }
 
 export interface QueryStats {
@@ -48,7 +48,7 @@ export interface QueryStats {
   scannedDataPoints: number;
 }
 
-export type ViewMode = "coverage" | "maturity" | "recommendations";
+export type ViewMode = "coverage" | "utilization" | "recommendations";
 
 export interface EntityCounts {
   hosts: number;
@@ -79,7 +79,7 @@ export interface EntityCounts {
 export interface CoverageData {
   capabilities: CapabilityResult[];
   totalScore: number;
-  overallMaturityLevel: number;
+  overallUtilizationLevel: number;
   loading: boolean;
   idle: boolean;
   progress: number;
@@ -280,7 +280,7 @@ function isEntityCountQuery(q: string): boolean {
   return /^\s*fetch\s+dt\.entity\.[a-z_0-9]+\s*\|\s*summarize\s+count\(\)\s*$/.test(q);
 }
 
-// Maturity tier weights for weighted scoring
+// Utilization tier weights for weighted scoring
 export const FOUNDATION_WEIGHT = 60;
 export const BEST_PRACTICE_WEIGHT = 25;
 export const EXCELLENCE_WEIGHT = 15;
@@ -729,7 +729,7 @@ export function useCoverageData(
           if (!isError && value > 0) details.push(`${criterion.label}: ${value}`);
         }
 
-        // Compute maturity per tier
+        // Compute utilization per tier
         const tierCounts = { foundation: { total: 0, passed: 0 }, bestPractice: { total: 0, passed: 0 }, excellence: { total: 0, passed: 0 } };
         for (const cr of criteriaResults) {
           const t = cr.tier;
@@ -745,26 +745,26 @@ export function useCoverageData(
         if (fPct >= 1.0 && bPct >= 0.5) { level = 2; levelLabel = "Operational"; }
         if (fPct >= 1.0 && bPct >= 1.0 && ePct >= 0.5) { level = 3; levelLabel = "Optimized"; }
 
-        // Progressive maturity: BP only counts if Foundation >= 80%, Excellence only if BP >= 60%
+        // Progressive utilization: BP only counts if Foundation >= 80%, Excellence only if BP >= 60%
         const effB = fPct >= 0.8 ? bPct : 0;
         const effE = effB >= 0.6 ? ePct : 0;
-        const maturityScore = Math.round((fPct * FOUNDATION_WEIGHT + effB * BEST_PRACTICE_WEIGHT + effE * EXCELLENCE_WEIGHT));
-        const maturityBand = maturityScore >= 80 ? "Excellent" : maturityScore >= 60 ? "Good" : maturityScore >= 40 ? "Moderate" : maturityScore >= 20 ? "Low" : "N/A";
+        const utilizationScore = Math.round((fPct * FOUNDATION_WEIGHT + effB * BEST_PRACTICE_WEIGHT + effE * EXCELLENCE_WEIGHT));
+        const utilizationBand = utilizationScore >= 80 ? "Excellent" : utilizationScore >= 60 ? "Good" : utilizationScore >= 40 ? "Moderate" : utilizationScore >= 20 ? "Low" : "N/A";
 
-        const maturity: MaturityResult = {
+        const utilization: UtilizationResult = {
           foundation: tierCounts.foundation,
           bestPractice: tierCounts.bestPractice,
           excellence: tierCounts.excellence,
           level,
           levelLabel,
-          maturityScore,
-          maturityBand,
+          utilizationScore,
+          utilizationBand,
         };
 
         const passedCount = criteriaResults.filter(cr => cr.points > 0).length;
         const capScore = Math.round((passedCount / cap.criteria.length) * 100);
 
-        return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, maturity, consolidation: 100, effectiveMaturityScore: maturityScore };
+        return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, utilization, consolidation: 100, effectiveUtilizationScore: utilizationScore };
       });
 
       // Log summary
@@ -857,8 +857,8 @@ export function useCoverageData(
       const factor = consolidation[cap.name] ?? 100;
       if (factor === 100) return cap;
       const adjScore = Math.round(cap.rawScore * factor / 100);
-      const adjMaturity = Math.round(cap.maturity.maturityScore * factor / 100);
-      return { ...cap, consolidation: factor, score: adjScore, effectiveMaturityScore: adjMaturity };
+      const adjMaturity = Math.round(cap.utilization.utilizationScore * factor / 100);
+      return { ...cap, consolidation: factor, score: adjScore, effectiveUtilizationScore: adjMaturity };
     });
   }, [capabilities, consolidation]);
 
@@ -866,8 +866,8 @@ export function useCoverageData(
     ? Math.round(adjustedCapabilities.reduce((sum, c) => sum + c.score, 0) / adjustedCapabilities.length)
     : 0;
 
-  const overallMaturityLevel = adjustedCapabilities.length > 0
-    ? Math.round(adjustedCapabilities.reduce((sum, c) => sum + c.effectiveMaturityScore, 0) / adjustedCapabilities.length)
+  const overallUtilizationLevel = adjustedCapabilities.length > 0
+    ? Math.round(adjustedCapabilities.reduce((sum, c) => sum + c.effectiveUtilizationScore, 0) / adjustedCapabilities.length)
     : 0;
 
   const tenant = (() => {
@@ -954,7 +954,7 @@ export function useCoverageData(
   return {
     capabilities: adjustedCapabilities,
     totalScore,
-    overallMaturityLevel,
+    overallUtilizationLevel,
     loading,
     idle,
     progress,

@@ -22,10 +22,13 @@ amended 2026-08-05 for v2.5.5.
 >   baseline. Sampling is applied only where both sides of a ratio are plain
 >   counts; `countDistinct` gets a narrower window instead, because sampling
 >   collapses it (log sources 63 → 28, AI providers 4 → 1).
-> - **"Maturity" is now "Utilization"** everywhere a user can see it. The code
->   identifiers (`maturityScore`, `cap.maturity`) and the persisted snapshot
->   keys were deliberately NOT renamed — renaming them would break every
->   snapshot already in the Document Store.
+> - **"Maturity" is now "Utilization"** everywhere — user-visible text in
+>   v2.5.5, and the code identifiers in v2.5.6 (`utilizationScore`,
+>   `cap.utilization`, `UtilizationCard`, `CovUtilRadar`). An earlier draft of
+>   this note said the identifier rename was unsafe because snapshots persist
+>   the key. That was wrong: a snapshot stores only name, colour, score,
+>   consolidation and criteriaResults, and utilization is recomputed from the
+>   criteria on load. Nothing persisted holds the word at all.
 > - **App adoption** (`useAppAdoption.ts`) counts distinct users per app from
 >   `dt.system.events` at zero scan cost, and reports penetration per
 >   capability. It never feeds a score.
@@ -204,7 +207,7 @@ const FOUNDATION_WEIGHT     = 60
 const BEST_PRACTICE_WEIGHT  = 25
 const EXCELLENCE_WEIGHT     = 15
 
-maturityScore = round(fPct * 60 + effB * 25 + effE * 15)
+utilizationScore = round(fPct * 60 + effB * 25 + effE * 15)
 ```
 
 **Do not change these weights without product approval.** They're part
@@ -223,17 +226,17 @@ Utilization band:
 
 | Band | Range |
 |---|---:|
-| Excellent | maturityScore >= 80 |
-| Good | maturityScore >= 60 |
-| Moderate | maturityScore >= 40 |
-| Low | maturityScore >= 20 |
-| N/A | maturityScore < 20 |
+| Excellent | utilizationScore >= 80 |
+| Good | utilizationScore >= 60 |
+| Moderate | utilizationScore >= 40 |
+| Low | utilizationScore >= 20 |
+| N/A | utilizationScore < 20 |
 
 ### 2.5 Overall scores
 
 ```ts
 totalScore        = round(mean of capabilities.score)
-overallMaturityLv = round(mean of capabilities.effectiveMaturityScore)
+overallMaturityLv = round(mean of capabilities.effectiveUtilizationScore)
 ```
 
 Shown in radar center and PDF cover.
@@ -245,7 +248,7 @@ range 0–100). Represents "how much of the real estate is in Dynatrace":
 
 ```ts
 adjScore     = round(rawScore * factor / 100)
-adjMaturity  = round(maturityScore * factor / 100)
+adjUtilization  = round(utilizationScore * factor / 100)
 ```
 
 Stored in `useCoverageData.consolidation: Record<string, number>`.
@@ -1250,7 +1253,7 @@ interface PerfReport {
     name: string;
     color: string;
     score: number;
-    maturityScore: number;
+    utilizationScore: number;
     maturityLevel: 0 | 1 | 2 | 3;
     criteriaCount: number;
     criteriaPassed: number;
@@ -1374,7 +1377,7 @@ Toggled via `ToggleButtonGroup` in the toolbar:
 | View | Content |
 |---|---|
 | `coverage` | Radar (left) + capability cards (right) |
-| `maturity` | Utilization scorecard with foundation / bestPractice / excellence breakdown |
+| `utilization` | Utilization scorecard with foundation / bestPractice / excellence breakdown |
 | `recommendations` | Executive summary with prioritized actions per importance level |
 
 ### 11.3 Toolbar (top, when results loaded)
@@ -1391,7 +1394,7 @@ visible (no dev gate).
 
 | Section | Gate | Content |
 |---|---|---|
-| `How to Analyze` collapsible | `viewMode === 'coverage' \|\| 'maturity'` | Legend + color scale |
+| `How to Analyze` collapsible | `viewMode === 'coverage' \|\| 'utilization'` | Legend + color scale |
 
 ### 11.5 Theme
 

@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **App adoption in the Executive headline** — average share of active platform users who open the apps behind each capability, beside Coverage and Utilization. Never feeds a score.
 
 ### Changed — terminology
-- Every user-visible **"Maturity" is now "Utilization"**, including chart labels, hub captions, tooltips, the criteria list and the Assist prompts. Internal identifiers (`maturityScore`, `cap.maturity`) and the persisted snapshot keys were deliberately left alone so saved history stays readable.
+- Every user-visible **"Maturity" is now "Utilization"**, including chart labels, hub captions, tooltips, the criteria list and the Assist prompts. Internal identifiers were left alone in this release and renamed in 2.5.6.
 - Criterion a12 renamed from "Service tagging maturity" to "Service tagging utilization".
 
 ### Changed — Executive Summary

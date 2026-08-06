@@ -178,7 +178,7 @@ flowchart TD
     E -->|Yes - BP solido| F[effE = ePct<br/>Excellence CONTA]
     E -->|No - BP fraco| G[effE = 0<br/>Excellence zerado]
 
-    F --> H[maturityScore =<br/>fPct x 60 +<br/>effB x 25 +<br/>effE x 15]
+    F --> H[utilizationScore =<br/>fPct x 60 +<br/>effB x 25 +<br/>effE x 15]
     G --> H
 
     H --> I[Round para inteiro 0-100]
@@ -200,7 +200,7 @@ flowchart TD
 
 ### 3.4 Utilization Level (L0-L3) - rotulo discreto
 
-Independente do maturityScore, atribui um **nivel** discreto. Mais facil de comunicar.
+Independente do utilizationScore, atribui um **nivel** discreto. Mais facil de comunicar.
 
 ```mermaid
 flowchart TD
@@ -271,7 +271,7 @@ flowchart TD
 
     D -->|No| E[effE = 0<br/>Excellence zerado!]
 
-    E --> F[maturityScore =<br/>1.00 x 60 + 0.55 x 25 + 0 x 15<br/>= 60 + 13.75 + 0<br/>= 73.75]
+    E --> F[utilizationScore =<br/>1.00 x 60 + 0.55 x 25 + 0 x 15<br/>= 60 + 13.75 + 0<br/>= 73.75]
 
     F --> G[Math.round -> 74]
     G --> H[Banda: Good<br/>60-80]

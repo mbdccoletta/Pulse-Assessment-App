@@ -498,7 +498,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       },
       {
         id: "l15", label: "Log-based events",
-        description: "Presence of events generated from log data — indicates mature log-based alerting.",
+        description: "Presence of events generated from log data — indicates established log-based alerting.",
         query: 'fetch events | filter timestamp > now() - 24h | filter event.kind == "LOG" | summarize count()',
         denominatorConstant: 1,
         thresholds: [{ min: 100 }, { min: 50 }],

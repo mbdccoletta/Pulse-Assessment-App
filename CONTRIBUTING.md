@@ -19,9 +19,12 @@ npm run start   # Starts dev server with hot reload
 ```bash
 npx dt-app dev --environment-url https://YOUR_TENANT.apps.dynatrace.com
 ```
-`app.config.json` ships with a **placeholder** `environmentUrl` — real tenant
-URLs are not committed. Either pass `--environment-url` as above, or set it
-locally and keep that edit out of your commits.
+`app.config.json` ships with a **dummy** `environmentUrl`
+(`https://abc12345.apps.dynatrace.com`) — real tenant URLs are not committed.
+It has to be a syntactically valid URL because `dt-app build` validates it and
+has no `--environment-url` flag; only `dev` and `deploy` accept one. So: pass
+the flag for dev/deploy, or set the URL locally and keep that edit out of your
+commits.
 
 ### Build
 ```bash

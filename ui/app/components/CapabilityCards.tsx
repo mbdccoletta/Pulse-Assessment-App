@@ -12,7 +12,7 @@ function isTextSelection(): boolean {
   return !!(sel && sel.toString().length > 0);
 }
 import type { CapabilityResult } from "../hooks/useCoverageData";
-import { maturity } from "./TechRadar";
+import { utilization } from "./TechRadar";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
 import { CAP_SUMMARIES } from "../data/capSummaries";
@@ -163,7 +163,7 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
   return (
     <Flex flexDirection="column" gap={6}>
       {capabilities.map((cap, i) => {
-        const ml = maturity(cap.score);
+        const ml = utilization(cap.score);
         const act = activeIdx === i;
         return (
           <Flex key={i} flexDirection="column" data-cap-idx={i}

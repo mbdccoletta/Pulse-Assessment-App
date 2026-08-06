@@ -200,7 +200,7 @@ flowchart TD
     Q -->|Yes| R[effE = ePct]
     Q -->|No| S[effE = 0]
 
-    R --> T[maturityScore =<br/>fPct x 60 +<br/>effB x 25 +<br/>effE x 15]
+    R --> T[utilizationScore =<br/>fPct x 60 +<br/>effB x 25 +<br/>effE x 15]
     S --> T
 
     T --> U[Utilization Band<br/>≥80 Excellent<br/>≥60 Good<br/>≥40 Moderate<br/>≥20 Low<br/>&lt;20 N/A]

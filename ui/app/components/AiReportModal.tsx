@@ -126,7 +126,7 @@ export const AiReportModal: React.FC<Props> = ({ show, onDismiss, ctx, page = "c
             </Text>
             <Text style={{ fontSize: 11, color: subColor }}>
               Tenant <Strong style={{ color: textColor }}>{ctx.tenant}</Strong> ·{" "}
-              {ctx.overallCoverage}% coverage · {ctx.overallMaturity}/100 utilization
+              {ctx.overallCoverage}% coverage · {ctx.overallUtilization}/100 utilization
             </Text>
           </Flex>
         </Flex>
