@@ -116,7 +116,7 @@ export interface TraceProxyInfo {
 
 /**
  * Transform a capability set for a tenant without Traces on Grail:
- * span criteria get proxy queries (same id → same maturity tier, same
+ * span criteria get proxy queries (same id → same utilization tier, same
  * thresholds), unproxiable span criteria are dropped from the criteria
  * array (scoring divides by criteria.length, so they leave the
  * denominator — the customer is not penalised for a missing entitlement),

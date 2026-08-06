@@ -95,9 +95,13 @@ invariants that make this safe are enforced by construction and were checked by
 a dry-run over all 119 catalog queries — read the module header before changing
 any of it.
 
-**Terminology.** Every user-visible "Maturity" became "Utilization". Code
-identifiers and the persisted snapshot keys were left alone on purpose: renaming
-`cap.maturity` would break every snapshot already in the Document Store.
+**Terminology.** Every "Maturity" became "Utilization" — user-visible text in
+v2.5.5, code
+identifiers were renamed too in v2.5.6. An earlier note here claimed that
+renaming `cap.maturity` would break saved snapshots — that was wrong: a snapshot
+persists only name, colour, score, consolidation and criteriaResults, and
+utilization is recomputed from the criteria on load. Nothing in the Document
+Store or localStorage stores the word at all.
 
 **Adoption** (`useAppAdoption.ts`). Distinct users per app, mapped to
 capabilities, reported as penetration against all active users. Zero scan cost.

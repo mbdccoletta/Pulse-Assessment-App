@@ -15,7 +15,7 @@
 // guardrail accepts them (see promptTemplates v4-v6 for why).
 
 /** Which screen the Assist panel was opened from. Drives PAGE_STARTERS. */
-export type AssistPage = "coverage" | "maturity" | "executive" | "comparison";
+export type AssistPage = "coverage" | "utilization" | "executive" | "comparison";
 
 export interface Starter {
   /** Chip label (short). */
@@ -53,7 +53,7 @@ export const PAGE_STARTERS: Record<AssistPage, StarterGroup[]> = {
     },
   ],
   // Utilization view — tier progression, gates, levels.
-  maturity: [
+  utilization: [
     {
       category: "Utilization analysis",
       starters: [

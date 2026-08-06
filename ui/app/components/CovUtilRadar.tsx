@@ -47,18 +47,18 @@ const BANDS = SCORE_BANDS;
 interface DataPoint {
   name: string;
   coverage: number;
-  maturity: number;
+  utilization: number;
   color: string;
   /** Raw coverage before consolidation (shown as ghost polygon when present and differs from coverage). */
   rawCoverage?: number;
-  /** Raw maturity before consolidation. */
-  rawMaturity?: number;
+  /** Raw utilization before consolidation. */
+  rawUtilization?: number;
 }
 
 interface Props {
   data: DataPoint[];
   coverageColor?: string;
-  maturityColor?: string;
+  utilizationColor?: string;
   legendLabels?: [string, string];
   activeIdx?: number | null;
   onSelect?: (idx: number | null) => void;
@@ -68,23 +68,23 @@ interface Props {
   coverageOnly?: boolean;
 }
 
-export interface CovMatRadarHandle {
+export interface CovUtilRadarHandle {
   toDataURL: () => string | null;
 }
 
-export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(function CovMatRadar({ data, coverageColor, maturityColor, legendLabels, activeIdx: controlledIdx, onSelect, coverageOnly = false }, ref) {
+export const CovUtilRadar = React.memo(forwardRef<CovUtilRadarHandle, Props>(function CovUtilRadar({ data, coverageColor, utilizationColor, legendLabels, activeIdx: controlledIdx, onSelect, coverageOnly = false }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dk = useCurrentTheme() === "dark";
   const COV_C = coverageColor ?? (dk ? "#00E5FF" : "#0097A7");
-  const MAT_C = maturityColor ?? (dk ? "#D500F9" : "#9C27B0");
+  const UTIL_C = utilizationColor ?? (dk ? "#D500F9" : "#9C27B0");
   const [internalIdx, setInternalIdx] = useState<number | null>(null);
   const activeIdx = controlledIdx !== undefined ? controlledIdx : internalIdx;
   const geoRef = useRef<{ cx: number; cy: number; R: number; N: number; SEG: number }>({ cx: 0, cy: 0, R: 0, N: 0, SEG: 0 });
-  const legendGeoRef = useRef<{ covBox: { x: number; y: number; w: number; h: number }; matBox: { x: number; y: number; w: number; h: number } } | null>(null);
+  const legendGeoRef = useRef<{ covBox: { x: number; y: number; w: number; h: number }; utilBox: { x: number; y: number; w: number; h: number } } | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [layerState, setVisibleLayer] = useState<"both" | "coverage" | "maturity">("both");
+  const [layerState, setVisibleLayer] = useState<"both" | "coverage" | "utilization">("both");
   // In coverage-only mode the layer toggle is fixed: there is no second
   // series to switch to.
   const visibleLayer = coverageOnly ? "coverage" : layerState;
@@ -161,23 +161,23 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const dotSizeBase = Math.max(Math.min(w, h) * 0.018, 10);
     const minBlipR = hR + 6 + dotSizeBase + 4; // hub visual edge + dot radius + gap
     const showCov = visibleLayer === "both" || visibleLayer === "coverage";
-    const showMat = visibleLayer === "both" || visibleLayer === "maturity";
+    const showUtil = visibleLayer === "both" || visibleLayer === "utilization";
     if (showCov) drawPoly(ctx, data.map(d => d.coverage), cx, cy, R, N, SEG, COV_C, dk, false, minBlipR);
 
-    // ── Maturity polygon ──
-    if (showMat) drawPoly(ctx, data.map(d => d.maturity), cx, cy, R, N, SEG, MAT_C, dk, true, minBlipR);
+    // ── Utilization polygon ──
+    if (showUtil) drawPoly(ctx, data.map(d => d.utilization), cx, cy, R, N, SEG, UTIL_C, dk, true, minBlipR);
 
     // ── Raw score ghost polygons (consolidation active) — dashed outline showing original scores ──
     const hasRaw = data.some(d => d.rawCoverage !== undefined && d.rawCoverage !== d.coverage);
     if (hasRaw) {
       const RAW_C = dk ? "#ffffff" : "#888888";
       if (showCov) drawPoly(ctx, data.map(d => d.rawCoverage ?? d.coverage), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
-      if (showMat) drawPoly(ctx, data.map(d => d.rawMaturity ?? d.maturity), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
+      if (showUtil) drawPoly(ctx, data.map(d => d.rawUtilization ?? d.utilization), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
     }
 
     // ── Center hub (drawn before blips so blips appear on top) ──
     const avgCov = Math.round(data.reduce((a, d) => a + d.coverage, 0) / N);
-    const avgMat = Math.round(data.reduce((a, d) => a + d.maturity, 0) / N);
+    const avgUtil = Math.round(data.reduce((a, d) => a + d.utilization, 0) / N);
 
     ctx.beginPath(); ctx.arc(cx, cy, hR + 5, 0, Math.PI * 2);
     ctx.strokeStyle = dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.035)";
@@ -197,9 +197,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     ctx.strokeStyle = COV_C; ctx.lineWidth = 3;
     ctx.globalAlpha = 0.7; ctx.stroke();
     if (!coverageOnly) {
-      const matEnd = ps + Math.PI * 2 * (avgMat / 100);
-      ctx.beginPath(); ctx.arc(cx, cy, hR + 6, ps, matEnd);
-      ctx.strokeStyle = MAT_C; ctx.lineWidth = 2.5;
+      const utilEnd = ps + Math.PI * 2 * (avgUtil / 100);
+      ctx.beginPath(); ctx.arc(cx, cy, hR + 6, ps, utilEnd);
+      ctx.strokeStyle = UTIL_C; ctx.lineWidth = 2.5;
       ctx.stroke();
     }
     ctx.globalAlpha = 1; ctx.lineCap = "butt";
@@ -218,8 +218,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       ctx.fillText(hubLabel1, cx, cy - hR * 0.42);
     } else {
       ctx.fillText(avgCov + "%", cx, cy - hR * 0.22);
-      ctx.fillStyle = MAT_C;
-      ctx.fillText(avgMat + "%", cx, cy + hR * 0.22);
+      ctx.fillStyle = UTIL_C;
+      ctx.fillText(avgUtil + "%", cx, cy + hR * 0.22);
       ctx.fillStyle = dk ? "#c0c0e0" : "#555570";
       ctx.font = `600 ${Math.max(fSize * 0.42, 7)}px system-ui,sans-serif`;
       ctx.fillText(hubLabel1, cx, cy - hR * 0.55);
@@ -239,8 +239,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       let covX = cx + Math.cos(midA) * covR;
       let covY = cy + Math.sin(midA) * covR;
 
-      // Maturity blip (diamond)
-      const matR = minBlipR + (data[i].maturity / 100) * (R - minBlipR);
+      // Utilization blip (diamond)
+      const matR = minBlipR + (data[i].utilization / 100) * (R - minBlipR);
       let matX = cx + Math.cos(midA) * matR;
       let matY = cy + Math.sin(midA) * matR;
 
@@ -260,7 +260,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       }
 
       drawGradientBlip(ctx, covX, covY, dotSize, COV_C, data[i].coverage, dk, false, act, dim || !showCov);
-      if (!coverageOnly) drawGradientBlip(ctx, matX, matY, dotSize, MAT_C, data[i].maturity, dk, true, act, dim || !showMat);
+      if (!coverageOnly) drawGradientBlip(ctx, matX, matY, dotSize, UTIL_C, data[i].utilization, dk, true, act, dim || !showUtil);
     }
 
     // ── Connector lines + capability labels ──
@@ -287,7 +287,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       else if (isL) lx = Math.max(lx, maxLabelW + labelPad);
 
       // Band colour of what the label actually reports
-      const avgScore = coverageOnly ? data[i].coverage : (data[i].coverage + data[i].maturity) / 2;
+      const avgScore = coverageOnly ? data[i].coverage : (data[i].coverage + data[i].utilization) / 2;
       const ml = bandForScore(avgScore);
       const alpha = dim ? 0.2 : act ? 0.95 : 0.6;
 
@@ -301,8 +301,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       let scoreText: string;
       if (coverageOnly) scoreText = `${Math.round(data[i].coverage)}%`;
       else if (visibleLayer === "coverage") scoreText = `${scorePrefix1} ${Math.round(data[i].coverage)}%`;
-      else if (visibleLayer === "maturity") scoreText = `${scorePrefix2} ${Math.round(data[i].maturity)}%`;
-      else scoreText = `${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].maturity)}%`;
+      else if (visibleLayer === "utilization") scoreText = `${scorePrefix2} ${Math.round(data[i].utilization)}%`;
+      else scoreText = `${scorePrefix1} ${Math.round(data[i].coverage)}% / ${scorePrefix2} ${Math.round(data[i].utilization)}%`;
       const totalTextH = nameBlockH + 2 + fs2;
       const textTopY = ly - totalTextH / 2;
       const nameStartY = textTopY;
@@ -350,9 +350,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     ctx.font = `700 ${legFont}px system-ui,sans-serif`;
     // Measure text widths for centering
     const covLabel = legendLabels?.[0] ?? "Coverage";
-    const matLabel = legendLabels?.[1] ?? "Utilization";
+    const utilLabel = legendLabels?.[1] ?? "Utilization";
     const covW = ctx.measureText(covLabel).width;
-    const matW = ctx.measureText(matLabel).width;
+    const matW = ctx.measureText(utilLabel).width;
     const iconR = 5;
     const iconGap = 8;
     const itemGap = 20;
@@ -362,7 +362,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const startX = cx - totalW / 2;
     const legHitPad = 6;
     // Coverage legend item
-    const covItemAlpha = visibleLayer === "maturity" ? 0.3 : 1;
+    const covItemAlpha = visibleLayer === "utilization" ? 0.3 : 1;
     ctx.globalAlpha = covItemAlpha;
     ctx.fillStyle = COV_C;
     ctx.beginPath();
@@ -387,46 +387,46 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     const covBoxY = legY - legFont - legHitPad;
     const covBoxW = iconR * 2 + iconGap + covW + legHitPad * 2;
     const covBoxH = legFont * 2 + legHitPad * 2;
-    // Maturity legend item
+    // Utilization legend item
     if (coverageOnly) {
       legendGeoRef.current = {
         covBox: { x: covBoxX, y: covBoxY, w: covBoxW, h: covBoxH },
-        matBox: { x: 0, y: 0, w: 0, h: 0 },
+        utilBox: { x: 0, y: 0, w: 0, h: 0 },
       };
       return;
     }
-    const matItemAlpha = visibleLayer === "coverage" ? 0.3 : 1;
-    ctx.globalAlpha = matItemAlpha;
-    const matIconX = startX + iconR * 2 + iconGap + covW + itemGap + iconR;
-    ctx.fillStyle = MAT_C;
+    const utilItemAlpha = visibleLayer === "coverage" ? 0.3 : 1;
+    ctx.globalAlpha = utilItemAlpha;
+    const utilIconX = startX + iconR * 2 + iconGap + covW + itemGap + iconR;
+    ctx.fillStyle = UTIL_C;
     ctx.beginPath();
-    ctx.moveTo(matIconX, legY - iconR);
-    ctx.lineTo(matIconX + iconR, legY);
-    ctx.lineTo(matIconX, legY + iconR);
-    ctx.lineTo(matIconX - iconR, legY);
+    ctx.moveTo(utilIconX, legY - iconR);
+    ctx.lineTo(utilIconX + iconR, legY);
+    ctx.lineTo(utilIconX, legY + iconR);
+    ctx.lineTo(utilIconX - iconR, legY);
     ctx.closePath();
     ctx.fill();
     ctx.fillStyle = dk ? "#e0e0f8" : "#2a2a3e";
-    ctx.fillText(matLabel, matIconX + iconR + iconGap, legY);
-    if (visibleLayer === "maturity") {
+    ctx.fillText(utilLabel, utilIconX + iconR + iconGap, legY);
+    if (visibleLayer === "utilization") {
       ctx.beginPath();
-      ctx.roundRect(matIconX - iconR - legHitPad, legY - legFont - legHitPad / 2, iconR * 2 + iconGap + matW + legHitPad * 2, legFont * 2 + legHitPad, 4);
-      ctx.strokeStyle = MAT_C;
+      ctx.roundRect(utilIconX - iconR - legHitPad, legY - legFont - legHitPad / 2, iconR * 2 + iconGap + matW + legHitPad * 2, legFont * 2 + legHitPad, 4);
+      ctx.strokeStyle = UTIL_C;
       ctx.globalAlpha = 0.5;
       ctx.lineWidth = 1;
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
-    // Store maturity legend hit box
-    const matBoxX = matIconX - iconR - legHitPad;
+    // Store utilization legend hit box
+    const matBoxX = utilIconX - iconR - legHitPad;
     const matBoxY = legY - legFont - legHitPad;
     const matBoxW = iconR * 2 + iconGap + matW + legHitPad * 2;
     const matBoxH = legFont * 2 + legHitPad * 2;
     legendGeoRef.current = {
       covBox: { x: covBoxX, y: covBoxY, w: covBoxW, h: covBoxH },
-      matBox: { x: matBoxX, y: matBoxY, w: matBoxW, h: matBoxH },
+      utilBox: { x: matBoxX, y: matBoxY, w: matBoxW, h: matBoxH },
     };
-  }, [data, dk, COV_C, MAT_C, activeIdx, legendLabels, visibleLayer, coverageOnly]);
+  }, [data, dk, COV_C, UTIL_C, activeIdx, legendLabels, visibleLayer, coverageOnly]);
 
   const hitTest = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -468,7 +468,7 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
     let best = -1, bestD = Infinity;
     for (let i = 0; i < N; i++) {
       const midA = i * SEG + SEG / 2 - Math.PI / 2;
-      for (const val of [data[i].coverage, data[i].maturity]) {
+      for (const val of [data[i].coverage, data[i].utilization]) {
         const r = minR2 + (val / 100) * (R - minR2);
         const bx = cx + Math.cos(midA) * r;
         const by = cy + Math.sin(midA) * r;
@@ -499,13 +499,13 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const my = e.clientY - rect.top;
       const lg = legendGeoRef.current;
       if (lg) {
-        const { covBox, matBox } = lg;
+        const { covBox, utilBox } = lg;
         if (mx >= covBox.x && mx <= covBox.x + covBox.w && my >= covBox.y && my <= covBox.y + covBox.h) {
           setVisibleLayer(prev => prev === "coverage" ? "both" : "coverage");
           return;
         }
-        if (mx >= matBox.x && mx <= matBox.x + matBox.w && my >= matBox.y && my <= matBox.y + matBox.h) {
-          setVisibleLayer(prev => prev === "maturity" ? "both" : "maturity");
+        if (mx >= utilBox.x && mx <= utilBox.x + utilBox.w && my >= utilBox.y && my <= utilBox.y + utilBox.h) {
+          setVisibleLayer(prev => prev === "utilization" ? "both" : "utilization");
           return;
         }
       }
@@ -526,9 +526,9 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
       const my = e.clientY - rect.top;
       const lg = legendGeoRef.current;
       if (lg) {
-        const { covBox, matBox } = lg;
+        const { covBox, utilBox } = lg;
         const onLeg = (mx >= covBox.x && mx <= covBox.x + covBox.w && my >= covBox.y && my <= covBox.y + covBox.h)
-          || (mx >= matBox.x && mx <= matBox.x + matBox.w && my >= matBox.y && my <= matBox.y + matBox.h);
+          || (mx >= utilBox.x && mx <= utilBox.x + utilBox.w && my >= utilBox.y && my <= utilBox.y + utilBox.h);
         setHoveredLegend(onLeg);
       }
     }
@@ -593,8 +593,8 @@ export const CovMatRadar = React.memo(forwardRef<CovMatRadarHandle, Props>(funct
           </div>
           {!coverageOnly && (
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 8, height: 8, background: MAT_C, display: "inline-block", transform: "rotate(45deg)" }} />
-              <span>Utilization: <strong>{Math.round(hovered.maturity)}%</strong></span>
+              <span style={{ width: 8, height: 8, background: UTIL_C, display: "inline-block", transform: "rotate(45deg)" }} />
+              <span>Utilization: <strong>{Math.round(hovered.utilization)}%</strong></span>
             </div>
           )}
         </div>
@@ -705,19 +705,19 @@ function diamondPath(ctx: CanvasRenderingContext2D, x: number, y: number, s: num
 }
 
 /**
- * Renders the CovMatRadar chart to an offscreen canvas and returns a PNG data URL.
+ * Renders the CovUtilRadar chart to an offscreen canvas and returns a PNG data URL.
  * Used by PDF report generators to embed a pixel-perfect chart image.
  */
 export function renderRadarToDataURL(
   data: DataPoint[],
   size: number,
-  options?: { coverageColor?: string; maturityColor?: string; darkBg?: boolean; format?: "png" | "jpeg" },
+  options?: { coverageColor?: string; utilizationColor?: string; darkBg?: boolean; format?: "png" | "jpeg" },
 ): string {
   const w = Math.round(size * 1.35); // wider to fit label text
   const h = size;
   const dk = options?.darkBg ?? true;
   const COV_C = options?.coverageColor ?? (dk ? "#00E5FF" : "#0097A7");
-  const MAT_C = options?.maturityColor ?? (dk ? "#D500F9" : "#9C27B0");
+  const UTIL_C = options?.utilizationColor ?? (dk ? "#D500F9" : "#9C27B0");
 
   const canvas = document.createElement("canvas");
   const dpr = 2; // high-res for PDF
@@ -785,19 +785,19 @@ export function renderRadarToDataURL(
   const dotSizeBase = Math.max(Math.min(w, h) * 0.016, 9);
   const minBlipR = hR + 6 + dotSizeBase + 4;
   drawPoly(ctx, data.map(d => d.coverage), cx, cy, R, N, SEG, COV_C, dk, false, minBlipR);
-  drawPoly(ctx, data.map(d => d.maturity), cx, cy, R, N, SEG, MAT_C, dk, true, minBlipR);
+  drawPoly(ctx, data.map(d => d.utilization), cx, cy, R, N, SEG, UTIL_C, dk, true, minBlipR);
 
   // Raw score ghost polygons (consolidation active)
   const hasRawStatic = data.some(d => d.rawCoverage !== undefined && d.rawCoverage !== d.coverage);
   if (hasRawStatic) {
     const RAW_C = dk ? "#ffffff" : "#888888";
     drawPoly(ctx, data.map(d => d.rawCoverage ?? d.coverage), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
-    drawPoly(ctx, data.map(d => d.rawMaturity ?? d.maturity), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
+    drawPoly(ctx, data.map(d => d.rawUtilization ?? d.utilization), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
   }
 
   // Center hub
   const avgCov = Math.round(data.reduce((a, d) => a + d.coverage, 0) / N);
-  const avgMat = Math.round(data.reduce((a, d) => a + d.maturity, 0) / N);
+  const avgUtil = Math.round(data.reduce((a, d) => a + d.utilization, 0) / N);
   ctx.beginPath(); ctx.arc(cx, cy, hR + 5, 0, Math.PI * 2);
   ctx.strokeStyle = dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.035)";
   ctx.lineWidth = 0.5; ctx.stroke();
@@ -814,9 +814,9 @@ export function renderRadarToDataURL(
   ctx.beginPath(); ctx.arc(cx, cy, hR + 3, ps, covEnd);
   ctx.strokeStyle = COV_C; ctx.lineWidth = 3;
   ctx.globalAlpha = 0.7; ctx.stroke();
-  const matEnd = ps + Math.PI * 2 * (avgMat / 100);
-  ctx.beginPath(); ctx.arc(cx, cy, hR + 6, ps, matEnd);
-  ctx.strokeStyle = MAT_C; ctx.lineWidth = 2.5;
+  const utilEnd = ps + Math.PI * 2 * (avgUtil / 100);
+  ctx.beginPath(); ctx.arc(cx, cy, hR + 6, ps, utilEnd);
+  ctx.strokeStyle = UTIL_C; ctx.lineWidth = 2.5;
   ctx.stroke();
   ctx.globalAlpha = 1; ctx.lineCap = "butt";
 
@@ -828,8 +828,8 @@ export function renderRadarToDataURL(
   ctx.fillStyle = COV_C;
   ctx.font = `800 ${fSize}px system-ui,sans-serif`;
   ctx.fillText(adoptionWord(avgCov), cx, cy - hR * 0.24);
-  ctx.fillStyle = MAT_C;
-  ctx.fillText(depthWord(avgMat).replace(/^./, c => c.toUpperCase()), cx, cy + hR * 0.30);
+  ctx.fillStyle = UTIL_C;
+  ctx.fillText(depthWord(avgUtil).replace(/^./, c => c.toUpperCase()), cx, cy + hR * 0.30);
   ctx.fillStyle = dk ? "#c0c0e0" : "#555570";
   ctx.font = `600 ${Math.max(fSize * 0.40, 7)}px system-ui,sans-serif`;
   ctx.fillText("ADOPTION", cx, cy - hR * 0.58);
@@ -844,10 +844,10 @@ export function renderRadarToDataURL(
     const covX2 = cx + Math.cos(midA) * covR2;
     const covY2 = cy + Math.sin(midA) * covR2;
     drawGradientBlip(ctx, covX2, covY2, dotSize, COV_C, data[i].coverage, dk, false, false, false, false);
-    const matR2 = minBlipR + (data[i].maturity / 100) * (R - minBlipR);
+    const matR2 = minBlipR + (data[i].utilization / 100) * (R - minBlipR);
     const matX2 = cx + Math.cos(midA) * matR2;
     const matY2 = cy + Math.sin(midA) * matR2;
-    drawGradientBlip(ctx, matX2, matY2, dotSize, MAT_C, data[i].maturity, dk, true, false, false, false);
+    drawGradientBlip(ctx, matX2, matY2, dotSize, UTIL_C, data[i].utilization, dk, true, false, false, false);
   }
 
   // Connector lines + capability labels
@@ -898,7 +898,7 @@ export function renderRadarToDataURL(
     const isR = a.isR, isL = a.isL;
     const lx = a.lx;
     const ly = a.ly;
-    const avgScore = (data[i].coverage + data[i].maturity) / 2;
+    const avgScore = (data[i].coverage + data[i].utilization) / 2;
     const ml = bandForScore(avgScore);
 
     // Connector from ring edge toward label
@@ -937,7 +937,7 @@ export function renderRadarToDataURL(
     // Say what the two axes MEAN for this capability in plain words —
     // no percentages. "how much is adopted" x "how deeply it is used".
     ctx.fillText(
-      `${adoptionWord(data[i].coverage)} adoption, ${depthWord(data[i].maturity)} use`,
+      `${adoptionWord(data[i].coverage)} adoption, ${depthWord(data[i].utilization)} use`,
       clampedLx, ly + fs1 / 2 + 1,
     );
     ctx.globalAlpha = 1;
@@ -950,9 +950,9 @@ export function renderRadarToDataURL(
   // Spell out what each ring means — the reader should never have to
   // guess what "Coverage" vs "Utilization" measures.
   const covLabel = "Coverage - how much is switched on";
-  const matLabel = "Utilization - how deeply it is used";
+  const utilLabel = "Utilization - how deeply it is used";
   const covW2 = ctx.measureText(covLabel).width;
-  const matW2 = ctx.measureText(matLabel).width;
+  const matW2 = ctx.measureText(utilLabel).width;
   const iconR = 5;
   const iconGap = 8;
   const itemGap = 20;
@@ -963,17 +963,17 @@ export function renderRadarToDataURL(
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
   ctx.fillStyle = dk ? "#e0e0f8" : "#2a2a3e";
   ctx.fillText(covLabel, startX + iconR * 2 + iconGap, legY);
-  const matIconX = startX + iconR * 2 + iconGap + covW2 + itemGap + iconR;
-  ctx.fillStyle = MAT_C;
+  const utilIconX = startX + iconR * 2 + iconGap + covW2 + itemGap + iconR;
+  ctx.fillStyle = UTIL_C;
   ctx.beginPath();
-  ctx.moveTo(matIconX, legY - iconR);
-  ctx.lineTo(matIconX + iconR, legY);
-  ctx.lineTo(matIconX, legY + iconR);
-  ctx.lineTo(matIconX - iconR, legY);
+  ctx.moveTo(utilIconX, legY - iconR);
+  ctx.lineTo(utilIconX + iconR, legY);
+  ctx.lineTo(utilIconX, legY + iconR);
+  ctx.lineTo(utilIconX - iconR, legY);
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = dk ? "#e0e0f8" : "#2a2a3e";
-  ctx.fillText(matLabel, matIconX + iconR + iconGap, legY);
+  ctx.fillText(utilLabel, utilIconX + iconR + iconGap, legY);
 
   return exportDataURL();
 }

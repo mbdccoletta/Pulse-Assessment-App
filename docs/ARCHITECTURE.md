@@ -61,7 +61,7 @@ pulse-assessment/
 │       │   ├── reportPrompt.ts        # Assessment context for prompts
 │       │   └── smartReport.ts         # Narrative report via Davis CoPilot
 │       ├── components/
-│       │   ├── CovMatRadar.tsx        # Radar; `coverageOnly` drops 2nd series
+│       │   ├── CovUtilRadar.tsx       # Radar; `coverageOnly` drops 2nd series
 │       │   ├── CapabilityScatter.tsx  # Coverage bars + Utilization line
 │       │   ├── TechRadar.tsx          # Coverage-view radar
 │       │   ├── CapabilityCards.tsx    # Capability score cards
@@ -186,7 +186,7 @@ overallScore = average(all capability scores)
 ```
 effB = (foundationPct >= 0.8) ? bestPracticePct : 0
 effE = (effB >= 0.6) ? excellencePct : 0
-maturityScore = foundationPct × 60 + effB × 25 + effE × 15
+utilizationScore = foundationPct × 60 + effB × 25 + effE × 15
 ```
 
 ### Utilization Levels

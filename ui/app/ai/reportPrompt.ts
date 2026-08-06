@@ -13,13 +13,13 @@
 
 /** Minimal capability shape the report builder needs. Both the live
  *  CapabilityResult and the lighter snapshot capability (Evolution page)
- *  satisfy this — maturity detail is optional and defaulted when absent. */
+ *  satisfy this — utilization detail is optional and defaulted when absent. */
 export interface ReportCapability {
   name: string;
   score: number;
   criteriaResults: { id: string; label: string; value: number; points: number; error: boolean }[];
-  maturity?: {
-    maturityScore: number;
+  utilization?: {
+    utilizationScore: number;
     levelLabel: string;
     foundation: { passed: number; total: number };
     bestPractice: { passed: number; total: number };
@@ -48,7 +48,7 @@ export interface ReportContext {
   tenant: string;
   date: string;
   overallCoverage: number;
-  overallMaturity: number;
+  overallUtilization: number;
   capabilities: ReportCapability[];
   /** Optional change context — e.g. a snapshot-to-snapshot delta summary
    *  from the Evolution page. When present it's appended so Davis can
@@ -91,14 +91,14 @@ export function buildAssessmentContext(ctx: ReportContext): string {
     const topStr = top.length > 0
       ? ` Weakest checks: ${top.map(t => `"${clamp(t.label, 55).replace(/\s*\(%\)\s*$/, "")}" at ${t.value}%`).join("; ")}.`
       : "";
-    // Tier breakdown lets Davis answer maturity-aware questions ("which
+    // Tier breakdown lets Davis answer utilization-aware questions ("which
     // Foundation gates are still closed?") without us pre-digesting it.
-    // Snapshot capabilities (Evolution page) omit maturity detail — in that
+    // Snapshot capabilities (Evolution page) omit utilization detail — in that
     // case we report coverage + failing count only.
-    const m = cap.maturity;
+    const m = cap.utilization;
     if (m) {
       const tiers = `tiers F=${m.foundation.passed}/${m.foundation.total}, BP=${m.bestPractice.passed}/${m.bestPractice.total}, E=${m.excellence.passed}/${m.excellence.total}`;
-      return `- ${cap.name}: coverage ${cap.score}%, maturity ${m.maturityScore}/100 (${m.levelLabel}), ${tiers}, ${failed}/${total} criteria failing.${topStr}`;
+      return `- ${cap.name}: coverage ${cap.score}%, utilization ${m.utilizationScore}/100 (${m.levelLabel}), ${tiers}, ${failed}/${total} criteria failing.${topStr}`;
     }
     return `- ${cap.name}: coverage ${cap.score}%, ${failed}/${total} criteria failing.${topStr}`;
   }).join("\n");
@@ -107,7 +107,7 @@ export function buildAssessmentContext(ctx: ReportContext): string {
     `I just ran a Dynatrace observability coverage assessment (Pulse ` +
     `Assessment app) for a customer, tenant ${ctx.tenant}, on ${ctx.date}. ` +
     `Overall coverage is ${ctx.overallCoverage}% and overall utilization is ` +
-    `${ctx.overallMaturity}/100. The capability scores are:\n${capLines}` +
+    `${ctx.overallUtilization}/100. The capability scores are:\n${capLines}` +
     (ctx.comparisonNote
       ? `\nChange since the previous snapshot:\n${clamp(ctx.comparisonNote, 900)}`
       : "")

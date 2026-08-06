@@ -89,7 +89,7 @@ export interface PerfCapabilitySummary {
   name: string;
   color: string;
   score: number;
-  maturityScore: number;
+  utilizationScore: number;
   maturityLevel: 0 | 1 | 2 | 3;
   criteriaCount: number;
   criteriaPassed: number;

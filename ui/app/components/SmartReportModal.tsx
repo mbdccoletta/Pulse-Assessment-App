@@ -8,7 +8,8 @@
 //   - "Generate PDF": Davis CoPilot SDK call; the markdown answer is
 //     rendered into the app's PDF shell with an AI disclosure.
 //
-// DEV ONLY — mounted behind isDev like every Davis surface in this app.
+// Shipped to production in v2.5.6. No Davis call fires until the user
+// submits a request, so simply opening the modal spends no quota.
 
 import React, { useState } from "react";
 import { Flex } from "@dynatrace/strato-components/layouts";
@@ -67,7 +68,7 @@ export const SmartReportModal: React.FC<SmartReportModalProps> = ({ open, onClos
       tenant: ctx.tenant,
       date: ctx.date,
       coverage: ctx.overallCoverage,
-      utilization: ctx.overallMaturity,
+      utilization: ctx.overallUtilization,
       ask: effectiveAsk,
     });
     onClose();

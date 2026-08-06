@@ -13,7 +13,7 @@
 //      ../reports/aiNarrativePdf.ts into the app's PDF shell.
 //
 // DEV ONLY: like every Davis surface in this app, Smart Reports are gated
-// behind isDev — customer tenants never load this path.
+// in production since v2.5.6; the call only happens on explicit submit.
 
 import { publicClient } from "@dynatrace-sdk/client-davis-copilot";
 import { buildReportPrompt, type ReportContext } from "./reportPrompt";

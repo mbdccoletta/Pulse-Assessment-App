@@ -44,7 +44,6 @@ interface Props {
   /** Dev flag — required to enable the page. The whole Davis surface is
    *  hidden on customer tenants; only ?dev=1 or localStorage.cca.dev
    *  unlocks it. */
-  isDev: boolean;
 }
 
 /** Map utilization level number → human label + accent token. */
@@ -57,15 +56,14 @@ function levelMeta(level: 0 | 1 | 2 | 3): { label: string; color: string } {
   }
 }
 
-export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale, isDev }) => {
+export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
   const navigate = useNavigate();
   const dk = useCurrentTheme() === "dark";
   const { capabilities, tenant, date, loading, refresh } = coverageData;
 
   // Dev-only — the hook is disabled outside dev mode so no SDK calls
   // ever fire from customer tenants. The empty SE-only state below
-  // covers the !isDev path before this code runs.
-  const davisHandle = useDavisRecommendations(capabilities, { enabled: isDev });
+  const davisHandle = useDavisRecommendations(capabilities, { enabled: true });
   const recommendations = davisHandle.byCapability;
   const sendFollowUp = davisHandle.sendFollowUp;
   const requestInsight = davisHandle.requestInsight;
@@ -117,22 +115,6 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale, isDev }) 
   // ── Dev-only gate. Customer tenants land here only if they navigate to
   // /ai-insights directly — show a polite SE-only notice and a back link
   // rather than firing Davis calls or revealing the page structure. ──
-  if (!isDev) {
-    return (
-      <Flex flexDirection="column" alignItems="center" justifyContent="center"
-        style={{ height: "100vh", padding: 32, background: bg, color: text }}>
-        <Text style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
-          AI Insights are an SE-only feature
-        </Text>
-        <Text style={{ fontSize: 13, color: textSec, marginBottom: 16, textAlign: "center", maxWidth: 480 }}>
-          This page is gated behind dev mode while we validate Davis CoPilot response quality.
-        </Text>
-        <Button onClick={() => navigate("/")}>
-          ← Back to Assessment
-        </Button>
-      </Flex>
-    );
-  }
 
   // ── Empty state ──
   if (capabilities.length === 0) {
@@ -233,7 +215,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale, isDev }) 
           const failed = cap.criteriaResults.filter(cr => cr.points === 0 && !cr.error).length;
           const total = cap.criteriaResults.length;
           const errored = cap.criteriaResults.filter(cr => cr.error).length;
-          const lvl = levelMeta(cap.maturity.level);
+          const lvl = levelMeta(cap.utilization.level);
           const isPerfect = failed === 0;
 
           return (
@@ -266,7 +248,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale, isDev }) 
                     padding: "2px 8px", borderRadius: 4,
                     background: accent + "15", color: accent,
                   }}>
-                    Utilization {cap.maturity.maturityScore}
+                    Utilization {cap.utilization.utilizationScore}
                   </Text>
                 </Flex>
               </Flex>

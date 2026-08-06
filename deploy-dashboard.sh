@@ -1,10 +1,10 @@
 #!/bin/bash
 # Upload dashboard to Dynatrace Document Store
 # Usage: DT_TOKEN=<your-token> ./deploy-dashboard.sh
-# Generate token at: https://<your-tenant>.apps.dynatrace.com/ui/access-tokens
+# Generate token at: https://abc12345.apps.dynatrace.com/ui/access-tokens
 # Required scope: document:documents:write
 
-DT_URL="${DT_URL:-https://<your-tenant>.apps.dynatrace.com}"
+DT_URL="${DT_URL:-https://abc12345.apps.dynatrace.com}"
 DASHBOARD_FILE="dashboards/finops-cloud-management.json"
 
 if [ -z "$DT_TOKEN" ]; then

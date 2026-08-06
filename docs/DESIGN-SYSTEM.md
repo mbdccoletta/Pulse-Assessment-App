@@ -467,7 +467,7 @@ ui/app/
     useCoverageData.ts, useAppAdoption.ts, usePreflight.ts,
     useScaleTier.ts, useDavisRecommendations.ts, useDevMode.ts
   components/                # UI reutilizavel
-    CovMatRadar.tsx (radar, modo coverageOnly), CapabilityScatter.tsx
+    CovUtilRadar.tsx (radar, modo coverageOnly), CapabilityScatter.tsx
     (barras de coverage + linha de utilization), CustomReportModal.tsx,
     SmartReportModal.tsx, DavisInsightSection.tsx (exporta renderMarkdown),
     ScaleTierBanner.tsx (+ CostModeNote), TraceProxyBanner.tsx, TechRadar.tsx

@@ -128,7 +128,7 @@ export function buildCapabilityPrompt(cap: CapabilityResult): {
   const text =
     `I'm a Dynatrace SE reviewing an observability coverage assessment for ` +
     `a customer's "${cap.name}" capability. The capability scored ${cap.score}% ` +
-    `coverage and ${cap.maturity.maturityScore}/100 maturity. These checks are ` +
+    `coverage and ${cap.utilization.utilizationScore}/100 utilization. These checks are ` +
     `below their passing thresholds (each line gives the check's name, what it ` +
     `measures, the current value, the gap, and a suggested fix):\n\n` +
     `${criteriaLines}\n\n` +

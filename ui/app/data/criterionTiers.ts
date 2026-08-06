@@ -53,7 +53,7 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   a9:  "excellence",     // Messaging span coverage
   a10: "excellence",     // Multi-service trace depth
   a11: "bestPractice",   // Service-process mapping
-  a12: "excellence",     // Service tagging maturity
+  a12: "excellence",     // Service tagging utilization
   a13: "excellence",     // Database call depth
 
   // ─── 3. DIGITAL EXPERIENCE ───

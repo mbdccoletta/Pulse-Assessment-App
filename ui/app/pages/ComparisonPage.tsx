@@ -8,7 +8,7 @@ import { Flex, Grid, Surface, Container } from "@dynatrace/strato-components/lay
 import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-components-preview/buttons";
 import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
-import { CovMatRadar } from "../components/CovMatRadar";
+import { CovUtilRadar } from "../components/CovUtilRadar";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_TIERS } from "../data/criterionTiers";
 import { CAPABILITIES } from "../queries";
@@ -39,9 +39,9 @@ interface CapDiff {
   currScore: number;
   prevScore: number;
   delta: number;
-  currMaturity: number;
-  prevMaturity: number;
-  maturityDelta: number;
+  currUtilization: number;
+  prevUtilization: number;
+  utilizationDelta: number;
   currConsolidation: number;
   prevConsolidation: number;
   critDiffs: CritDiff[];
@@ -86,8 +86,8 @@ function deltaColor(d: number) {
   return Colors.Text.Neutral.Disabled;
 }
 
-/** Compute maturity score for a capability's criteria using the CRITERION_TIERS lookup */
-function computeMaturity(criteria: { id: string; points: number; error: boolean }[]): number {
+/** Compute utilization score for a capability's criteria using the CRITERION_TIERS lookup */
+function computeUtilization(criteria: { id: string; points: number; error: boolean }[]): number {
   const tiers = { foundation: { total: 0, passed: 0 }, bestPractice: { total: 0, passed: 0 }, excellence: { total: 0, passed: 0 } };
   for (const cr of criteria) {
     const t = CRITERION_TIERS[cr.id] || "foundation";
@@ -114,7 +114,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
   const [selectedCap, setSelectedCap] = useState<string | null>(null);
   const [showListA, setShowListA] = useState(false);
   const [showListB, setShowListB] = useState(false);
-  const [dimension, setDimension] = useState<"coverage" | "maturity">("coverage");
+  const [dimension, setDimension] = useState<"coverage" | "utilization">("coverage");
   const [expandedRadar, setExpandedRadar] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -169,8 +169,8 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
         };
       });
 
-      const currMat = computeMaturity(cc.criteriaResults);
-      const prevMat = pc ? computeMaturity(pc.criteriaResults) : 0;
+      const currUtil = computeUtilization(cc.criteriaResults);
+      const prevUtil = pc ? computeUtilization(pc.criteriaResults) : 0;
 
       return {
         name: cc.name,
@@ -178,9 +178,9 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
         currScore: cc.score,
         prevScore,
         delta: d,
-        currMaturity: currMat,
-        prevMaturity: prevMat,
-        maturityDelta: currMat - prevMat,
+        currUtilization: currUtil,
+        prevUtilization: prevUtil,
+        utilizationDelta: currUtil - prevUtil,
         currConsolidation: cc.consolidation ?? 100,
         prevConsolidation: pc?.consolidation ?? 100,
         critDiffs,
@@ -195,16 +195,16 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
     const absHours = Math.round(Math.abs(elapsed) / 3600_000);
     const timeSpan = absDays >= 1 ? `${absDays} day${absDays !== 1 ? "s" : ""}` : `${absHours} hour${absHours !== 1 ? "s" : ""}`;
 
-    const baselineMat = capDiffs.length > 0 ? Math.round(capDiffs.reduce((s, c) => s + c.prevMaturity, 0) / capDiffs.length) : 0;
-    const currentMat = capDiffs.length > 0 ? Math.round(capDiffs.reduce((s, c) => s + c.currMaturity, 0) / capDiffs.length) : 0;
+    const baselineUtil = capDiffs.length > 0 ? Math.round(capDiffs.reduce((s, c) => s + c.prevUtilization, 0) / capDiffs.length) : 0;
+    const currentUtil = capDiffs.length > 0 ? Math.round(capDiffs.reduce((s, c) => s + c.currUtilization, 0) / capDiffs.length) : 0;
 
     return {
       baseline: { timestamp: snapB.timestamp, totalScore: snapB.totalScore },
       current: { timestamp: snapA.timestamp, totalScore: snapA.totalScore },
       totalDelta: snapA.totalScore - snapB.totalScore,
-      baselineMaturity: baselineMat,
-      currentMaturity: currentMat,
-      maturityDelta: currentMat - baselineMat,
+      baselineUtilization: baselineUtil,
+      currentUtilization: currentUtil,
+      utilizationDelta: currentUtil - baselineUtil,
       timeSpan,
       capDiffs,
       improved: capDiffs.filter((c) => c.delta > 0),
@@ -227,7 +227,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
   }
 
   const snapPickerBtn = (label: string, snap: AssessmentSnapshot | null, isOpen: boolean, toggle: () => void, color: string) => {
-    const mat = snap ? Math.round(snap.capabilities.reduce((s, c) => s + computeMaturity(c.criteriaResults), 0) / (snap.capabilities.length || 1)) : 0;
+    const mat = snap ? Math.round(snap.capabilities.reduce((s, c) => s + computeUtilization(c.criteriaResults), 0) / (snap.capabilities.length || 1)) : 0;
     return (
     <Button onClick={(e: React.MouseEvent<Element>) => { e.stopPropagation(); toggle(); }} style={{
       display: "flex", alignItems: "center", gap: 10,
@@ -264,7 +264,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
       {available.map((snap, i) => {
         const isSelected = i === selectedIdx;
         const isDisabled = i === otherIdx;
-        const mat = Math.round(snap.capabilities.reduce((s, c) => s + computeMaturity(c.criteriaResults), 0) / (snap.capabilities.length || 1));
+        const mat = Math.round(snap.capabilities.reduce((s, c) => s + computeUtilization(c.criteriaResults), 0) / (snap.capabilities.length || 1));
         return (
           <Flex key={snap.id}
             onClick={(e) => { e.stopPropagation(); if (!isDisabled) onSelect(i); }} alignItems="center" gap={8} style={{ padding: "8px 16px", cursor: isDisabled ? "not-allowed" : "pointer", fontSize: 12, opacity: isDisabled ? 0.35 : 1,
@@ -315,8 +315,8 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
             </Flex>
             <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
               <Text style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: textTert, fontWeight: 700 }}>Util</Text>
-              <Text style={{ fontSize: 14, fontWeight: 800 }}>{comparison.baselineMaturity}→{comparison.currentMaturity}%</Text>
-              <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.maturityDelta) }}>{comparison.maturityDelta > 0 ? "+" : ""}{comparison.maturityDelta}%</Text>
+              <Text style={{ fontSize: 14, fontWeight: 800 }}>{comparison.baselineUtilization}→{comparison.currentUtilization}%</Text>
+              <Text style={{ fontSize: 12, fontWeight: 700, color: deltaColor(comparison.utilizationDelta) }}>{comparison.utilizationDelta > 0 ? "+" : ""}{comparison.utilizationDelta}%</Text>
             </Flex>
             <Flex alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, background: card }}>
               <Text style={{ fontSize: 12, fontWeight: 700, color: Colors.Text.Success.Default }}>↑{comparison.improved.length}</Text>
@@ -328,7 +328,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
 
           {/* ══════ RADAR CHART + CAPABILITY BARS (side by side) ══════ */}
           <Flex gap={8} style={{ marginBottom: 0, flex: 1, minHeight: 0 }} flexWrap={isMobile ? "wrap" : "nowrap"} onClick={(e) => e.stopPropagation()}>
-            {/* Left: CovMatRadar */}
+            {/* Left: CovUtilRadar */}
             <Flex flexDirection="column" style={{
               flex: isMobile ? "1 1 100%" : "3 1 0%", minWidth: 0, minHeight: 0,
               borderRadius: 12, border: `1px solid ${border}`, background: card,
@@ -337,23 +337,23 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
               <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
                 <Flex alignItems="center" gap={8} flexWrap="wrap">
                   <Text style={{ fontSize: 14, fontWeight: 800, color: text, letterSpacing: 0.2 }}>{dimension === "coverage" ? "Coverage" : "Utilization"} Comparison</Text>
-                  <ToggleButtonGroup value={dimension} onChange={(val: string) => setDimension(val as "coverage" | "maturity")}>
+                  <ToggleButtonGroup value={dimension} onChange={(val: string) => setDimension(val as "coverage" | "utilization")}>
                     <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
-                    <ToggleButtonGroupItem value="maturity">Utilization</ToggleButtonGroupItem>
+                    <ToggleButtonGroupItem value="utilization">Utilization</ToggleButtonGroupItem>
                   </ToggleButtonGroup>
                 </Flex>
                 <ExpandChartButton onClick={() => setExpandedRadar(true)} />
               </Flex>
               <Flex flexDirection="column" style={{ flex: 1, minHeight: 0 }}>
-                <CovMatRadar
+                <CovUtilRadar
                   data={comparison.capDiffs.map(c => ({
                     name: c.name,
-                    coverage: dimension === "coverage" ? c.currScore : c.currMaturity,
-                    maturity: dimension === "coverage" ? c.prevScore : c.prevMaturity,
+                    coverage: dimension === "coverage" ? c.currScore : c.currUtilization,
+                    utilization: dimension === "coverage" ? c.prevScore : c.prevUtilization,
                     color: c.color,
                   }))}
                   coverageColor="#134fc9"
-                  maturityColor="#d56b1a"
+                  utilizationColor="#d56b1a"
                   legendLabels={[`A ${fmtShort(comparison.current.timestamp)}`, `B ${fmtShort(comparison.baseline.timestamp)}`]}
                   activeIdx={selectedCap ? comparison.capDiffs.findIndex(c => c.name === selectedCap) : null}
                   onSelect={(idx) => setSelectedCap(idx !== null && idx >= 0 ? comparison.capDiffs[idx]?.name ?? null : null)}
@@ -381,7 +381,7 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
                       <Flex key={cap.name} alignItems="center" gap={4} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${border}`, fontSize: 11 }}>
                         <Text style={{ width: 5, height: 5, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
                         <Text style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{cap.name}</Text>
-                        <Text style={{ color: textTert, whiteSpace: "nowrap" }}>{dimension === "maturity" ? cap.currMaturity : cap.currScore}%</Text>
+                        <Text style={{ color: textTert, whiteSpace: "nowrap" }}>{dimension === "utilization" ? cap.currUtilization : cap.currScore}%</Text>
                       </Flex>
                     ))}
                   </Flex>
@@ -393,15 +393,15 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
           {/* Expanded Radar Modal */}
           <ExpandableChartModal open={expandedRadar} onClose={() => setExpandedRadar(false)} title={`${dimension === "coverage" ? "Coverage" : "Utilization"} Comparison`}>
             <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
-              <CovMatRadar
+              <CovUtilRadar
                 data={comparison.capDiffs.map(c => ({
                   name: c.name,
-                  coverage: dimension === "coverage" ? c.currScore : c.currMaturity,
-                  maturity: dimension === "coverage" ? c.prevScore : c.prevMaturity,
+                  coverage: dimension === "coverage" ? c.currScore : c.currUtilization,
+                  utilization: dimension === "coverage" ? c.prevScore : c.prevUtilization,
                   color: c.color,
                 }))}
                 coverageColor="#134fc9"
-                maturityColor="#d56b1a"
+                utilizationColor="#d56b1a"
                 legendLabels={[`A ${fmtShort(comparison.current.timestamp)}`, `B ${fmtShort(comparison.baseline.timestamp)}`]}
               />
             </Flex>
@@ -426,13 +426,13 @@ function KpiCard({ dk, card, border, label, value, sub, accent }: { dk: boolean;
   );
 }
 
-function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeaderClick, dimension = "coverage" }: { cap: CapDiff; dk: boolean; border: string; textSec: string; textTert: string; forceOpen?: boolean; onHeaderClick?: () => void; dimension?: "coverage" | "maturity" }) {
+function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeaderClick, dimension = "coverage" }: { cap: CapDiff; dk: boolean; border: string; textSec: string; textTert: string; forceOpen?: boolean; onHeaderClick?: () => void; dimension?: "coverage" | "utilization" }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = forceOpen ?? localOpen;
-  const isMat = dimension === "maturity";
-  const prev = isMat ? cap.prevMaturity : cap.prevScore;
-  const curr = isMat ? cap.currMaturity : cap.currScore;
-  const d = isMat ? cap.maturityDelta : cap.delta;
+  const isUtil = dimension === "utilization";
+  const prev = isUtil ? cap.prevUtilization : cap.prevScore;
+  const curr = isUtil ? cap.currUtilization : cap.currScore;
+  const d = isUtil ? cap.utilizationDelta : cap.delta;
   const capBarRef = useRef<HTMLDivElement>(null);
   const gainedCount = cap.critDiffs.filter(c => c.pointsDelta > 0).length;
   const lostCount = cap.critDiffs.filter(c => c.pointsDelta < 0).length;
@@ -491,7 +491,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
         const improvable = cap.critDiffs.filter((c) => c.pointsDelta === 0 && c.currPoints === 0);
         const healthy = cap.critDiffs.filter((c) => c.pointsDelta === 0 && c.currPoints > 0);
 
-        /* tier grouping helpers for maturity view */
+        /* tier grouping helpers for utilization view */
         const tierLabel: Record<string, string> = { foundation: "Foundation", bestPractice: "Best Practice", excellence: "Excellence" };
         const tierColor: Record<string, string> = { foundation: Colors.Charts.Categorical.Color01.Default, bestPractice: Colors.Charts.Status.Warning.Default, excellence: Colors.Charts.Categorical.Color08.Default };
         const tierOrder = ["foundation", "bestPractice", "excellence"] as const;
@@ -544,7 +544,7 @@ function CapabilityBar({ cap, dk, border, textSec, textTert, forceOpen, onHeader
               );
             })}
             {/* ── Improvement opportunities / Healthy — grouped by tier when utilization ── */}
-            {isMat ? (
+            {isUtil ? (
               /* UTILIZATION VIEW: group all non-changed criteria by tier */
               tierOrder.map((tier) => {
                 const tiered = [...improvable, ...healthy].filter((cr) => (CRITERION_TIERS[cr.id] || "foundation") === tier);

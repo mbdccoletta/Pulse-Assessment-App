@@ -7,7 +7,6 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useAssessmentHistory } from "./hooks/useAssessmentHistory";
 import { useCoverageData } from "./hooks/useCoverageData";
 import { useScaleTier } from "./hooks/useScaleTier";
-import { useDevMode } from "./hooks/useDevMode";
 
 const CoverageAssessment = React.lazy(() =>
   import("./pages/CoverageAssessment").then(m => ({ default: m.CoverageAssessment }))
@@ -27,7 +26,6 @@ export const App = () => {
   // Dev mode gates SE-facing diagnostic controls (perf JSON download,
   // force-refresh). Active when ?dev=1 or localStorage.cca.dev is set.
   // In a customer tenant with neither, the diagnostic surface is hidden.
-  const { isDev } = useDevMode();
   // Thread the scale metadata into useCoverageData so the downloadable
   // perf report records exactly which tier was auto-detected vs forced.
   const coverageData = useCoverageData(scale.tier, {
@@ -53,9 +51,9 @@ export const App = () => {
             </Flex>
           }>
             <Routes>
-              <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} scale={scale} isDev={isDev} />} />
+              <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} scale={scale} />} />
               <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} saveSnapshot={history.saveSnapshot} />} />
-              <Route path="/ai-insights" element={<AiInsightsPage coverageData={coverageData} scale={scale} isDev={isDev} />} />
+              <Route path="/ai-insights" element={<AiInsightsPage coverageData={coverageData} scale={scale} />} />
             </Routes>
           </Suspense>
         </Page.Main>
