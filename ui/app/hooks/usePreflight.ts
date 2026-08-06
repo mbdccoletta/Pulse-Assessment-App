@@ -28,6 +28,38 @@ function isEntitlementError(detail: string): boolean {
   return detail.toUpperCase().includes("ENTITLEMENT");
 }
 
+/** Everything the SDK error carries, flattened into one searchable string.
+ *
+ *  The query client throws `ClientRequestError`, which puts the parsed error
+ *  envelope in `body` — `message` is generic. Classifying on `message` alone
+ *  therefore never saw TRACE_QUERY_ENTITLEMENT_MISSING: a tenant without
+ *  Traces on Grail was told to grant scopes (which cannot fix an entitlement)
+ *  and Trace Proxy Mode was never offered — the exact case it exists for. */
+function errorText(err: unknown): string {
+  const e = err as Record<string, unknown> | null;
+  const parts: string[] = [];
+  const push = (v: unknown) => {
+    if (v == null) return;
+    if (typeof v === "string") { parts.push(v); return; }
+    try { parts.push(JSON.stringify(v)); } catch { /* circular — skip */ }
+  };
+  push(e?.message);
+  push(e?.body);
+  push(e?.cause);
+  push(e?.details);
+  if (parts.length === 0) parts.push(String(err));
+  return parts.join(" | ");
+}
+
+/** The human-readable line out of the envelope, so the UI shows
+ *  "Querying spans requires ... Trace query entitlement." instead of raw JSON. */
+function humanDetail(err: unknown): string {
+  const env = (err as { body?: { error?: { message?: string; details?: { errorMessage?: string } } } })?.body?.error;
+  const msg = env?.details?.errorMessage || env?.message || (err as { message?: string })?.message;
+  const out = msg ? String(msg) : String(err);
+  return out.length > 160 ? out.slice(0, 160) + "…" : out;
+}
+
 /** Dev-only simulation of a tenant without Traces on Grail, so Trace Proxy
  *  Mode can be tested on any tenant (which HAS spans). Never active outside
  *  the dev environment — a customer tenant cannot trip this. */
@@ -43,7 +75,9 @@ function simulateNoTraces(): boolean {
   }
 }
 
-async function probeQuery(query: string): Promise<{ ok: boolean; detail: string }> {
+/** `entitlement` is decided here, on the raw error, and carried out — the
+ *  caller must not re-derive it from `detail`, which is human-facing text. */
+async function probeQuery(query: string): Promise<{ ok: boolean; detail: string; entitlement: boolean }> {
   try {
     const response = await queryExecutionClient.queryExecute({
       body: { query, requestTimeoutMilliseconds: 15000, maxResultRecords: 1 },
@@ -52,18 +86,21 @@ async function probeQuery(query: string): Promise<{ ok: boolean; detail: string 
     if (state === "FAILED" || state === "CANCELLED") {
       const notes = (response?.result as any)?.metadata?.grail?.notifications ?? [];
       const msg = notes.map((n: any) => n.message).join("; ") || `Query ${state}`;
-      return { ok: false, detail: msg };
+      return { ok: false, detail: msg, entitlement: isEntitlementError(msg) };
     }
-    return { ok: true, detail: "Access confirmed" };
-  } catch (err: any) {
-    const msg = err?.message || String(err);
-    if (isEntitlementError(msg))
-      return { ok: false, detail: msg.length > 160 ? msg.substring(0, 160) + "…" : msg };
-    if (msg.includes("403") || msg.includes("Forbidden") || msg.includes("permission"))
-      return { ok: false, detail: "Permission denied — scope not granted to this app" };
-    if (msg.includes("401") || msg.includes("Unauthorized"))
-      return { ok: false, detail: "Authentication failed — app token may be invalid" };
-    return { ok: false, detail: msg.length > 120 ? msg.substring(0, 120) + "…" : msg };
+    return { ok: true, detail: "Access confirmed", entitlement: false };
+  } catch (err: unknown) {
+    // Classify on the WHOLE error, not just `message` — see errorText above.
+    const haystack = errorText(err);
+    // Entitlement first: it is also a 403, so the scope branch below would
+    // otherwise swallow it and give advice that cannot work.
+    if (isEntitlementError(haystack))
+      return { ok: false, detail: humanDetail(err), entitlement: true };
+    if (haystack.includes("403") || haystack.includes("Forbidden") || haystack.includes("permission"))
+      return { ok: false, detail: "Permission denied — scope not granted to this app", entitlement: false };
+    if (haystack.includes("401") || haystack.includes("Unauthorized"))
+      return { ok: false, detail: "Authentication failed — app token may be invalid", entitlement: false };
+    return { ok: false, detail: humanDetail(err), entitlement: false };
   }
 }
 
@@ -91,7 +128,7 @@ export function usePreflight() {
       const result = await probeQuery(probe.query);
       const status: PreflightCheck["status"] = result.ok
         ? "ok"
-        : probe.id === "spans" && isEntitlementError(result.detail)
+        : probe.id === "spans" && result.entitlement
           ? "not-entitled"
           : "fail";
       setChecks(prev => prev.map(c => c.id === probe.id ? { ...c, status, detail: result.detail } : c));

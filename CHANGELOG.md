@@ -4,6 +4,31 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.8] — 2026-08-06
+
+### Fixed — Trace Proxy Mode was never offered
+- The preflight probe classified SDK errors by reading `err.message` only. The
+  query client throws `ClientRequestError`, which carries the parsed envelope in
+  **`body`** while `message` stays generic ("Request failed with status code
+  403"), so `TRACE_QUERY_ENTITLEMENT_MISSING` was never seen. A tenant without
+  Traces on Grail was therefore told "Permission denied — scope not granted to
+  this app" — advice that cannot fix an entitlement — and **Trace Proxy Mode,
+  which exists precisely for that tenant, was never offered.**
+- Classification now flattens `message`, `body`, `cause` and `details` into one
+  searchable string, and tests for the entitlement **before** the generic 403
+  branch, since an entitlement failure is also a 403.
+- `probeQuery` now returns the entitlement decision instead of leaving the
+  caller to re-derive it from the human-facing `detail` string — the same
+  fragility that produced the bug.
+- Verified against the exact payload from a live tenant: the shipped 2.5.7 code
+  returns `fail` + "scope not granted"; the fix returns `not-entitled` + the
+  readable "Querying spans requires ... Trace query entitlement." A plain 403
+  still classifies as `fail` and keeps the scope hint.
+
+Note: the `Request failed: {...403}` line still appears in the browser console.
+The probe queries spans deliberately to detect the entitlement, so that 403 is
+the detection working; the SDK logs every failed request.
+
 ## [2.5.5] — 2026-08-05
 
 ### Added — Economy Mode (Grail/DPS cost)
