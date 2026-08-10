@@ -27,7 +27,7 @@ const clean = (s: string) =>
     .replace(/\*(.+?)\*/g, "$1")
     .replace(/`{1,3}/g, "")
     .replace(/≥/g, ">=").replace(/→/g, "->").replace(/≈/g, "~")
-    .replace(/[""]/g, '"').replace(/·/g, "-").replace(/—/g, "-")
+    .replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/·/g, "-").replace(/—/g, "-")
     .replace(/[^\x20-\x7E]/g, "");
 
 /** Build without saving — lets tests/preview harnesses render offline. */

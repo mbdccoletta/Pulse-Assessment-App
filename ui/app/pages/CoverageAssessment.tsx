@@ -1597,7 +1597,7 @@ function UtilizationCriterionRow({ cr, dk, text, textSec, textTert, collapseKey 
           width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
           background: passed ? Colors.Text.Success.Default : Colors.Text.Critical.Default,
         }} />
-        <Tooltip text={criterionTooltipContent(cr.id, cr.description, cr.tier)} containerStyle={{ flex: 1 }} maxWidth={340}>
+        <Tooltip text={criterionTooltipContent(cr.id, cr.description, cr.tier)} containerStyle={{ flex: 1 }}>
           <Flex alignItems="center" gap={6}>
             <Text style={{ color: passed ? text : textSec }}>{cr.label}</Text>
             {cr.proxied && (
@@ -2179,7 +2179,7 @@ function CriterionRow({ cr, idx, capColor, dk, text, textSec, collapseKey }: {
       }}>{idx + 1}</Text>
       <Flex flexDirection="column" style={{ flex: 1, minWidth: 0 }}>
         <Flex alignItems="center" gap={8} style={{ marginBottom: 4 }}>
-          <Tooltip text={CRITERION_IMPORTANCE[cr.id] || cr.description} maxWidth={340}>
+          <Tooltip text={CRITERION_IMPORTANCE[cr.id] || cr.description}>
             <Flex flexDirection="column" style={{ fontSize: 14, fontWeight: 700, color: text }}>{cr.label}</Flex>
           </Tooltip>
           <Text style={{

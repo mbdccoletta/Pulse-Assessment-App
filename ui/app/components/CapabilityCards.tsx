@@ -66,7 +66,7 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
             {CRITERION_IMPORTANCE[cr.id] && <Text style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.5 }}>{CRITERION_IMPORTANCE[cr.id].split(". ")[0]}.</Text>}
             <Text style={{ fontSize: 11, opacity: 0.6, marginTop: 5 }}>Click to expand details</Text>
           </Flex>
-        } maxWidth={320} containerStyle={{ flex: 1 }}>
+        } containerStyle={{ flex: 1 }}>
           <Flex alignItems="center" gap={6}>
             <Text>{cr.label}</Text>
             {cr.proxied && (
