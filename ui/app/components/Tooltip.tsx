@@ -6,7 +6,6 @@ interface Props {
   text: React.ReactNode;
   children: React.ReactElement;
   position?: "top" | "bottom";
-  maxWidth?: number;
   containerStyle?: React.CSSProperties;
 }
 
