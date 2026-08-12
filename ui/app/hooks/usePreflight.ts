@@ -6,7 +6,7 @@ export interface PreflightCheck {
   id: string;
   label: string;
   scope: string;
-  status: "pending" | "running" | "ok" | "fail" | "not-entitled";
+  status: "pending" | "running" | "ok" | "fail" | "not-entitled" | "no-classic-entities";
   detail?: string;
 }
 
@@ -26,6 +26,19 @@ const PROBE_QUERIES: { id: string; label: string; scope: string; query: string }
  *  offer Trace Proxy Mode instead of the misleading "grant scopes" advice. */
 function isEntitlementError(detail: string): boolean {
   return detail.toUpperCase().includes("ENTITLEMENT");
+}
+
+/** Tenants on the Smartscape entity model do not expose the classic
+ *  `dt.entity.*` tables at all: the query fails to parse with
+ *  UNKNOWN_DATA_OBJECT ("dt.entity.host isn't a valid data object").
+ *
+ *  This is neither a scope nor an entitlement problem — no permission can
+ *  conjure a table that the tenant does not have — so it gets its own status.
+ *  Reported as issue #1 by a user who had hosts running and was told to grant
+ *  scopes. */
+function isClassicEntityModelMissing(detail: string): boolean {
+  const d = detail.toUpperCase();
+  return d.includes("UNKNOWN_DATA_OBJECT") && d.includes("DT.ENTITY.");
 }
 
 /** Everything the SDK error carries, flattened into one searchable string.
@@ -77,7 +90,7 @@ function simulateNoTraces(): boolean {
 
 /** `entitlement` is decided here, on the raw error, and carried out — the
  *  caller must not re-derive it from `detail`, which is human-facing text. */
-async function probeQuery(query: string): Promise<{ ok: boolean; detail: string; entitlement: boolean }> {
+async function probeQuery(query: string): Promise<{ ok: boolean; detail: string; entitlement: boolean; noClassicEntities: boolean }> {
   try {
     const response = await queryExecutionClient.queryExecute({
       body: { query, requestTimeoutMilliseconds: 15000, maxResultRecords: 1 },
@@ -86,21 +99,23 @@ async function probeQuery(query: string): Promise<{ ok: boolean; detail: string;
     if (state === "FAILED" || state === "CANCELLED") {
       const notes = (response?.result as any)?.metadata?.grail?.notifications ?? [];
       const msg = notes.map((n: any) => n.message).join("; ") || `Query ${state}`;
-      return { ok: false, detail: msg, entitlement: isEntitlementError(msg) };
+      return { ok: false, detail: msg, entitlement: isEntitlementError(msg), noClassicEntities: isClassicEntityModelMissing(msg) };
     }
-    return { ok: true, detail: "Access confirmed", entitlement: false };
+    return { ok: true, detail: "Access confirmed", entitlement: false, noClassicEntities: false };
   } catch (err: unknown) {
     // Classify on the WHOLE error, not just `message` — see errorText above.
     const haystack = errorText(err);
     // Entitlement first: it is also a 403, so the scope branch below would
     // otherwise swallow it and give advice that cannot work.
+    if (isClassicEntityModelMissing(haystack))
+      return { ok: false, detail: humanDetail(err), entitlement: false, noClassicEntities: true };
     if (isEntitlementError(haystack))
-      return { ok: false, detail: humanDetail(err), entitlement: true };
+      return { ok: false, detail: humanDetail(err), entitlement: true, noClassicEntities: false };
     if (haystack.includes("403") || haystack.includes("Forbidden") || haystack.includes("permission"))
-      return { ok: false, detail: "Permission denied — scope not granted to this app", entitlement: false };
+      return { ok: false, detail: "Permission denied — scope not granted to this app", entitlement: false, noClassicEntities: false };
     if (haystack.includes("401") || haystack.includes("Unauthorized"))
-      return { ok: false, detail: "Authentication failed — app token may be invalid", entitlement: false };
-    return { ok: false, detail: humanDetail(err), entitlement: false };
+      return { ok: false, detail: "Authentication failed — app token may be invalid", entitlement: false, noClassicEntities: false };
+    return { ok: false, detail: humanDetail(err), entitlement: false, noClassicEntities: false };
   }
 }
 
@@ -128,9 +143,11 @@ export function usePreflight() {
       const result = await probeQuery(probe.query);
       const status: PreflightCheck["status"] = result.ok
         ? "ok"
-        : probe.id === "spans" && result.entitlement
-          ? "not-entitled"
-          : "fail";
+        : result.noClassicEntities
+          ? "no-classic-entities"
+          : probe.id === "spans" && result.entitlement
+            ? "not-entitled"
+            : "fail";
       setChecks(prev => prev.map(c => c.id === probe.id ? { ...c, status, detail: result.detail } : c));
     }
     setRunning(false);
@@ -148,9 +165,13 @@ export function usePreflight() {
   /** Every source is fine EXCEPT spans, which failed on the tenant-level
    *  Traces on Grail entitlement → the app can offer Trace Proxy Mode. */
   const spansNotEntitled = done && !hasFails && checks.some(c => c.id === "spans" && c.status === "not-entitled");
+  /** The tenant uses the Smartscape entity model, so every `dt.entity.*`
+   *  denominator in the catalog is unavailable. The assessment cannot run —
+   *  but the reason is the data model, not a missing permission. */
+  const noClassicEntities = done && checks.some(c => c.status === "no-classic-entities");
 
   // Persist validated state so preflight is skipped on subsequent runs
   const markValidated = useCallback(() => setValidated(true), []);
 
-  return { checks, running, done, allPassed, hasFails, spansNotEntitled, validated, runPreflight, reset, markValidated };
+  return { checks, running, done, allPassed, hasFails, spansNotEntitled, noClassicEntities, validated, runPreflight, reset, markValidated };
 }
