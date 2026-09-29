@@ -52,7 +52,7 @@ export const App = () => {
           }>
             <Routes>
               <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} scale={scale} />} />
-              <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} saveSnapshot={history.saveSnapshot} />} />
+              <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} loading={history.loading} saveSnapshot={history.saveSnapshot} />} />
               <Route path="/ai-insights" element={<AiInsightsPage coverageData={coverageData} scale={scale} />} />
             </Routes>
           </Suspense>

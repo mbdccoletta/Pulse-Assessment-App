@@ -81,7 +81,10 @@ function topRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: 
   ctx.closePath();
 }
 
-export const CapabilityScatter: React.FC<Props> = ({
+/** Memoised: redraws a canvas and lives inside a page that re-renders on
+ *  every hover, tooltip and collapse. `data` comes from a useMemo, so the
+ *  shallow prop comparison actually holds. */
+const CapabilityScatterImpl: React.FC<Props> = ({
   data,
   dotRadius = 5,
   yLabel = "%",
@@ -394,6 +397,9 @@ export const CapabilityScatter: React.FC<Props> = ({
     </div>
   );
 };
+
+export const CapabilityScatter = React.memo(CapabilityScatterImpl);
+CapabilityScatter.displayName = "CapabilityScatter";
 
 /** Height / width of the chart rendered for PDF embedding. Capability names
  *  now live on the X axis instead of a legend that grew with the data, so

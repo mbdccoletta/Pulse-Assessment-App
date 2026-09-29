@@ -52,8 +52,25 @@ interface CapDiff {
 
 interface Props {
   snapshots: AssessmentSnapshot[];
+  /** First Document Store sync still in flight. Optional so callers that do
+   *  not track it keep working — `undefined` means "not loading". */
+  loading?: boolean;
   saveSnapshot: (capabilities: CapabilityResult[], totalScore: number, tenant: string) => void;
 }
+
+/** Placeholder shaped like the real content, so nothing jumps when data lands. */
+const Skeleton: React.FC<{ h: number; w?: string | number; dk: boolean; r?: number }> = ({ h, w = "100%", dk, r = 8 }) => (
+  <div style={{
+    height: h, width: w, borderRadius: r,
+    background: dk ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)",
+    animation: "ccaPulse 1.4s ease-in-out infinite",
+  }} />
+);
+
+const skeletonKeyframes = `
+@keyframes ccaPulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
+@media (prefers-reduced-motion: reduce) { @keyframes ccaPulse { 0%,100% { opacity: 0.75 } } }
+`;
 
 /* ── helpers ── */
 function fmtDate(iso: string) {
@@ -87,9 +104,13 @@ function deltaColor(d: number) {
 }
 
 /** Compute utilization score for a capability's criteria using the CRITERION_TIERS lookup */
-function computeUtilization(criteria: { id: string; points: number; error: boolean }[]): number {
+function computeUtilization(criteria: { id: string; points: number; error: boolean; notAssessed?: boolean }[]): number {
   const tiers = { foundation: { total: 0, passed: 0 }, bestPractice: { total: 0, passed: 0 }, excellence: { total: 0, passed: 0 } };
   for (const cr of criteria) {
+    // Mirrors useCoverageData. `notAssessed` is absent on pre-2.5.11 snapshots
+    // and `undefined` falls through as false, so old history keeps scoring
+    // exactly as it did and stays comparable on the same chart.
+    if (cr.notAssessed) continue;
     const t = CRITERION_TIERS[cr.id] || "foundation";
     tiers[t].total++;
     if (!cr.error && cr.points > 0) tiers[t].passed++;
@@ -103,7 +124,7 @@ function computeUtilization(criteria: { id: string; points: number; error: boole
   return Math.round(fPct * FOUNDATION_WEIGHT + effB * BEST_PRACTICE_WEIGHT + effE * EXCELLENCE_WEIGHT);
 }
 
-export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => {
+export const ComparisonPage: React.FC<Props> = ({ snapshots, loading = false, saveSnapshot }) => {
   const dk = useCurrentTheme() === "dark";
   const navigate = useNavigate();
 
@@ -214,12 +235,41 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
   }, [snapA, snapB, idxA, idxB]);
 
   /* ── Empty state ── */
+  // Loading beats the empty state: with history still in flight, "Not enough
+  // data" is a claim we cannot make yet — and showing it made a slow fetch
+  // look like a lost history.
+  if (loading && available.length < 2) {
+    return (
+      <Flex flexDirection="column" gap={20} style={{ fontFamily: "inherit", background: bg, color: text, minHeight: "100vh", padding: 24 }}>
+        <style>{skeletonKeyframes}</style>
+        <Flex flexDirection="row" alignItems="center" gap={12}>
+          <Skeleton h={22} w={190} dk={dk} r={6} />
+          <Flex flexDirection="column" style={{ fontSize: 13, color: textSec }}>Loading assessment history…</Flex>
+        </Flex>
+        <Flex flexDirection="row" gap={12} flexWrap="wrap">
+          <Skeleton h={44} w={200} dk={dk} />
+          <Skeleton h={44} w={200} dk={dk} />
+        </Flex>
+        <Skeleton h={220} dk={dk} />
+        <Flex flexDirection="row" gap={12} flexWrap="wrap">
+          <Skeleton h={90} w={240} dk={dk} />
+          <Skeleton h={90} w={240} dk={dk} />
+          <Skeleton h={90} w={240} dk={dk} />
+        </Flex>
+      </Flex>
+    );
+  }
+
   if (available.length < 2) {
     return (
       <Flex flexDirection="column" alignItems="center" justifyContent="center" gap={16} style={{ fontFamily: "inherit", background: bg, color: text, minHeight: "100vh" }}>
-        <Flex flexDirection="column" style={{ fontSize: 18, fontWeight: 800 }}>Not enough data</Flex>
-        <Flex flexDirection="column" style={{ fontSize: 14, color: textSec, textAlign: "center", maxWidth: 320 }}>
-          Run the assessment at least twice to compare evolution over time. Each run is saved automatically.
+        <Flex flexDirection="column" style={{ fontSize: 18, fontWeight: 800 }}>
+          {available.length === 0 ? "No history yet" : "Not enough data"}
+        </Flex>
+        <Flex flexDirection="column" style={{ fontSize: 14, color: textSec, textAlign: "center", maxWidth: 340 }}>
+          {available.length === 0
+            ? "No saved runs were found for this environment. Run the assessment once and it is saved automatically — a second run unlocks the comparison."
+            : "One run is saved. Run the assessment again to compare evolution over time; each run is saved automatically."}
         </Flex>
         <Button onClick={() => navigate("/")} size="condensed">← Back to Overview</Button>
       </Flex>

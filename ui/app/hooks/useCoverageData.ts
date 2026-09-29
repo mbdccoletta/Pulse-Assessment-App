@@ -31,7 +31,11 @@ export interface CapabilityResult {
   /** Original score from DQL queries (before consolidation adjustment). */
   rawScore: number;
   details: string[];
-  criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; proxied: boolean }[];
+  criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; notAssessed: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; proxied: boolean }[];
+  /** Criteria that produced a verdict — the denominator of `score`. */
+  assessedCount: number;
+  /** Criteria that could not be measured. Reported, never counted as failures. */
+  notAssessedCount: number;
   utilization: UtilizationResult;
   /** Consolidation factor (0–100). 100 = all data in DT, 30 = only 30% of estate in DT. */
   consolidation: number;
@@ -284,6 +288,36 @@ function isEntityCountQuery(q: string): boolean {
 export const FOUNDATION_WEIGHT = 60;
 export const BEST_PRACTICE_WEIGHT = 25;
 export const EXCELLENCE_WEIGHT = 15;
+
+/**
+ * Three-state scoring — met / not met / NOT ASSESSED.
+ *
+ * Until v2.5.10 a criterion that could not be measured was scored as a
+ * failure: the numerator excluded it, the denominator did not. A query that
+ * errored, or one whose entity denominator came back empty (a tenant with no
+ * services, no applications, no clusters), was reported to the customer as a
+ * check they had failed. 33 of the 111 criteria denominate on
+ * dt.entity.service: a pure-infrastructure customer lost 30% of the score
+ * FOR NOT HAVING SERVICES.
+ *
+ * ROLLBACK: flip this to false and the previous arithmetic returns exactly.
+ * `?accuracy=legacy` (or localStorage `cca.accuracy = "legacy"`) does the same
+ * at runtime, without a redeploy.
+ */
+export const THREE_STATE_SCORING_DEFAULT = true;
+
+export function threeStateScoringEnabled(): boolean {
+  try {
+    if (typeof window === "undefined") return THREE_STATE_SCORING_DEFAULT;
+    const p = new URLSearchParams(window.location.search).get("accuracy");
+    if (p === "legacy") return false;
+    if (p === "three-state") return true;
+    const ls = window.localStorage.getItem("cca.accuracy");
+    if (ls === "legacy") return false;
+    if (ls === "three-state") return true;
+  } catch { /* storage blocked — fall through to the default */ }
+  return THREE_STATE_SCORING_DEFAULT;
+}
 
 interface ExecutionResult {
   cache: Map<string, number>;
@@ -677,6 +711,11 @@ export function useCoverageData(
         for (const criterion of cap.criteria) {
           const valueA = cache.get(criterion.query) ?? -1;
           const isError = valueA === -1;
+          /** No verdict is possible: the numerator errored, or the universe
+           *  this criterion measures against is empty. A tenant with zero
+           *  services has not FAILED the service criteria — it was never
+           *  eligible for them. */
+          let notAssessed = isError;
           let value: number;
           if (isError) {
             value = 0;
@@ -685,6 +724,7 @@ export function useCoverageData(
             const valueB = cache.get(criterion.queryB) ?? -1;
             if (valueB <= 0) {
               value = 0;
+              notAssessed = true;   // denominator absent, not a failure
             } else {
               value = Math.min(Math.round((valueA / valueB) * 1000) / 10, 100); // one decimal %, capped at 100
             }
@@ -696,6 +736,7 @@ export function useCoverageData(
             const denom = criterion.denominatorConstant;
             if (denom <= 0) {
               value = 0;
+              notAssessed = true;
             } else {
               value = Math.min(Math.round((valueA / denom) * 1000) / 10, 100);
             }
@@ -716,6 +757,7 @@ export function useCoverageData(
             value: isError ? 0 : value,
             points: passed ? 1 : 0,
             error: isError,
+            notAssessed,
             query: criterion.queryB
               ? `${criterion.query}\n÷ ${criterion.queryB}`
               : criterion.denominatorConstant != null
@@ -730,8 +772,13 @@ export function useCoverageData(
         }
 
         // Compute utilization per tier
+        // Under three-state scoring an unmeasurable criterion leaves the tier
+        // denominator too — otherwise a capability with no eligible entities
+        // reads as L0 "Not Adopted" when nothing was measurable at all.
+        const threeState = threeStateScoringEnabled();
         const tierCounts = { foundation: { total: 0, passed: 0 }, bestPractice: { total: 0, passed: 0 }, excellence: { total: 0, passed: 0 } };
         for (const cr of criteriaResults) {
+          if (threeState && cr.notAssessed) continue;
           const t = cr.tier;
           tierCounts[t].total++;
           if (!cr.error && cr.points > 0) tierCounts[t].passed++; // points is 0 or 1
@@ -762,9 +809,13 @@ export function useCoverageData(
         };
 
         const passedCount = criteriaResults.filter(cr => cr.points > 0).length;
-        const capScore = Math.round((passedCount / cap.criteria.length) * 100);
+        const notAssessedCount = threeState ? criteriaResults.filter(cr => cr.notAssessed).length : 0;
+        const assessedCount = cap.criteria.length - notAssessedCount;
+        // "Of what we could measure, how much passes." With the flag off the
+        // denominator is the full catalog again — identical to v2.5.10.
+        const capScore = assessedCount > 0 ? Math.round((passedCount / assessedCount) * 100) : 0;
 
-        return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, utilization, consolidation: 100, effectiveUtilizationScore: utilizationScore };
+        return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, assessedCount, notAssessedCount, utilization, consolidation: 100, effectiveUtilizationScore: utilizationScore };
       });
 
       // Log summary
