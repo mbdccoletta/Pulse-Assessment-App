@@ -4,6 +4,78 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.15] — 2026-09-29
+
+### Added — every capability carries a verdict, not just a number
+
+Coverage, utilization and adoption were shown side by side and the reading was
+left to whoever was in the room. Three percentages are not a verdict: 82%
+coverage means something very different when three people in 37 open the apps
+than when the whole team does.
+
+Each capability card now shows a named verdict — **Healthy, Skin-deep,
+Unwatched, Starved, Dark, Not assessed** — on a band of its own under the
+name, with the one-line reason beside it. Nothing is removed and **no score
+changes**: the verdict is a reading of numbers the app already had.
+
+A first cut put this as a small chip in the header row, between the score and
+the existing Excellent/Good badge, where it read as just another badge and
+went unnoticed on a real screen. The band is the fix.
+
+On this tenant it separates cases no single number showed: Digital Experience
+passes 82% of its checks and is *Unwatched*; Threat Observability is at 91%
+but *Skin-deep* — the audience is in, the depth is not.
+
+**The adoption cut needed an absolute floor.** A pure percentage threshold does
+not survive a real tenant: the most-adopted capability here reaches 24% of the
+platform population, so a 25% cut would leave nothing ever reading as well
+adopted. Adoption now counts as high when it clears the share **or** a floor of
+people. `tools/diagnosis.test.mjs` pins that — it asserts the floor-less
+variant degenerates to a single verdict.
+
+### A capability with nobody in it is not "adoption unknown"
+
+Capabilities with zero users have no entry in the adoption map. Reading a
+missing entry as unmeasured hid the exact case the verdict exists for — data
+collected, nobody opening it. When adoption ran at all, a missing entry now
+means zero. Caught by looking at the deployed screen, not by a test.
+
+### Fixed — a criterion that could not be measured was scored as a failure
+
+The score was `passed ÷ every criterion in the catalog`: the numerator excluded
+criteria that errored, the denominator excluded nothing. Two cases reached the
+customer as checks they had failed — a numerator query that errored, and an
+entity denominator that came back empty. 33 of the 111 criteria denominate on
+`dt.entity.service`, so a pure-infrastructure customer lost 30% of the score
+**for not having services**.
+
+Scoring now has three states — met, not met, **not assessed** — and the third
+leaves both sides of the fraction. Utilization tiers follow the same rule. The
+Executive Summary states how many criteria were assessed and how many were not.
+
+Scores can go up; that is the number becoming correct, not the bar moving. On a
+tenant where every entity type exists nothing changes at all.
+
+### Fixed — the Evolution screen looked broken while it was working
+
+History was fetched one document at a time — `await` inside a `for` loop, up to
+200 sequential round-trips — with no loading state, so Evolution rendered "Not
+enough data" the whole time: a slow fetch was indistinguishable from a lost
+history. Downloads now run 8 in parallel, a skeleton shows while they land, and
+the empty state distinguishes **no history yet** from **only one run so far**.
+
+### Fixed — the radar re-rendered on every hover
+
+`CovUtilRadar` is memoised, but both call sites passed `data={sorted.map(...)}`
+— a new array each render, so the memo never hit and ~1000 lines of SVG redrew
+on every hover, tooltip and collapse. It is built once with `useMemo` now.
+`CapabilityScatter` was not memoised at all; it is now.
+
+### Rollback
+- `THREE_STATE_SCORING_DEFAULT` → `false` restores the previous arithmetic.
+- Without a redeploy: `?accuracy=legacy`, or `localStorage['cca.accuracy']='legacy'`.
+- Tree as it was: tag `pre-accuracy-fix`.
+
 ## [2.5.10] — 2026-08-12
 
 ### Fixed — misleading error on Smartscape-only tenants (issue #1)

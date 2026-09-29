@@ -19,6 +19,11 @@ export interface AssessmentSnapshot {
       value: number;
       points: number;
       error: boolean;
+      /** Could not be measured. Absent on snapshots written before v2.5.11:
+       *  those record a missing denominator as `value: 0, error: false`,
+       *  indistinguishable from a genuine zero, so older history can only be
+       *  reprocessed for the `error` case. Treat `undefined` as false. */
+      notAssessed?: boolean;
     }[];
   }[];
 }
@@ -54,14 +59,26 @@ async function loadFromDocStore(): Promise<{ snapshots: AssessmentSnapshot[], re
       pageSize: 200,
     });
     for (const doc of list.documents) remoteDocIds.add(doc.id);
+
+    // Downloads run in parallel, bounded. The previous version awaited each
+    // document in turn: with a full retention window that is one round-trip
+    // after another, and Evolution sat blank for all of them.
+    const CONCURRENCY = 8;
+    const docs = list.documents;
     const snaps: AssessmentSnapshot[] = [];
-    for (const doc of list.documents) {
-      try {
-        const content = await documentsClient.downloadDocumentContent({ id: doc.id });
-        const text = await content.get("text");
-        snaps.push(JSON.parse(text));
-      } catch { /* skip corrupt documents */ }
+    let next = 0;
+    async function worker(): Promise<void> {
+      for (;;) {
+        const i = next++;
+        if (i >= docs.length) return;
+        try {
+          const content = await documentsClient.downloadDocumentContent({ id: docs[i].id });
+          const text = await content.get("text");
+          snaps.push(JSON.parse(text));
+        } catch { /* skip corrupt documents */ }
+      }
     }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, docs.length) }, worker));
     snaps.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     return { snapshots: snaps, remoteDocIds };
   } catch (err) {
@@ -175,6 +192,10 @@ async function deleteSnapshotsFromDocStore(ids: string[], remoteIds?: Set<string
 
 export function useAssessmentHistory() {
   const [snapshots, setSnapshots] = useState<AssessmentSnapshot[]>(loadLocal);
+  /** True while the first Document Store sync is in flight. Without it the
+   *  Evolution screen cannot tell "still loading" from "never ran" — both
+   *  rendered as an empty page, and the ambiguity read as a broken app. */
+  const [loading, setLoading] = useState(true);
   const syncedRef = useRef(false);
   const remoteIdsRef = useRef(new Set<string>());
 
@@ -200,7 +221,7 @@ export function useAssessmentHistory() {
       setSnapshots(keep);
       persistLocal(keep);
       if (removeIds.length > 0) deleteSnapshotsFromDocStore(removeIds, remoteIdsRef.current);
-    });
+    }).finally(() => setLoading(false));
   }, []);
 
   const saveSnapshot = useCallback((capabilities: CapabilityResult[], totalScore: number, tenant: string) => {
@@ -220,6 +241,7 @@ export function useAssessmentHistory() {
           value: cr.value,
           points: cr.points,
           error: cr.error,
+          ...(cr.notAssessed ? { notAssessed: true } : {}),
         })),
       })),
     };
@@ -242,5 +264,5 @@ export function useAssessmentHistory() {
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
-  return { snapshots, saveSnapshot, clearHistory };
+  return { snapshots, loading, saveSnapshot, clearHistory };
 }

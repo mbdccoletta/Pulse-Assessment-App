@@ -18,12 +18,59 @@ import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
 import { CAP_SUMMARIES } from "../data/capSummaries";
 import { DavisInsightSection } from "./DavisInsightSection";
 import type { DavisRecommendationMap } from "../hooks/useDavisRecommendations";
+import { diagnose, type Diagnosis, type DiagnosisId } from "../diagnosis";
+
+/** Semantic colour per verdict. Warm = something is being wasted, blue =
+ *  opportunity, grey = unknown, green = the one to show off. */
+function diagnosisColor(id: DiagnosisId): string {
+  switch (id) {
+    case "healthy":   return Colors.Text.Success.Default;
+    case "skinDeep":  return Colors.Charts.Status.Warning.Default;
+    case "unwatched": return Colors.Text.Critical.Default;
+    case "starved":   return Colors.Text.Primary.Default;
+    default:          return Colors.Text.Neutral.Subdued;
+  }
+}
+
+/**
+ * The verdict, on a band of its own under the capability name.
+ *
+ * A first cut put this as a small chip in the header row, between the score
+ * and the existing Excellent/Good badge — where it read as just another
+ * badge and went unnoticed. It now gets its own line, a solid colour swatch
+ * and the one-line reason, so it announces itself as a reading rather than
+ * a fourth number.
+ */
+const VerdictBand: React.FC<{ dx: Diagnosis; dk: boolean }> = ({ dx, dk }) => {
+  const c = diagnosisColor(dx.id);
+  return (
+    <Flex flexDirection="row" alignItems="center" gap={8} style={{
+      marginBottom: 8, padding: "5px 9px", borderRadius: 6,
+      background: c + (dk ? "1A" : "12"),
+      borderLeft: `3px solid ${c}`,
+    }}>
+      <Text style={{
+        fontSize: 11, fontWeight: 800, color: c, letterSpacing: 0.6,
+        textTransform: "uppercase", whiteSpace: "nowrap", flexShrink: 0,
+      }}>{dx.label}</Text>
+      <Text style={{
+        fontSize: 11, color: Colors.Text.Neutral.Subdued, lineHeight: 1.35, minWidth: 0,
+      }}>{dx.meaning}</Text>
+    </Flex>
+  );
+};
 
 interface Props {
   capabilities: CapabilityResult[];
   anim: number;
   activeIdx: number | null;
   onSelect: (idx: number | null) => void;
+  /** Adoption per capability, when the usage query was available. Feeds the
+   *  verdict; absent adoption downgrades it to a coverage/utilization reading
+   *  rather than implying nobody uses the capability. */
+  adoptionByCapability?: Record<string, { users: number; rate: number }>;
+  adoptionTotalUsers?: number;
+  adoptionWindowDays?: number;
   /** Optional map of Davis CoPilot recommendations keyed by capability
    *  name. When provided, an "AI Insight" section renders under each
    *  expanded card. */
@@ -151,7 +198,7 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
   );
 };
 
-export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations, onSendFollowUp, onRequestInsight, onExplain }) => {
+export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations, onSendFollowUp, onRequestInsight, onExplain, adoptionByCapability, adoptionTotalUsers, adoptionWindowDays }) => {
   const dk = useCurrentTheme() === "dark";
 
   // NB: NO auto-fire on expand. The user explicitly opted out of implicit
@@ -164,6 +211,22 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
     <Flex flexDirection="column" gap={6}>
       {capabilities.map((cap, i) => {
         const ml = utilization(cap.score);
+        // A capability with nobody in it has NO ENTRY in the adoption map.
+        // Reading that as "adoption unknown" hid the very case the verdict
+        // exists for: data collected, zero people opening it. When adoption
+        // ran at all, a missing entry means zero — not unmeasured.
+        const adoptionRan = adoptionByCapability != null;
+        const ad = adoptionByCapability?.[cap.name];
+        const dx = diagnose({
+          coverage: cap.score,
+          utilization: cap.effectiveUtilizationScore,
+          users: adoptionRan ? (ad?.users ?? 0) : undefined,
+          rate: adoptionRan ? (ad?.rate ?? 0) : undefined,
+          totalUsers: adoptionTotalUsers,
+          windowDays: adoptionWindowDays,
+          notAssessedCount: cap.notAssessedCount,
+          totalCount: cap.criteriaResults.length,
+        });
         const act = activeIdx === i;
         return (
           <Flex key={i} flexDirection="column" data-cap-idx={i}
@@ -278,6 +341,7 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                 )}
               </Flex>
             </Flex>
+            <VerdictBand dx={dx} dk={dk} />
             <Flex flexDirection="column" style={{ height: 4, borderRadius: 3, background: dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", overflow: "hidden" }}>
               <Flex flexDirection="column" style={{
                 height: "100%", borderRadius: 3, background: cap.color,

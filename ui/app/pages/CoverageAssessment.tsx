@@ -615,7 +615,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? "50vh" : undefined,
             }}>
-              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} onExplain={explainCapability} />
+              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} onExplain={explainCapability} adoptionByCapability={adoption.unavailable ? undefined : adoption.byCapability} adoptionTotalUsers={adoption.totalUsers} adoptionWindowDays={adoption.windowDays} />
             </Flex>
           </>) : viewMode === "utilization" ? (
             <UtilizationView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallUtilizationLevel={overallUtilizationLevel} collapseKey={collapseKey} isMobile={isMobile} adoptionByCapability={adoption.unavailable ? undefined : adoption.byCapability} adoptionTotalUsers={adoption.totalUsers} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} onExplain={() => { /* card expands itself; no Davis call here */ }} />
@@ -1018,6 +1018,20 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   // ── Sorted capabilities for charts ──
   const sorted = useMemo(() => [...capabilities].sort((a, b) => a.name.localeCompare(b.name)), [capabilities]);
 
+  /** Radar input, built once per capabilities change.
+   *
+   *  CovUtilRadar is React.memo'd, but both call sites used to pass
+   *  `data={sorted.map(...)}` inline — a fresh array on every render, so the
+   *  memo never hit and ~1000 lines of SVG redrew on every hover. */
+  const radarData = useMemo(() => sorted.map(c => ({
+    name: c.name,
+    coverage: c.score,
+    utilization: c.effectiveUtilizationScore,
+    color: c.color,
+    rawCoverage: c.consolidation < 100 ? c.rawScore : undefined,
+    rawUtilization: c.consolidation < 100 ? c.utilization.utilizationScore : undefined,
+  })), [sorted]);
+
   const scatterPoints = useMemo(() =>
     capabilities.map(c => ({
       name: c.name,
@@ -1031,6 +1045,11 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   // ── KPI helpers ──
   const totalCriteria = capabilities.reduce((s, c) => s + c.criteriaResults.length, 0);
   const passedCriteria = capabilities.reduce((s, c) => s + c.criteriaResults.filter(cr => !cr.error && cr.points > 0).length, 0);
+  /** Criteria with no verdict — the score's real denominator is
+   *  `totalCriteria - notAssessedCriteria`. Surfaced so the header never
+   *  implies the tenant failed a check it was never eligible for. */
+  const notAssessedCriteria = capabilities.reduce((s, c) => s + (c.notAssessedCount ?? 0), 0);
+  const assessedCriteria = totalCriteria - notAssessedCriteria;
   const totalCritical = capGaps.reduce((s, c) => s + c.critical, 0);
   const totalQuickWin = capGaps.reduce((s, c) => s + c.quickWin, 0);
   const totalOther = capGaps.reduce((s, c) => s + c.other, 0);
@@ -1056,7 +1075,8 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
         Executive Summary
       </Flex>
       <Flex flexDirection="column" style={{ fontSize: 11, color: textSec, marginBottom: 6, lineHeight: 1.4, animation: "recFadeUp 0.3s ease both 0.05s" }}>
-        Overall assessment of observability coverage and Utilization across {capabilities.length} capabilities · {totalCriteria} criteria evaluated
+        Overall assessment of observability coverage and Utilization across {capabilities.length} capabilities · {assessedCriteria} of {totalCriteria} criteria assessed
+        {notAssessedCriteria > 0 && ` · ${notAssessedCriteria} not assessed (no eligible entities or query error) — excluded from the score, not counted as failures`}
       </Flex>
 
       {/* ═══ SECTION 1: Highlights ═══ */}
@@ -1303,14 +1323,14 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
             <ExpandChartButton onClick={() => setExpandedChart("radar")} />
           </Flex>
           <Flex flexDirection="column" style={{ height: "clamp(300px, 44vh, 460px)", minHeight: 300 }}>
-            <CovUtilRadar coverageOnly ref={(h: CovUtilRadarHandle | null) => { onRadarMount(h); }} data={sorted.map(c => ({ name: c.name, coverage: c.score, utilization: c.effectiveUtilizationScore, color: c.color, rawCoverage: c.consolidation < 100 ? c.rawScore : undefined, rawUtilization: c.consolidation < 100 ? c.utilization.utilizationScore : undefined }))} />
+            <CovUtilRadar coverageOnly ref={(h: CovUtilRadarHandle | null) => { onRadarMount(h); }} data={radarData} />
           </Flex>
         </Flex>
 
         {/* ── Expanded Radar Chart Modal ── */}
         <ExpandableChartModal open={expandedChart === "radar"} onClose={() => setExpandedChart(null)} title="Coverage by Capability">
           <Flex flexDirection="column" style={{ width: "100%", height: "100%" }}>
-            <CovUtilRadar coverageOnly data={sorted.map(c => ({ name: c.name, coverage: c.score, utilization: c.effectiveUtilizationScore, color: c.color, rawCoverage: c.consolidation < 100 ? c.rawScore : undefined, rawUtilization: c.consolidation < 100 ? c.utilization.utilizationScore : undefined }))} />
+            <CovUtilRadar coverageOnly data={radarData} />
           </Flex>
         </ExpandableChartModal>
 
