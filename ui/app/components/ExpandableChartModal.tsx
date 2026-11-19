@@ -1,5 +1,6 @@
+import { MaximizeIcon } from "@dynatrace/strato-icons";
 import React from "react";
-import { Modal } from "@dynatrace/strato-components-preview/overlays";
+import { Modal } from "@dynatrace/strato-components/overlays";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Text } from "@dynatrace/strato-components/typography";
@@ -42,7 +43,7 @@ export const ExpandChartButton: React.FC<ExpandChartButtonProps> = ({ onClick, s
         size="condensed"
         aria-label="Expand chart"
       >
-        ⤢
+        <Button.Prefix><MaximizeIcon /></Button.Prefix>
       </Button>
     </Text>
   );

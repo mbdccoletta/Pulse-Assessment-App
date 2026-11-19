@@ -142,6 +142,20 @@ function isHotSource(query: string): boolean {
   );
 }
 
+/** Queries that must keep the window they were written with. Cost & Carbon
+ *  Optimization writes one cloud-bill import a day and one measurement an hour:
+ *  narrowed to minutes, the import is simply not there and the criterion would
+ *  read "none" on an environment that has it. They still get the scan ceiling. */
+function isFixedWindow(query: string): boolean {
+  return /dynatrace\.biz\.carbon/.test(query);
+}
+function capOnly(query: string): string {
+  return query.replace(
+    /\bfetch\s+bizevents\b(\s*,\s*from\s*:\s*now\(\)\s*-\s*\d+\s*[hmsd])?/i,
+    (m) => (/scanLimitGBytes/i.test(query) ? m : `${m}, scanLimitGBytes: ${COST_SCAN_LIMIT_GB}`),
+  );
+}
+
 /** Sampling ratio for criteria where it provably cancels out. 1000x was the
  *  measured sweet spot: ratio error stayed under 1.5 percentage points while
  *  scan dropped ~1600x. */
@@ -167,6 +181,15 @@ function isRatioSafe(query: string): boolean {
   if (/\bby\s*:/i.test(query)) return false;
   if (/\bdedup\b/i.test(query)) return false;
   return /count\s*\(\s*\)|countIf\s*\(/i.test(query);
+}
+
+/** Sparse signals: gen_ai spans are a tiny fraction of all spans. A 1-in-1000
+ *  sample leaves single digits to divide — measured on a real tenant: the AI
+ *  ratio checks were computed from 6 sampled spans, so 0% error tracking and
+ *  0% guardrails could be sampling noise. A ratio whose two sides are both
+ *  sparse is read unsampled, over the shorter window plainWindow() gives it. */
+function isSparseSignal(query: string): boolean {
+  return /\bgen_ai\./i.test(query);
 }
 
 /** Reads the window a hot query asks for, in minutes. */
@@ -201,10 +224,24 @@ export function sampleableQueries(): Set<string> {
         sides.length === 2 &&
         sides.every(isHotSource) &&
         sides.every(isRatioSafe) &&
+        !sides.every(isSparseSignal) &&
         // Both sides must read the same window, or the ratio compares
         // different amounts of data once sampled.
         windowMinutesOf(sides[0]) === windowMinutesOf(sides[1]);
       for (const s of sides) (qualifies ? safe : blocked).add(s);
+    }
+  }
+  // A blocked string blocks its partner too: a criterion must never divide a
+  // sampled count by an unsampled one. Repeat until nothing changes.
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const cap of CAPABILITIES) {
+      for (const cr of cap.criteria) {
+        const sides = [cr.query, cr.queryB].filter((s): s is string => !!s);
+        if (sides.some(s => blocked.has(s))) {
+          for (const s of sides) if (!blocked.has(s)) { blocked.add(s); changed = true; }
+        }
+      }
     }
   }
   for (const s of blocked) safe.delete(s);
@@ -290,6 +327,7 @@ function rewriteFetch(query: string, windowMin: number, sampling?: number): stri
  * cache key and every downstream consumer are unaffected.
  */
 export function costOptimizeQuery(query: string, original = query): string {
+  if (isFixedWindow(query)) return capOnly(query);
   if (!isHotSource(query)) return query;
   // Sampleability and the window plan are properties of the CRITERION, so
   // they are looked up by the catalog string — `query` may already carry a
@@ -322,6 +360,7 @@ export function costOptimizeQuery(query: string, original = query): string {
  * bit-identical so the result column shape matches the original query.
  */
 export function scaleQuery(query: string, tier: ScaleTier): string {
+  if (isFixedWindow(query)) return capOnly(query);
   // Cost mode runs at every tier. On "exact" it is the only transform: the
   // question the criterion asks is unchanged, Grail just reads far less to
   // answer it.

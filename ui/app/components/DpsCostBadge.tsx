@@ -32,6 +32,7 @@
 import React from 'react';
 import { Text } from '@dynatrace/strato-components/typography';
 import Colors from '@dynatrace/strato-design-tokens/colors';
+import { Tooltip } from './Tooltip';
 import type { QueryStats, CoverageData } from '../hooks/useCoverageData';
 
 interface DpsCostBadgeProps {
@@ -48,14 +49,16 @@ interface DpsCostBadgeProps {
   /** Strato text colors injected by the host so the badge follows theme. */
   textColor: string;
   textSecColor: string;
+  /** Extra disclosure appended to the tooltip (economy mode). */
+  note?: string;
 }
 
 /** Upper-bound DPS pricing in USD per GiB scanned. Matches what Dynatrace
  *  publishes for the most common tier of customer contracts; SEs running
  *  the badge on lower-tier contracts will see a CONSERVATIVE (high) number,
  *  which is the right error direction. */
-const USD_PER_GB_HIGH = 0.01;
-const USD_PER_GB_LOW = 0.0065;
+const USD_PER_GB_HIGH = 0.0035; // public list price per GiB scanned (logs, traces, events)
+const USD_PER_GB_LOW = 0.0035;
 
 /** Format a bytes count compactly: <1 GiB → MB, <1024 GiB → GB, else TB. */
 function fmtBytes(bytes: number): string {
@@ -82,6 +85,7 @@ export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
   loading,
   textColor,
   textSecColor,
+  note,
 }) => {
   // Mid-run: surface the live counter so the badge climbs as the assessment
   // progresses. Post-run: use the canonical totals from `stats`.
@@ -128,36 +132,27 @@ export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
     `  • Daily (with cache):  ${fmtUsd(dailyYear)} / year`,
     `  • Daily (without cache):  ${fmtUsd(dailyYearNoCache)} / year`,
     '',
-    'Numbers are upper-bound estimates at $0.01/GiB. Your contract may be cheaper.',
+    'Estimates at the public list price of US$ 0.0035 per GiB scanned. Contracts may differ.',
   ].join('\n');
 
   // Loading state: we deliberately keep the badge visible so the operator
   // can watch the cost climb during a long xLarge run.
   const liveTag = loading && cacheTotal === 0 ? ' (running…)' : '';
 
+  const runLines = stats
+    ? [
+        `${stats.succeeded} of ${stats.total} queries ran.${stats.failed > 0 ? ` ${stats.failed} failed.` : ''}`,
+        `${stats.scannedRecords.toLocaleString()} records scanned.`,
+        '',
+      ]
+    : [];
+  const full = [...runLines, tooltip, ...(note ? ['', note] : [])].join('\n') + (liveTag ? `\n${liveTag.trim()}` : '');
+
   return (
-    <Text
-      style={{
-        marginLeft: 8,
-        fontSize: 12,
-        color: textSecColor,
-        cursor: 'help',
-      }}
-      title={tooltip}
-    >
-      · ≈ <Text style={{ fontWeight: 600, color: textColor }}>{fmtUsd(usdHigh)}</Text> DPS
-      <Text style={{ color: textSecColor }}> · {fmtBytes(scannedBytes)} scanned</Text>
-      {isFullyCached && (
-        <Text style={{ marginLeft: 4, color: Colors.Text.Success.Default, fontWeight: 600 }}>
-          · cache hit
-        </Text>
-      )}
-      {!isFullyCached && savedBytes > 0 && (
-        <Text style={{ marginLeft: 4, color: Colors.Text.Success.Default }}>
-          {' '}· saved {fmtUsd(savedUsdHigh)}
-        </Text>
-      )}
-      {liveTag && <Text style={{ marginLeft: 4 }}>{liveTag}</Text>}
-    </Text>
+    <Tooltip text={full} position="bottom">
+      <Text style={{ marginLeft: 8, fontSize: 12, color: textSecColor, borderBottom: `1px dotted ${textSecColor}`, cursor: 'help' }}>
+        Run details
+      </Text>
+    </Tooltip>
   );
 };

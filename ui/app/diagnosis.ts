@@ -37,11 +37,16 @@ export interface DiagnosisCuts {
   utilization: number;
 }
 
+// One ruler for the whole app: a part is "high" when it reaches the Good band
+// (60) on the score scale. Adoption counts 100 at 20% of active users
+// (pulseScore.ts), so 60 points = 12% of active users. The earlier "or 5
+// people" floor is gone: on a tenant with thousands of users it made adoption
+// high everywhere, and a capability scored Good could read as Starved.
 export const DEFAULT_CUTS: DiagnosisCuts = {
   coverage: 60,
-  adoptionRate: 20,
-  adoptionFloor: 5,
-  utilization: 50,
+  adoptionRate: 12,
+  adoptionFloor: Number.POSITIVE_INFINITY,
+  utilization: 60,
 };
 
 interface Meta {
@@ -141,18 +146,22 @@ export function diagnose(input: DiagnosisInput, cuts: DiagnosisCuts = DEFAULT_CU
 
   const highAdoption = (rate ?? 0) >= cuts.adoptionRate || (users ?? 0) >= cuts.adoptionFloor;
   const who = people(users, totalUsers, windowDays);
+  // The basis of the judgement, stated with the reading: the share and the cut it is compared with.
+  const share = `${rate ?? 0}% of active users`;
+  const low = `${share}; below ${cuts.adoptionRate}% counts as low adoption`;
+  const high = `${share}; ${cuts.adoptionRate}% or more counts as high adoption`;
 
   if (highAdoption && !highCoverage)
-    return build("starved", `Demand is proven and supply is short: ${who}, but only ${coverage}% of checks pass.`, true);
+    return build("starved", `Demand is proven and supply is short: ${who} (${high}), but coverage is ${coverage}%, below ${cuts.coverage}%.`, true);
 
   if (highCoverage && !highAdoption)
-    return build("unwatched", `The data is being collected and ${who}.`, true);
+    return build("unwatched", `The data is being collected (coverage ${coverage}%), but few people use it: ${who} (${low}).`, true);
 
   if (highCoverage && highAdoption && !deep)
-    return build("skinDeep", `Plenty of people are in, but only ${utilization}% is configured in depth.`, true);
+    return build("skinDeep", `People are in (${high}) and coverage is ${coverage}%, but utilization is ${utilization}%, below ${cuts.utilization}%.`, true);
 
   if (highCoverage && highAdoption)
-    return build("healthy", `On, used and deep: ${coverage}% coverage at ${utilization}% depth, and ${who}.`, true);
+    return build("healthy", `On, used and deep: coverage ${coverage}%, utilization ${utilization}%, and ${who} (${high}).`, true);
 
-  return build("dark", `Barely on and barely opened: ${coverage}% coverage, and ${who}.`, true);
+  return build("dark", `Barely on and barely opened: coverage ${coverage}%, below ${cuts.coverage}%, and ${who} (${low}).`, true);
 }

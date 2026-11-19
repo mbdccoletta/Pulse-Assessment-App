@@ -4,6 +4,179 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.0] — 2026-11-19
+
+A new major version: the score changed meaning (coverage, utilization and adoption), the catalog grew from 9 to 11 capabilities, the pages were rebuilt and every AI surface was rewritten. Runs saved by 2.x are not comparable with 3.0 runs. Everything listed under this heading was developed as 2.6.0 and never released under that number.
+
+### Removed in the final pass
+- Criterion "Log source continuity": its denominator needed three hours of logs, hit the scan ceiling on a high-volume tenant and cost about 46 GiB a run for a value that could not be trusted.
+- Dead code: the old comparison page, AI insights page, persona and custom reports, the earlier radar, scatter and card components, the consolidation panel, and the second remediation catalog. `CoverageAssessment.tsx` went from 1,797 to 515 lines.
+
+### Changed in the final pass
+- "Log source diversity" reads the log metric when it exists (distinct log-emitting entities), marked as an approximation; without the metric it reads logs as before.
+- Run history is kept for 90 days (was 15), so the 30 and 90 day options of Evolution have data to compare.
+
+
+### Audit before release
+- **Cost**: log coverage criteria (hosts, services, error services, namespaces, severity classes) read the `dt.log.status_per_entity_count` metric when it exists (`log-metric.ts`): no log scan. On the reference tenant a full run went from about 262 GiB to 137 GiB.
+- **Cost**: FinOps data is no longer fetched when the Smart report opens, only when a request asks about cost, energy or carbon.
+- **Fixed**: the result cache document is emptied in place and never deleted. Deleting it sent it to the trash with its id reserved, so nothing was cached afterwards and every open was a full run. Document id is now `pulse-querycache-2`.
+- **Fixed**: Refresh now takes new readings (it used to re-serve the 24h cache) and re-runs the catalog adapted to the environment.
+- **Fixed**: percentages are floored at the source (criterion value, coverage, utilization, adoption share), never rounded up into a pass.
+- **Fixed**: adoption is read once for the whole app; a failed population query reads "not measured" instead of 0% everywhere; the query is polled.
+- **Fixed**: Guide and Evolution treated 12 share criteria as presence checks; closed tier gates with an empty tier; capability trend mixing scoring methods; configuration reads offered as DQL.
+- **AI**: one instruction for every surface (the old Assist instruction asked for expected outcomes in numbers); not-assessed criteria are no longer sent as failures; tier shares instead of tallies; adoption sent as the score shown on screen; page facts no longer cut mid-fact; Smart report carries the Overall lens and facts.
+- **AI, after testing every question on the reference tenant**: page facts now state which capabilities have high and low adoption, list the AI and automation criteria with their readings, give each unmet criterion's distance to its pass line, and state explicitly when nothing regressed or improved between two runs; the request text has a size budget (the service answers HTTP 400 above about 10,000 characters); one question that tripped the guardrail was reworded.
+- **Reports**: say how the run was measured (trace proxy, Smartscape, estimates); "Not assessed" as a word and explained; FinOps prints "Not available" instead of zeros, excludes hosts without a CPU reading from idle, says when the host list is capped, wraps long names; local date; raw data gains a `run` block and marks configuration reads.
+
+### Added (after the first 2.6.0 notes)
+- **Intelligence layer per page** (`ai/pageIntelligence.ts`): Overview, Overall score, Capability, Evolution and Guide each have their own lens, questions and computed page facts (gains in points, closed tier gates, verdicts, causes of change, like-for-like score). The model quotes numbers the app computed; it is never asked to do arithmetic. "Go deeper in Assist" carries the same lens and facts.
+- Seven criteria from the State of Observability 2026 review: SLOs defined (g10), Custom anomaly detectors configured (g11), Adaptive or seasonal baselines in alerts (g12), Problems lasting 5 minutes or more (g13), Custom log pipelines configured (l18), Critical vulnerabilities without public exposure (s15), Response model recorded (ai19). Cuts of g13 (5 minutes, 80%) and s15 (90%) are provisional.
+- Engine: `settings:count <schemaId>` criteria read configuration from the settings API with no Grail scan.
+- Evolution: "What caused the change" panel; snapshots store app version and adoption share.
+- **Platform Governance**, a tenth capability (8 criteria): workflows running, OneAgent version currency, host cost allocation, logs with security context, workflow execution success, ITSM/chat integration, event-triggered workflows, human approval. Targets are provisional.
+- New pages: Overall score (replaces Executive summary), Evolution (rebuilt), Guide (replaces Setup and guide).
+- Reports rebuilt (`reports/pulseReports.ts`): Overall score, Action plan, Criteria detail in EN/PT/ES, plus raw data export (JSON, CSV).
+- Radar: hover highlight, capability score in the centre, centre opens Overall score. Capability detail: filter by utilization tier.
+
+- **Criteria re-allocated by what they measure.** Buckets, ownership and tagging moved to Platform Governance; cost allocation to FinOps & Sustainability. Workflows, Assist, MCP and dtctl are no longer pinned to one capability: workflow criteria sit where the workflow acts, and Assist/MCP/dtctl usage is measured per capability from the data each query reads. The Workflows and Assist apps count as shared in every capability and primary in none.
+- **Strato components throughout the live pages**: Surface, Heading, Paragraph, Chip, HealthIndicator, DataTable (sortable, paginated, CSV download), Accordion, Breadcrumbs, EmptyState, InformationOverlay, MessageContainer, AiLoadingIndicator, Markdown, SkeletonText, ProgressCircle, Toast.
+- **FinOps & Sustainability**, an eleventh capability (8 criteria) read from Cost & Carbon Optimization data, plus a **FinOps report** (cloud bill by service/region/account, commitment and ownership share, idle hosts, wasted energy, emissions) and the same measured facts in the Assist context. Targets are provisional.
+- Smart report: the instruction no longer asks for menu paths or expected numbers; invented figures are forbidden; the PDF keeps accents.
+- **Works on either licensing/entity model, with no setup step.** Two probes before the first run switch on Trace Proxy Mode (no Traces on Grail) and the Smartscape entity model (no `dt.entity.*` tables, `entity-model.ts`). New scope `storage:smartscape:read`.
+- Removed: capability selection, Consolidation Context, the pre-flight screen.
+
+### Fixed
+- Runs were saved to history before adoption was read, with adoption 0 (`useAppAdoption` now reports loading until its first answer).
+
+Validated on one tenant through the dev server only. Not committed, not deployed.
+
+### Changed — platform
+- **Strato 1.18 → 3.18**, design tokens 1.3 → 1.8.1, icons 2.7. The deprecated
+  `strato-components-preview` package is removed; its imports (Page, Modal,
+  Tooltip, Menu, ToggleButtonGroup) now come from `strato-components`. The dark
+  theme is the platform's neutral black (#16161d / #1b1b22) instead of navy; the
+  last hand-written navy fills (radar centre disc, guide background) follow it.
+
+### Changed — screens
+- **Coverage is the radar only.** Hover highlights a capability; a click on a
+  point or a label opens the new **capability detail page** (`/capability/:name`).
+  The side cards, the economy-mode banner and the how-to footer are gone from it.
+- **The app opens on Coverage.** With a run in the last 24h the result loads from
+  the cache (no Grail cost); otherwise an empty state offers to run it. Capability
+  selection, consolidation and the guide moved to **Setup and guide**.
+- **AppHeader + PageLayout** replace the deprecated `Page`; Refresh, Reports and
+  Run details sit in the header (one bar). Coverage leads with "Needs attention".
+- **Executive summary** trimmed to the three scores, strongest / needs-attention
+  and one chart. Detail page gains **Next steps**; Analytics is collapsed.
+- **Capability detail page** with Strato charts: coverage gauge (GaugeChart),
+  utilization tiers and adoption (MeterBarChart), criteria per tier
+  (CategoricalBarChart, colour = verdict; presence checks as Present/Absent),
+  score over time (TimeseriesChart), apps used (CategoricalBarChart), an
+  analytics table (value, pass line, data source, query cost, copy DQL, docs)
+  and the on-demand Assist insight the cards used to carry.
+- **No internal counters on screen**: criterion ids, "116/116 queries OK",
+  "97/116 criteria met", tier fractions, run counts and raw people counts are
+  gone; run telemetry sits in one "Run details" tooltip. Failed checks stay
+  visible. The technical PDF no longer prints criterion ids.
+- **Utilization tab hidden** — its content is on the detail page; the view code
+  is kept (restore the toggle item to bring it back).
+- Davis CoPilot badge renamed **Dynatrace Assist**.
+- DPS estimate uses the public list price (US$ 0.0035/GiB) instead of 0.0065–0.01.
+
+### Changed — scoring: the capability score has three equal parts
+- **Score = average of Coverage, Utilization and Adoption** (`ui/app/pulseScore.ts`).
+  Adoption is the share of active users opening the capability's apps, scaled so
+  20% = 100 (an app reference, not a Dynatrace rule). Without adoption data the
+  score averages the other two. Applied once in `App.tsx`, so every screen, the
+  snapshot and the reports read the same number. Rollback:
+  `PULSE_SCORE_PARTS = "coverage"`.
+- The app opens directly on the assessment (no start page); the radar centre
+  reads SCORE.
+
+### Changed — scoring: one target per criterion
+- A criterion is met when its value reaches a single pass line; the score is the
+  share of criteria met. The pass line is the MIDDLE of the catalog's targets
+  (the higher one when there are two) instead of the lowest, which let almost
+  every criterion pass from 1%. Presence checks are unaffected. Rollback:
+  `PASS_LINE_DEFAULT = "lowest"` in `ui/app/passLine.ts`, or `?passline=lowest`.
+- AI Observability also measures MCP in use by people on external clients
+  (Assist's internal client excluded), dtctl in use and dtctl driven by AI agents.
+
+### Catalog: 111 → 108 criteria (added 21, removed 24)
+- **AI Observability** now also measures the customer's use of Dynatrace
+  Intelligence: Assist in use (ai11), agentic AI in use (ai12), MCP clients
+  connected (ai13), agentic workflows (ai14), plus agent tool-call tracing (ai10).
+  Presence checks (≥1), no invented targets.
+- **Problem practices per capability** — root cause identified and automated
+  response (problem `event.id` = workflow `trigger.event.id`), scoped by the
+  capability's entities: Infrastructure (i23/i24), Application (a14/a15),
+  Digital Experience (d12/d13), Software Delivery on entities that received a
+  deployment (sd11/sd12), AI on services that call an LLM (ai15/ai16), Business
+  on services that emit business events (b9/b10). Pass line 1% until targets
+  are set.
+- **Release validation** (sd13): Site Reliability Guardian validations.
+
+### Changed — security capabilities read security.events
+- New scope `storage:security.events:read`. Application Security now measures
+  Runtime Vulnerability Analytics coverage (process groups assessed), Runtime
+  Application Protection, Security Posture Management and third-party findings.
+  Threat Observability measures detection findings and external detection sources.
+- Foundation now answers "is it on?" in Software Delivery (CI/CD deployment
+  events) and Application Security (Runtime Vulnerability Analytics active, new);
+  the depth targets moved to Best practice, so one unmet ratio no longer zeroes
+  utilization.
+- Software Delivery targets raised: services with a deployment marker ≥ 30%,
+  services with an owner ≥ 50%.
+
+### Removed
+- s3–s10 and t5–t8: log, span, service and Davis-problem checks filed under a
+  security name. None read security data.
+- sd3–sd9 from Software Delivery: event kind/type diversity, service request and
+  failure baselines, process group coverage and tagging, and Davis problem
+  detection. None measures delivery, three repeat Application criteria, and any
+  environment with OneAgent passed them. Software Delivery keeps deployment
+  markers, CI/CD events, release validation, ownership and the two problem
+  practices.
+- t1, t2, t3, t9, t10, t11 from Threat Observability — they measured Davis
+  problems, not security. Threat now holds security criteria only.
+
+### Fixed — results that were wrong
+- **ai8** read `gen_ai.usage.cost`, a field Dynatrace does not define (0% on every
+  tenant); it now measures spans with token counts and the model.
+- **AI-span ratios** (ai2, ai4–ai8) were computed from a 1-in-1000 sample — 6
+  spans on the test tenant. Ratios whose both sides are gen_ai spans now read
+  4 hours unsampled (~0.5 GB per query). A criterion can no longer divide a
+  sampled count by an unsampled one.
+- **a11, s3, sd7, a12, sd9** counted an entity even when the relation or the tag
+  list was empty (`expand` keeps the row), so they always read 100%. They now
+  count only entities that have it (test tenant: 140 → 96 services linked to a
+  process, 140 → 121 tagged services, 564 → 469 tagged process groups).
+- **i12** read a relation that does not exist on clusters; it now counts clusters
+  that have namespaces.
+- **Adoption** read the app id out of `client.source`, which many apps do not
+  carry; it now uses `client.application_context` (the documented field). On the
+  test tenant Dashboards went from no data to 1,591 people and Problems from 820
+  to 1,529.
+- **sd1** divided all Davis events by services (590 ÷ 140, capped at 100%); it
+  now counts services with a deployment marker in `dt.davis.events`.
+- **sd2** filtered `event.kind == "CUSTOM_DEPLOYMENT"`, which never matches
+  (deployments are DAVIS_EVENT / CUSTOM_DEPLOYMENT) and always returned 0; it now
+  checks CI/CD deployment events (SDLC_EVENT).
+- **24h query cache** is keyed by the query Grail actually runs, so a change in
+  the cost rules can no longer serve a value measured under the old rules.
+
+### Changed — cost
+- **l11** (log buckets) scanned 172 GB per run with no limit; it now reads
+  `fieldsSnapshot`, which scans no raw data (same 8 buckets on the test tenant).
+- **Log field-share criteria** (l3, l4, l5, l13, l16, t7, t8, i14–i17) read
+  `fieldsSnapshot` instead of scanning logs: 0 GB, unsampled, within 0.3 points
+  of the scanned values on the test tenant.
+
+### Known gaps
+- Log Analytics and Security have no problem scope yet.
+- Problem criteria targets (root cause ≥ 50%, automated response ≥ 30%) are provisional app defaults, not a Dynatrace reference.
+
 ## [2.5.15] — 2026-09-29
 
 ### Added — every capability carries a verdict, not just a number

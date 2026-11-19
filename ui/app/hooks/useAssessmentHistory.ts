@@ -1,16 +1,26 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { documentsClient } from "@dynatrace-sdk/client-document";
 import type { CapabilityResult } from "./useCoverageData";
+import { APP_VERSION } from "../appVersion";
 
 export interface AssessmentSnapshot {
   id: string;
   timestamp: string;
   totalScore: number;
   tenant: string;
+  /** App version that produced the run: a different version can mean a different catalog. */
+  appVersion?: string;
   capabilities: {
     name: string;
     color: string;
     score: number;
+    /** Parts of the score, on snapshots written since v2.6.0. */
+    coverage?: number;
+    adoption?: number;
+    utilization?: number;
+    /** Adoption as measured: share of active users (0–100) and people. */
+    adoptionRate?: number;
+    adoptionUsers?: number;
     /** Consolidation factor (0–100). Defaults to 100 if absent (backwards compat). */
     consolidation?: number;
     criteriaResults: {
@@ -31,12 +41,19 @@ export interface AssessmentSnapshot {
 const STORAGE_KEY = "ppa-assessment-history";
 const DOC_TYPE = "ppa-snapshot";
 
+/** Capability names that changed; snapshots saved under the old name keep their trend. */
+const RENAMED: Record<string, string> = { "AI Observability": "AI/LLM Observability" };
+function normalize(s: AssessmentSnapshot): AssessmentSnapshot {
+  if (!s?.capabilities?.some(c => RENAMED[c.name])) return s;
+  return { ...s, capabilities: s.capabilities.map(c => (RENAMED[c.name] ? { ...c, name: RENAMED[c.name] } : c)) };
+}
+
 /* ── localStorage cache helpers ── */
 
 function loadLocal(): AssessmentSnapshot[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    return raw ? (JSON.parse(raw) as AssessmentSnapshot[]).map(normalize) : [];
   } catch {
     return [];
   }
@@ -74,7 +91,7 @@ async function loadFromDocStore(): Promise<{ snapshots: AssessmentSnapshot[], re
         try {
           const content = await documentsClient.downloadDocumentContent({ id: docs[i].id });
           const text = await content.get("text");
-          snaps.push(JSON.parse(text));
+          snaps.push(normalize(JSON.parse(text)));
         } catch { /* skip corrupt documents */ }
       }
     }
@@ -113,9 +130,10 @@ async function saveToDocStore(snap: AssessmentSnapshot, knownIds?: Set<string>):
   }
 }
 
-/* ── Retention policy: one snapshot per day in Grail, keep 15 days ── */
+/* ── Retention policy: one snapshot per day, kept for 90 days ──
+   Evolution offers "30 days" and "90 days": the history has to reach that far. */
 
-const RETENTION_DAYS = 15;
+const RETENTION_DAYS = 90;
 
 /**
  * Determines which snapshot IDs should be removed from Grail.
@@ -230,10 +248,16 @@ export function useAssessmentHistory() {
       timestamp: new Date().toISOString(),
       totalScore,
       tenant,
+      appVersion: APP_VERSION,
       capabilities: capabilities.map((c) => ({
         name: c.name,
         color: c.color,
-        score: c.rawScore,
+        // The score the screen shows (coverage, utilization and adoption combined).
+        score: c.score,
+        ...(c.coverageScore != null ? { coverage: c.coverageScore } : {}),
+        ...(c.adoptionScore != null ? { adoption: c.adoptionScore } : {}),
+        ...(c.adoptionRate != null ? { adoptionRate: c.adoptionRate } : {}),
+        utilization: c.effectiveUtilizationScore,
         ...(c.consolidation < 100 ? { consolidation: c.consolidation } : {}),
         criteriaResults: c.criteriaResults.map((cr) => ({
           id: cr.id,

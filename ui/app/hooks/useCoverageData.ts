@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { passLine } from "../passLine";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { getEnvironmentUrl } from "@dynatrace-sdk/app-environment";
 import { CAPABILITIES, type CapabilityDef, type Threshold } from "../queries";
@@ -31,7 +32,7 @@ export interface CapabilityResult {
   /** Original score from DQL queries (before consolidation adjustment). */
   rawScore: number;
   details: string[];
-  criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; notAssessed: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; proxied: boolean }[];
+  criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; notAssessed: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; proxied: boolean; /** Raw count for presence checks (denominator 1). */ count?: number; /** Numerator and denominator of a ratio check. */ num?: number; den?: number }[];
   /** Criteria that produced a verdict — the denominator of `score`. */
   assessedCount: number;
   /** Criteria that could not be measured. Reported, never counted as failures. */
@@ -41,6 +42,12 @@ export interface CapabilityResult {
   consolidation: number;
   /** Effective utilization score (adjusted by consolidation when active). */
   effectiveUtilizationScore: number;
+  /** Share of criteria met. Set once `score` carries the combined score (see ../pulseScore.ts). */
+  coverageScore?: number;
+  /** Adoption part of the score (0–100); null when adoption was not measured. */
+  adoptionScore?: number | null;
+  /** Share of active users (0–100) behind adoptionScore. */
+  adoptionRate?: number | null;
 }
 
 export interface QueryStats {
@@ -81,6 +88,11 @@ export interface EntityCounts {
 }
 
 export interface CoverageData {
+  /** The app's one adoption reading (set in App.tsx). Score, verdicts, facts
+   *  and reports all read this same object, so they cannot disagree. */
+  adoption?: import("./useAppAdoption").UseAppAdoptionResult;
+  /** False while adoption is still loading, i.e. `score` may still change. */
+  scoreSettled?: boolean;
   capabilities: CapabilityResult[];
   totalScore: number;
   overallUtilizationLevel: number;
@@ -145,7 +157,8 @@ export interface CoverageData {
 }
 
 function meetsThreshold(value: number, thresholds: Threshold[]): boolean {
-  return thresholds.some(t => value >= t.min);
+  const line = passLine(thresholds.map(t => t.min));
+  return line != null && value >= line;
 }
 
 function extractNumeric(v: unknown): number | null {
@@ -197,7 +210,44 @@ const POLL_INTERVAL_MS = 3000;
 const QUERY_TIMEOUT_MS = 30000;
 const DEFAULT_TIMEFRAME_HOURS = 2;
 
+/** A criterion that reads configuration, not data: "settings:count <schemaId>"
+ *  answers with the number of settings objects of that schema. No Grail scan. */
+const SETTINGS_COUNT = /^settings:count\s+(\S+)$/;
+async function countSettings(schemaId: string): Promise<DqlResult> {
+  const none = { scannedBytes: 0, scannedRecords: 0, scannedDataPoints: 0 };
+  try {
+    const r = await fetch(`/platform/classic/environment-api/v2/settings/objects?schemaIds=${encodeURIComponent(schemaId)}&pageSize=1&fields=objectId`);
+    if (!r.ok) { warn(`✗ settings ${schemaId} → HTTP ${r.status}`); return { value: -1, ...none }; }
+    const j = await r.json();
+    return { value: typeof j?.totalCount === "number" ? j.totalCount : -1, ...none };
+  } catch (e) {
+    warn(`✗ settings ${schemaId} →`, e);
+    return { value: -1, ...none };
+  }
+}
+
+/** "slos:count": SLOs of both generations — the classic settings schema plus
+ *  the Service-Level Objectives service. When one source cannot be read the
+ *  other still answers; the criterion fails only when neither can. */
+async function countSlos(): Promise<DqlResult> {
+  const none = { scannedBytes: 0, scannedRecords: 0, scannedDataPoints: 0 };
+  const classic = (await countSettings("builtin:monitoring.slo")).value;
+  let platform = -1;
+  try {
+    const r = await fetch("/platform/slo/v1/slos?page-size=1");
+    if (r.ok) {
+      const j = await r.json();
+      platform = typeof j?.totalCount === "number" ? j.totalCount : Array.isArray(j?.slos) ? j.slos.length : -1;
+    } else warn(`✗ slo service → HTTP ${r.status}`);
+  } catch (e) { warn("✗ slo service →", e); }
+  if (classic < 0 && platform < 0) return { value: -1, ...none };
+  return { value: Math.max(0, classic) + Math.max(0, platform), ...none };
+}
+
 async function executeDql(query: string): Promise<DqlResult> {
+  if (query.trim() === "slos:count") return countSlos();
+  const settings = SETTINGS_COUNT.exec(query.trim());
+  if (settings) return countSettings(settings[1]);
   try {
     const response = await queryExecutionClient.queryExecute({
       body: {
@@ -367,7 +417,12 @@ async function executeAllUnique(
       // We still emit a PerfQueryEntry for cache hits so the JSON shows the
       // full set of queries the assessment depended on (just with
       // scannedBytes=0 and a tiny wallTime).
-      const cached = persistentCache?.get(originalQ, tier);
+      // Keyed by the query Grail actually runs, not the catalog string: when
+      // the cost rules change how a criterion executes (window, sampling),
+      // a value cached under the old rules must not be served as current.
+      // Configuration reads cost nothing and must be current: never cached.
+      const isConfig = /^(settings:count\b|slos:count$)/.test(originalQ.trim());
+      const cached = isConfig ? undefined : persistentCache?.get(scaleQuery(originalQ, tier), tier);
       if (cached) {
         cache.set(originalQ, cached.v);
         cacheHits++;
@@ -428,12 +483,13 @@ async function executeAllUnique(
       totalScannedBytes += result.scannedBytes;
       totalScannedRecords += result.scannedRecords;
       totalScannedDataPoints += result.scannedDataPoints;
+      log(`⛁ ${(queryConsumers.get(originalQ) ?? []).join(",")}: ${(result.scannedBytes / 1e9).toFixed(2)} GB, value=${result.value}`);
       // Persist successful, non-error results to the 24h cache. Skip errors
       // (we don't want to cache a transient failure for a day) and skip the
       // -1 sentinel (same reason).
-      if (ok && result.value !== -1 && persistentCache) {
+      if (ok && result.value !== -1 && persistentCache && !isConfig) {
         persistentCache.set(
-          originalQ,
+          executedQ,
           tier,
           result.value,
           result.scannedBytes,
@@ -716,17 +772,20 @@ export function useCoverageData(
            *  services has not FAILED the service criteria — it was never
            *  eligible for them. */
           let notAssessed = isError;
+          /** Denominator behind the reading, kept so screens can say "77 of 571". */
+          let den: number | undefined;
           let value: number;
           if (isError) {
             value = 0;
           } else if (criterion.queryB) {
             // Cross-entity ratio: (queryA / queryB) * 100
             const valueB = cache.get(criterion.queryB) ?? -1;
+            if (valueB > 0) den = valueB;
             if (valueB <= 0) {
               value = 0;
               notAssessed = true;   // denominator absent, not a failure
             } else {
-              value = Math.min(Math.round((valueA / valueB) * 1000) / 10, 100); // one decimal %, capped at 100
+              value = Math.min(Math.floor((valueA / valueB) * 1000) / 10, 100); // one decimal %, floored (never rounded up into a pass), capped at 100
             }
             log(`↔ ${criterion.id}: A=${valueA}, B=${valueB}, ratio=${value}%`);
           } else if (criterion.denominatorConstant != null) {
@@ -738,7 +797,7 @@ export function useCoverageData(
               value = 0;
               notAssessed = true;
             } else {
-              value = Math.min(Math.round((valueA / denom) * 1000) / 10, 100);
+              value = Math.min(Math.floor((valueA / denom) * 1000) / 10, 100);
             }
             log(`↔ ${criterion.id}: A=${valueA}, B(const)=${denom}, ratio=${value}%`);
           } else {
@@ -767,6 +826,10 @@ export function useCoverageData(
             tier,
             isRatio: !!criterion.queryB || criterion.denominatorConstant != null,
             proxied: !!criterion.proxied,
+            // Presence checks (÷ 1) are a count, not a share: keep the count
+            // so screens can say "774 people" instead of a capped 100%.
+            ...(criterion.denominatorConstant === 1 && !isError ? { count: valueA } : {}),
+            ...(!isError && den != null ? { num: valueA, den } : {}),
           });
           if (!isError && value > 0) details.push(`${criterion.label}: ${value}`);
         }
@@ -795,7 +858,7 @@ export function useCoverageData(
         // Progressive utilization: BP only counts if Foundation >= 80%, Excellence only if BP >= 60%
         const effB = fPct >= 0.8 ? bPct : 0;
         const effE = effB >= 0.6 ? ePct : 0;
-        const utilizationScore = Math.round((fPct * FOUNDATION_WEIGHT + effB * BEST_PRACTICE_WEIGHT + effE * EXCELLENCE_WEIGHT));
+        const utilizationScore = Math.floor((fPct * FOUNDATION_WEIGHT + effB * BEST_PRACTICE_WEIGHT + effE * EXCELLENCE_WEIGHT) + 1e-9);
         const utilizationBand = utilizationScore >= 80 ? "Excellent" : utilizationScore >= 60 ? "Good" : utilizationScore >= 40 ? "Moderate" : utilizationScore >= 20 ? "Low" : "N/A";
 
         const utilization: UtilizationResult = {
@@ -813,7 +876,7 @@ export function useCoverageData(
         const assessedCount = cap.criteria.length - notAssessedCount;
         // "Of what we could measure, how much passes." With the flag off the
         // denominator is the full catalog again — identical to v2.5.10.
-        const capScore = assessedCount > 0 ? Math.round((passedCount / assessedCount) * 100) : 0;
+        const capScore = assessedCount > 0 ? Math.floor((passedCount / assessedCount) * 100 + 1e-9) : 0;
 
         return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, assessedCount, notAssessedCount, utilization, consolidation: 100, effectiveUtilizationScore: utilizationScore };
       });
@@ -907,18 +970,18 @@ export function useCoverageData(
     return capabilities.map(cap => {
       const factor = consolidation[cap.name] ?? 100;
       if (factor === 100) return cap;
-      const adjScore = Math.round(cap.rawScore * factor / 100);
-      const adjMaturity = Math.round(cap.utilization.utilizationScore * factor / 100);
+      const adjScore = Math.floor(cap.rawScore * factor / 100 + 1e-9);
+      const adjMaturity = Math.floor(cap.utilization.utilizationScore * factor / 100 + 1e-9);
       return { ...cap, consolidation: factor, score: adjScore, effectiveUtilizationScore: adjMaturity };
     });
   }, [capabilities, consolidation]);
 
   const totalScore = adjustedCapabilities.length > 0
-    ? Math.round(adjustedCapabilities.reduce((sum, c) => sum + c.score, 0) / adjustedCapabilities.length)
+    ? Math.floor(adjustedCapabilities.reduce((sum, c) => sum + c.score, 0) / adjustedCapabilities.length)
     : 0;
 
   const overallUtilizationLevel = adjustedCapabilities.length > 0
-    ? Math.round(adjustedCapabilities.reduce((sum, c) => sum + c.effectiveUtilizationScore, 0) / adjustedCapabilities.length)
+    ? Math.floor(adjustedCapabilities.reduce((sum, c) => sum + c.effectiveUtilizationScore, 0) / adjustedCapabilities.length)
     : 0;
 
   const tenant = (() => {
@@ -1017,7 +1080,8 @@ export function useCoverageData(
     consolidation,
     setConsolidation,
     tenant,
-    date: new Date().toISOString().split("T")[0],
+    // The local calendar day: in UTC an evening run would carry tomorrow's date.
+    date: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })(),
     start: startFn,
     refresh: refreshFn,
     reset: resetFn,

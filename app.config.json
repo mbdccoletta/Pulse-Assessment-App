@@ -5,7 +5,7 @@
     "name": "Pulse Assessment",
     "description": "Assess observability coverage and utilization across 9 Dynatrace capabilities.",
     "icon": "ui/assets/icon.svg",
-    "version": "2.5.15",
+    "version": "3.0.0",
     "scopes": [
       { "name": "storage:logs:read", "comment": "Log Analytics coverage" },
       { "name": "storage:events:read", "comment": "Security, Delivery, Problems" },
@@ -20,7 +20,11 @@
       { "name": "document:documents:delete", "comment": "Cleanup old snapshots" },
       { "name": "davis-copilot:conversations:execute", "comment": "Davis CoPilot dynamic recommendations (feat/davis-insights)" },
       { "name": "settings:objects:read", "comment": "Read official Ownership teams (builtin:ownership.teams) for Projects" },
-      { "name": "storage:filter-segments:read", "comment": "Read platform Segments to identify teams/scopes on Projects" }
+      { "name": "slo:slos:read", "comment": "Count SLOs created in the Service-Level Objectives app (criterion SLOs defined)" },
+      { "name": "storage:filter-segments:read", "comment": "Read platform Segments to identify teams/scopes on Projects" },
+      { "name": "storage:security.events:read", "comment": "Security findings (vulnerabilities, detections, compliance) live in security.events" },
+      { "name": "app-engine:apps:run", "comment": "Read installed app names from the registry for the adoption view" },
+      { "name": "storage:smartscape:read", "comment": "Read Smartscape nodes and edges, so the assessment works on environments without the classic entity model" }
     ]
   }
 }

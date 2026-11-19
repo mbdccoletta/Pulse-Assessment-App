@@ -27,7 +27,6 @@ const EXPLICIT: Record<string, string> = {
   "dynatrace.smartscape": "Infrastructure Observability",
   "dynatrace.clouds": "Infrastructure Observability",
   "dynatrace.extensions.manager": "Infrastructure Observability",
-  "dynatrace.fleet.management": "Infrastructure Observability",
   "dynatrace.database.overview": "Infrastructure Observability",
   // ── Application Observability ──
   "dynatrace.services": "Application Observability",
@@ -42,30 +41,36 @@ const EXPLICIT: Record<string, string> = {
   "dynatrace.sessionreplay": "Digital Experience",
   // ── Log Analytics ──
   "dynatrace.logs": "Log Analytics",
-  "dynatrace.notebooks": "Log Analytics",
   "dynatrace.openpipeline": "Log Analytics",
-  "dynatrace.storage.management": "Log Analytics",
   // ── Application Security ──
   "dynatrace.security.vulnerabilities": "Application Security",
   "dynatrace.vulnerabilities": "Application Security",
   "dynatrace.security.posturemanagement": "Application Security",
   "dynatrace.codelevelvulnerabilities": "Application Security",
   // ── Threat Observability ──
-  "dynatrace.davis.problems": "Threat Observability",
-  "dynatrace.davis.anomalydetection": "Threat Observability",
   "dynatrace.security.investigator": "Threat Observability",
   "dynatrace.attacks": "Threat Observability",
   "dynatrace.threats": "Threat Observability",
-  // ── AI Observability ──
-  "dynatrace.genai.observability": "AI Observability",
-  "dynatrace.ai.observability": "AI Observability",
+  // ── AI/LLM Observability ──
+  "dynatrace.genai.observability": "AI/LLM Observability",
+  "dynatrace.ai.observability": "AI/LLM Observability",
   // ── Business Observability ──
   "dynatrace.biz.flow": "Business Observability",
   "dynatrace.biz.explore": "Business Observability",
-  "dynatrace.biz.carbon": "Business Observability",
   "dynatrace.business.analytics": "Business Observability",
+  // ── Platform Governance ──
+  "dynatrace.settings": "Platform Governance",
+  "dynatrace.storage.management": "Platform Governance",
+  "dynatrace.classic.settings": "Platform Governance",
+  "dynatrace.segments.management": "Platform Governance",
+  "dynatrace.ownership": "Platform Governance",
+  "dynatrace.fleet.management": "Platform Governance",
+  "dynatrace.classic.one.agent.health": "Platform Governance",
+  "dynatrace.classic.tokens": "Platform Governance",
+  "dynatrace.platform.services.settings": "Platform Governance",
+  // ── FinOps & Sustainability ──
+  "dynatrace.biz.carbon": "FinOps & Sustainability",
   // ── Software Delivery ──
-  "dynatrace.automations": "Software Delivery",
   "dynatrace.sitereliabilityguardian": "Software Delivery",
   "dynatrace.releases": "Software Delivery",
   "dynatrace.dora": "Software Delivery",
@@ -100,20 +105,53 @@ const KEYWORDS: [string, string][] = [
   ["security", "Threat Observability"],
   ["attack", "Threat Observability"],
   ["threat", "Threat Observability"],
-  ["problem", "Threat Observability"],
-  ["davis", "Threat Observability"],
-  ["genai", "AI Observability"],
-  ["ai.observability", "AI Observability"],
-  ["llm", "AI Observability"],
+  ["genai", "AI/LLM Observability"],
+  ["ai.observability", "AI/LLM Observability"],
+  ["llm", "AI/LLM Observability"],
   ["biz", "Business Observability"],
   ["business", "Business Observability"],
 ];
 
 const CAP_NAMES = new Set(CAPABILITIES.map(c => c.name));
 
+/** Apps that serve several capabilities. They are LISTED in every one of them
+ *  (so a team sees every app it can use), but only a primary mapping above
+ *  feeds the adoption part of the score — otherwise one popular cross-cutting
+ *  app (Problems, Dashboards) would lift adoption everywhere at once. */
+const OBSERVED = ["Infrastructure Observability", "Application Observability", "Digital Experience", "AI/LLM Observability", "Business Observability", "Software Delivery"];
+const SHARED: Record<string, string[]> = {
+  "dynatrace.davis.problems": OBSERVED,
+  "dynatrace.davis.anomalydetection": OBSERVED,
+  // Workflows serve whatever capability the workflow acts on: listed in all of them, primary in none.
+  "dynatrace.automations": CAPABILITIES.map(c => c.name),
+  "dynatrace.davis.copilot": CAPABILITIES.map(c => c.name),
+  "dynatrace.notebooks": [...OBSERVED, "Log Analytics", "Application Security", "Threat Observability"],
+  "dynatrace.dashboards": [...OBSERVED, "Log Analytics", "Application Security", "Threat Observability"],
+  "dynatrace.distributedtracing": ["AI/LLM Observability"],
+  "dynatrace.logs": ["Infrastructure Observability", "Application Observability", "Threat Observability"],
+  "dynatrace.service.level.objectives": ["Software Delivery", "Digital Experience"],
+  "dynatrace.kubernetes": ["Application Security"],
+  "dynatrace.fleet.management": ["Infrastructure Observability"],
+  "dynatrace.storage.management": ["Log Analytics"],
+  "dynatrace.openpipeline": ["Platform Governance"],
+  "dynatrace.sitereliabilityguardian": ["Application Observability"],
+};
+
+/** Apps with no primary capability: they never feed one capability's adoption
+ *  score, and are listed in every capability they can serve. */
+const SHARED_ONLY = new Set(["dynatrace.automations", "dynatrace.davis.copilot"]);
+
+/** Capabilities an app also serves, beyond its primary one. */
+export function sharedCapabilitiesForApp(appId: string): string[] {
+  const id = appId.toLowerCase();
+  const primary = capabilityForApp(id);
+  return (SHARED[id] ?? []).filter(c => c !== primary);
+}
+
 /** Resolve an app id to a capability, or OTHER_BUCKET when nothing fits. */
 export function capabilityForApp(appId: string): string {
   const id = appId.toLowerCase();
+  if (SHARED_ONLY.has(id)) return OTHER_BUCKET;
   const explicit = EXPLICIT[id];
   if (explicit && CAP_NAMES.has(explicit)) return explicit;
   for (const [kw, cap] of KEYWORDS) {

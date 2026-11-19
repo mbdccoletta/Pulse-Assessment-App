@@ -1,3 +1,4 @@
+import { CheckmarkIcon, CopyIcon } from "@dynatrace/strato-icons";
 import React, { useState } from "react";
 import Typography from "@dynatrace/strato-design-tokens/typography";
 import { Button } from "@dynatrace/strato-components/buttons";
@@ -11,7 +12,7 @@ interface Props {
   inline?: boolean;
 }
 
-const CopyBtn: React.FC<{ text: string; dk: boolean; label?: string; small?: boolean }> = ({ text, dk, label, small }) => {
+export const CopyBtn: React.FC<{ text: string; dk: boolean; label?: string; small?: boolean }> = ({ text, dk, label, small }) => {
   const [copied, setCopied] = useState(false);
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -26,7 +27,10 @@ const CopyBtn: React.FC<{ text: string; dk: boolean; label?: string; small?: boo
       size="condensed"
       color={copied ? "success" : "neutral"}
       aria-label={copied ? "Copied" : (label || "Copy query")}
-    >{copied ? (small ? "✓" : "✓ Copied") : (small ? "⎎" : "⎎ Copy")}</Button>
+    >
+      <Button.Prefix>{copied ? <CheckmarkIcon /> : <CopyIcon />}</Button.Prefix>
+      {small ? null : copied ? "Copied" : "Copy"}
+    </Button>
   );
 };
 
