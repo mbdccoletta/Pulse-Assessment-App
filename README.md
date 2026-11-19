@@ -1,72 +1,62 @@
 # Pulse Assessment
 
-> Automated observability coverage and utilization assessment for Dynatrace environments.
+> How well is this environment actually using Dynatrace? One run answers it from the tenant's own data.
 
-Pulse Assessment is a native **Dynatrace App** that evaluates your environment's observability posture across **9 capabilities** and **111 criteria** using real-time DQL queries against Grail. It provides dual-dimension scoring (Coverage + Utilization), guided remediation, historical snapshots, and PDF reporting.
+Pulse Assessment is a native **Dynatrace App** that scores an environment's observability posture across **11 capabilities** and **138 criteria**, read with DQL against Grail and with the platform's settings and SLO services. Every capability gets one score built from three parts — **coverage**, **utilization** and **adoption** — plus a verdict, the criteria that fail, the action that fixes each one, and how the score moved since the last run.
 
 ---
 
 ## Features
 
-- **Automated Assessment** — Executes ~94 unique DQL queries (111 criteria with cross-entity ratios) against your Dynatrace tenant
-- **Dual Scoring Dimensions**
-  - **Coverage** — Percentage of criteria passing thresholds (simple pass/fail ratio)
-  - **Utilization** — Weighted progressive scoring across Foundation (60%), Best Practice (25%), and Excellence (15%) tiers with gating rules
-- **Interactive Radar Chart** — Canvas-rendered polar chart with hover tooltips and click-to-drill-down
-- **3 View Modes** — Coverage, Utilization, and Executive Summary
-- **Executive Summary** — Headline Coverage / Utilization / Adoption, a Coverage-only radar, and a Capability Map pairing coverage bars with a utilization line
-- **Guided Remediation** — Specific actions and documentation links for every unmet criterion
-- **Historical Snapshots** — Auto-saved to Dynatrace Document Store with up to 12 snapshots retained
-- **Evolution Over Time** — A/B comparison of any two snapshots with delta analysis per capability and criterion
-- **App Adoption** — Distinct users opening the Dynatrace apps behind each capability, as a share of the platform's active users. Reported beside coverage; it never feeds a score
-- **Persona PDF Reports** — Executive, Tactical and Technical, each in English, Portuguese and Spanish, plus a Custom builder (pick title, capabilities and sections). Reports embed the app's own charts
-- **Trace Proxy Mode** — Runs on tenants without the Traces-on-Grail entitlement by substituting validated metric/topology equivalents for span checks, and excluding the checks that have no honest proxy rather than faking them
-- **Economy Mode (DPS)** — Samples the checks where sampling provably cancels out and narrows the window where it does not, cutting a full run from ~370 GB to ~41 GB of Grail scan
-- **Preflight Validation** — Verifies all API scopes before running, and detects a missing span entitlement
-- **Dark/Light Theme** — Full support via Dynatrace Strato design tokens
+- **Runs on open** — the app opens on the assessment; there is no start page. A run from the last 24 hours is served from a cache at zero Grail cost
+- **Three-part score** — each capability score is the average of coverage, utilization and adoption (see below). Percentages are floored, never rounded up
+- **Verdict per capability** — a named diagnosis (for example data nobody opens, or usage ahead of coverage) instead of a bare number
+- **Four pages** — Overview (radar and capabilities), Overall score, Evolution and Guide, plus a detail page per capability
+- **Guided remediation** — the action and the documentation link for every unmet criterion, with the points the score gains
+- **Evolution** — every completed run is saved (one per day kept for 90 days); the page compares the latest run with a baseline and traces each change to its part and its criteria. The first run shows by itself
+- **Dynatrace Intelligence on every page** — page-specific questions answered by Davis CoPilot from the numbers on screen; one answer costs 3 AI Units and nothing is asked until you click
+- **Reports** — Overall, Action plan and Criteria PDFs in English, Portuguese and Spanish, a FinOps report, a Smart Report written by Davis CoPilot, and raw data as JSON or CSV
+- **Works on any licensing model** — without Traces on Grail it switches to Trace Proxy Mode (metric and topology equivalents for span checks; checks with no honest proxy leave the score). Without the classic entity model it reads Smartscape
+- **Not assessed is not failed** — a criterion that cannot be measured in the environment is left out of the score and named as such
+- **Dark/Light theme** — Dynatrace Strato components and design tokens throughout
 
-## 9 Capabilities Assessed
+## 11 capabilities assessed
 
-| Capability | Criteria | Tiers (F / BP / E) | Color |
-|---|---|---|---|
-| Infrastructure Observability | 22 | 4 / 10 / 8 | `#3B82F6` |
-| Application Observability | 13 | 3 / 4 / 6 | `#8B5CF6` |
-| Digital Experience | 11 | 3 / 5 / 3 | `#EC4899` |
-| Log Analytics | 16 | 4 / 6 / 6 | `#F59E0B` |
-| Application Security | 11 | 4 / 4 / 3 | `#EF4444` |
-| Threat Observability | 11 | 3 / 5 / 3 | `#F97316` |
-| AI Observability | 9 | 3 / 2 / 4 | `#06B6D4` |
-| Business Observability | 8 | 3 / 2 / 3 | `#10B981` |
-| Software Delivery | 10 | 3 / 4 / 3 | `#6366F1` |
-| **Total** | **111** | **30 / 46 / 40** | |
-
-## Utilization Scoring Model
-
-### Tier Weights (Progressive)
-
-| Tier | Weight | Gate |
+| Capability | Criteria | Tiers (F / BP / E) |
 |---|---|---|
-| Foundation | 60% | Always counted |
-| Best Practice | 25% | Only counts if Foundation ≥ 80% |
-| Excellence | 15% | Only counts if Best Practice ≥ 60% |
+| Infrastructure Observability | 26 | 3 / 13 / 10 |
+| Application Observability | 15 | 3 / 6 / 6 |
+| Digital Experience | 15 | 3 / 7 / 5 |
+| Log Analytics | 16 | 3 / 9 / 4 |
+| Application Security | 7 | 1 / 5 / 1 |
+| Threat Observability | 4 | 1 / 2 / 1 |
+| AI/LLM Observability | 16 | 3 / 5 / 8 |
+| Business Observability | 10 | 3 / 4 / 3 |
+| Software Delivery | 6 | 1 / 2 / 3 |
+| Platform Governance | 13 | 1 / 10 / 2 |
+| FinOps & Sustainability | 10 | 3 / 4 / 3 |
+| **Total** | **138** | **25 / 67 / 46** |
 
-### Utilization Levels
+## Scoring model
 
-| Level | Label | Condition |
-|---|---|---|
-| L0 | Not Adopted | Foundation < 50% |
-| L1 | Foundation | Foundation ≥ 50% |
-| L2 | Operational | Foundation = 100% AND Best Practice ≥ 50% |
-| L3 | Optimized | Foundation = 100% AND Best Practice = 100% AND Excellence ≥ 50% |
+**Capability score = floor(average of coverage, utilization and adoption).** The overall score is the floored average of the capability scores.
 
-> **Why progressive?** Coverage shows *how much* you cover. Utilization shows *if you're covering in the right order*. A solid Foundation must come before chasing Excellence.
+| Part | What it measures |
+|---|---|
+| Coverage | Share of the assessed criteria that are met |
+| Utilization | Tiered progress: Foundation 60%, Best Practice 25%, Excellence 15%. Best Practice counts only once Foundation reaches 80%, Excellence only once Best Practice reaches 60% |
+| Adoption | Distinct users opening the Dynatrace apps behind the capability, as a share of the platform's active users. 20% of active users is a full score |
+
+A share criterion is met at the middle of its three thresholds. When adoption cannot be read, the score uses the parts that can.
+
+Two pass lines have no official Dynatrace rule behind them and are provisional: "Problems lasting 5 minutes or more" (met at 80%) and "Critical vulnerabilities without public exposure" (met at 90%).
 
 ## Prerequisites
 
 - **Node.js** 20+ (recommended: 22 LTS or later)
 - **npm** 10+ (ships with Node.js 20+)
 - **Dynatrace App Toolkit** (`dt-app` CLI v1.8+) — install via `npm install -g dt-app`
-- Access to a Dynatrace tenant (SaaS or Managed)
+- Access to a Dynatrace SaaS tenant with Grail (Dynatrace Managed has no Grail)
 - VSCode with the [Dynatrace Apps extension](https://marketplace.visualstudio.com/items?itemName=dynatrace.dynatrace-extensions) (recommended)
 
 > **Important:** Verify your Node.js version before starting: `node --version` (must be ≥ v20).
@@ -136,108 +126,85 @@ npm run deploy
 
 ## Required Scopes
 
-The app requires 11 scopes (configured in `app.config.json`):
+The app requests 18 scopes (configured in `app.config.json`):
 
 | Scope | Purpose |
 |---|---|
 | `storage:entities:read` | Entity queries (hosts, services, apps) |
+| `storage:smartscape:read` | Smartscape nodes and edges, for environments without the classic entity model |
 | `storage:logs:read` | Log Analytics criteria |
 | `storage:metrics:read` | Infrastructure metrics (timeseries) |
-| `storage:spans:read` | APM + AI Observability tracing |
-| `storage:events:read` | Security, Delivery, Problems |
+| `storage:spans:read` | Application and AI/LLM Observability tracing |
+| `storage:events:read` | Security, delivery and problem events |
+| `storage:security.events:read` | Vulnerabilities, detections and compliance findings |
 | `storage:bizevents:read` | Business Observability events |
 | `storage:buckets:read` | Grail bucket access for DQL |
-| `storage:system:read` | System table access |
-| `document:documents:read` | Load assessment snapshots |
-| `document:documents:write` | Save assessment snapshots |
-| `document:documents:delete` | Cleanup old snapshots |
+| `storage:system:read` | System tables (usage and adoption) |
+| `storage:filter-segments:read` | Platform Segments |
+| `settings:objects:read` | Configuration counts (ownership teams, anomaly detectors, log pipelines) |
+| `slo:slos:read` | Count of SLOs in the Service-Level Objectives app |
+| `app-engine:apps:run` | Installed app names for the adoption reading |
+| `davis-copilot:conversations:execute` | Dynatrace Intelligence answers and the Smart Report |
+| `document:documents:read` | Load saved runs and the query cache |
+| `document:documents:write` | Save runs and the query cache |
+| `document:documents:delete` | Remove runs past retention |
 
 ## Project Structure
 
 ```
-cca-app/
-├── app.config.json               # App manifest
-├── package.json                  # Dependencies
+├── app.config.json               # App manifest (version, scopes)
 ├── ui/
 │   ├── main.tsx                  # Entry point
 │   └── app/
-│       ├── App.tsx               # Routes (/, /compare)
-│       ├── queries.ts            # 111 DQL criteria definitions
-│       ├── remediationActions.ts # Remediation for all criteria
-│       ├── components/           # Reusable UI components
-│       ├── data/                 # Static data (tiers, summaries)
-│       ├── hooks/                # Business logic hooks
-│       ├── pages/                # Page components
-│       └── utils/                # Shared utilities
-└── docs/
-    └── ARCHITECTURE.md           # Detailed architecture docs
+│       ├── App.tsx               # Routes, the single score, run history save
+│       ├── appVersion.ts         # Must match app.config.json
+│       ├── queries.ts            # The 138 criteria
+│       ├── pulseScore.ts         # Coverage + utilization + adoption
+│       ├── diagnosis.ts          # Verdict per capability
+│       ├── remediationActions.ts # Action and link per criterion
+│       ├── trace-proxy.ts        # Catalog without Traces on Grail
+│       ├── entity-model.ts       # Catalog on Smartscape
+│       ├── log-metric.ts         # Log criteria from the free log metric
+│       ├── ai/                   # Prompts and page intelligence
+│       ├── reports/              # PDF, JSON and CSV reports
+│       ├── perf/                 # 24h query cache
+│       ├── components/ data/ hooks/ pages/ utils/
+└── docs/                         # Architecture, criteria, scoring, data sources
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture, data flow, and scoring model documentation.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the architecture and data flow.
 
 ## Tech Stack
 
 | Technology | Purpose |
 |---|---|
-| React 18 | UI framework |
-| TypeScript 5.3 | Type safety |
-| Dynatrace Strato | Design system |
-| Chart.js | Evolution charts |
-| jsPDF | PDF report generation |
-| DQL | Grail data queries |
+| React 18 + TypeScript | UI |
+| Dynatrace Strato | Components, charts and design tokens |
+| jsPDF | PDF reports |
+| DQL, Settings and SLO services | Readings |
+| Davis CoPilot | Page intelligence and the Smart Report |
 | dt-app CLI | Build, dev, deploy |
 
 ## Grail Query Cost (DPS Consumption)
 
-> **Important:** Each assessment execution queries Grail tables (logs, spans, events, bizevents) which consume **DPS** based on GiB scanned.
+> **Important:** a full run scans Grail (logs, spans, events, bizevents), and the scan grows with the environment's ingest volume. Reopening the app does not: results are cached for 24 hours.
 
-### Measured cost per assessment
+- **24h query cache** — stored in the Document Store per tenant. Opening the app inside that window runs no Grail scan. Only the Refresh button pays for a new run.
+- **Free sources first** — entity, `timeseries`, settings and SLO reads scan nothing. Where the per-entity log metric exists, the log coverage criteria read it instead of scanning logs.
+- **Sampling only where it cancels out** — ratios of plain counts over the same table and window are sampled; distinct counts are not, because they collapse under sampling.
+- **Scan ceiling** — every hot query carries a `scanLimitGBytes` cap, so none can run away on a large tenant.
+- **Deduplication** — identical query strings execute once, however many criteria share them.
+- **Aggregates only** — every query returns a count-shaped result, never raw records.
 
-Numbers below were measured on a reference tenant over 30 days by reading the
-platform's own `dt.system.events` query log (which is itself free to query),
-not estimated.
+Reference measurement, read from `dt.system.events` (free to query): on an environment ingesting about 18 million log records a minute, a full fresh run scanned about 137 GiB before the last two reductions shipped in 3.0.0; a reopen inside 24 hours scanned 0. Smaller environments scan proportionally less. Measure your own with:
 
-| | Before Economy Mode | With Economy Mode |
-|---|---|---|
-| Scan per full run | 370 GB | **41 GB** |
-| Cost per run | ~$3.70 | **~$0.41** |
-| 16 runs / month | ~$59.83 | **~$6.60** |
+```
+fetch dt.system.events
+| filter event.kind == "QUERY_EXECUTION_EVENT" and client.application_context == "my.pulse.assessment"
+| summarize scanned_gib = sum(scanned_bytes) / 1073741824, by: { bin(timestamp, 1h) }
+```
 
-Where the scan went before optimization: spans 81%, logs 18%, everything else
-under 1%. Entity (`fetch dt.entity.*`) and `timeseries` queries measured
-**literally zero** — 696 executions, 0 bytes.
-
-### How Economy Mode gets there
-
-Two levers, applied per criterion in `ui/app/scale-tier.ts`:
-
-- **Sampling** (`samplingRatio: 1000`) — only where it provably cancels out:
-  both sides of the ratio must be plain counts over the same table and window.
-  Measured on 2h of logs: scan fell from 4.99 GB to ~0.003 GB while the ratios
-  held (trace-correlated share 8.78% → 9.07%).
-- **Shorter window** — the honest lever for the rest, because `countDistinct`
-  collapses under sampling (distinct log sources 63 → 28; AI providers 4 → 1).
-  2h → 15m costs 0.61 GB instead of 3.87 GB and keeps 94% of distinct sources.
-
-Everything else is left alone, and a `scanLimitGBytes` ceiling caps every hot
-query so none can run away on a large tenant.
-
-Coverage values therefore become close estimates rather than exact counts —
-within ~1.5 percentage points on ratios and ~6% lower on distinct counts. The
-pass thresholds are wide bands (≥80 / ≥50 / ≥1), so pass/fail outcomes are
-effectively unchanged. The app discloses this on screen next to the scores.
-
-### Other cost controls
-
-- **24h query cache** — repeated runs in the same day are served from the
-  Document Store at zero Grail cost. Measured: 3,289 executions served from
-  119 distinct queries.
-- **Query deduplication** — identical query strings execute once regardless of
-  how many criteria share them.
-- **Aggregates only** — every query returns `summarize count()`-shaped output,
-  never raw records.
-- **Trace Proxy Mode** is cheaper still: its metric/topology replacements are
-  not Grail-scanning queries, so the 12 span checks leave the plan entirely.
+**AI Units** — Dynatrace Intelligence and the Smart Report call Davis CoPilot only on a click; one answer is 3 AI Units.
 
 ## Scripts
 

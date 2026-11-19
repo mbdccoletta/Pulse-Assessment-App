@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.2] — 2026-11-19
+
+### Changed
+- App description in the manifest and the README now describe 3.x: 11 capabilities, 138 criteria, the three-part score, the 18 scopes and the current cost controls. No change in behavior.
+
 ## [3.0.1] — 2026-11-19
 
 ### Fixed

@@ -3,9 +3,9 @@
   "app": {
     "id": "my.pulse.assessment",
     "name": "Pulse Assessment",
-    "description": "Assess observability coverage and utilization across 9 Dynatrace capabilities.",
+    "description": "Scores coverage, utilization and adoption across 11 Dynatrace capabilities.",
     "icon": "ui/assets/icon.svg",
-    "version": "3.0.1",
+    "version": "3.0.2",
     "scopes": [
       { "name": "storage:logs:read", "comment": "Log Analytics coverage" },
       { "name": "storage:events:read", "comment": "Security, Delivery, Problems" },
@@ -18,7 +18,7 @@
       { "name": "document:documents:read", "comment": "Load assessment history" },
       { "name": "document:documents:write", "comment": "Save assessment snapshots" },
       { "name": "document:documents:delete", "comment": "Cleanup old snapshots" },
-      { "name": "davis-copilot:conversations:execute", "comment": "Davis CoPilot dynamic recommendations (feat/davis-insights)" },
+      { "name": "davis-copilot:conversations:execute", "comment": "Dynatrace Intelligence answers and the Smart Report" },
       { "name": "settings:objects:read", "comment": "Read official Ownership teams (builtin:ownership.teams) for Projects" },
       { "name": "slo:slos:read", "comment": "Count SLOs created in the Service-Level Objectives app (criterion SLOs defined)" },
       { "name": "storage:filter-segments:read", "comment": "Read platform Segments to identify teams/scopes on Projects" },
