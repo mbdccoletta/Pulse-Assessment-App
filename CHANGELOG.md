@@ -4,6 +4,14 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.1] — 2026-11-19
+
+### Fixed
+- Evolution showed "Not enough runs to compare" until a second run existed. With one saved run it now shows that run: the score, its three parts, the chart and every capability. The comparison panels and the questions appear with the second run.
+- A run that finished while another page was open was never saved: the save lived on the Overview page. It now lives at the app root.
+- Opening Evolution while a run is in flight shows a loading indicator and fills in by itself.
+- Reopening the app on the same day with the same result no longer saves a new history entry.
+
 ## [3.0.0] — 2026-11-19
 
 A new major version: the score changed meaning (coverage, utilization and adoption), the catalog grew from 9 to 11 capabilities, the pages were rebuilt and every AI surface was rewritten. Runs saved by 2.x are not comparable with 3.0 runs. Everything listed under this heading was developed as 2.6.0 and never released under that number.

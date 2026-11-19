@@ -1,5 +1,5 @@
 import { ToastContainer } from "@dynatrace/strato-components/notifications";
-import React, { Suspense, useMemo } from "react";
+import React, { Suspense, useEffect, useMemo, useRef } from "react";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppHeader, Flex, HelpMenu, PageLayout } from "@dynatrace/strato-components/layouts";
 import { Skeleton, SkeletonText } from "@dynatrace/strato-components/content";
@@ -55,6 +55,28 @@ export const App = () => {
   }, [rawCoverage.capabilities, adoption.loading, adoption.unavailable, adoption.byCapability]);
   const coverageData = { ...rawCoverage, ...scored, scoreSettled: !adoption.loading, adoption };
 
+  // Every completed run is saved to the history here, not on a page: a run that
+  // finishes while another page is open is still a run, and Evolution needs it.
+  const wasLoadingRef = useRef(false);
+  const lastSavedRef = useRef("");
+  const measured = scored.capabilities.length > 0 && scored.capabilities.some(c => c.assessedCount > 0);
+  useEffect(() => {
+    if (rawCoverage.loading) { wasLoadingRef.current = true; return; }
+    // Wait for adoption: it is one of the three parts of the score being saved.
+    if (!wasLoadingRef.current || scored.capabilities.length === 0 || adoption.loading) return;
+    wasLoadingRef.current = false;
+    const sig = scored.capabilities.map(c => `${c.name}:${c.score}`).join(",");
+    // A run in which nothing could be measured (no connection, expired session)
+    // is not a result: saving it would put a 0% run in the history.
+    if (measured && sig !== lastSavedRef.current) {
+      lastSavedRef.current = sig;
+      history.saveSnapshot(scored.capabilities, scored.totalScore, rawCoverage.tenant);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawCoverage.loading, adoption.loading, scored]);
+  /** A run is in flight or its result is on its way into the history. */
+  const assessing = rawCoverage.loading || (scored.capabilities.length > 0 && adoption.loading) || (measured && history.snapshots.length === 0);
+
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const go = (to: string) => (e: React.MouseEvent) => { e.preventDefault(); navigate(to); };
@@ -106,7 +128,7 @@ export const App = () => {
               <Route path="/" element={<CoverageAssessment view="coverage" history={history} coverageData={coverageData} scale={scale} />} />
               <Route path="/guide" element={<GuidePage coverageData={coverageData} />} />
               <Route path="/summary" element={<CoverageAssessment view="recommendations" history={history} coverageData={coverageData} scale={scale} />} />
-              <Route path="/compare" element={<EvolutionPage snapshots={history.snapshots} loading={history.loading} />} />
+              <Route path="/compare" element={<EvolutionPage snapshots={history.snapshots} loading={history.loading} assessing={assessing} />} />
               <Route path="/capability/:name" element={<CapabilityDetailPage coverageData={coverageData} history={history} />} />
             </Routes>
           </Suspense>

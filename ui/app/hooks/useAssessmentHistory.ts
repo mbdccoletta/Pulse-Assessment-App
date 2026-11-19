@@ -242,7 +242,24 @@ export function useAssessmentHistory() {
     }).finally(() => setLoading(false));
   }, []);
 
+  const snapshotsRef = useRef(snapshots);
+  snapshotsRef.current = snapshots;
+
   const saveSnapshot = useCallback((capabilities: CapabilityResult[], totalScore: number, tenant: string) => {
+    // Reopening the app on the same day with the same result is not a new run:
+    // saving it again only piled identical entries into the history.
+    const last = snapshotsRef.current[0];
+    const today = new Date().toISOString().slice(0, 10);
+    const same = last && last.timestamp.slice(0, 10) === today && last.tenant === tenant && last.appVersion === APP_VERSION
+      && last.capabilities.length === capabilities.length
+      && capabilities.every(c => {
+        const p = last.capabilities.find(x => x.name === c.name);
+        return !!p && p.score === c.score && (p.coverage ?? null) === (c.coverageScore ?? null)
+          && (p.adoption ?? null) === (c.adoptionScore ?? null) && p.utilization === c.effectiveUtilizationScore
+          && p.criteriaResults.length === c.criteriaResults.length
+          && c.criteriaResults.every(r => { const q = p.criteriaResults.find(y => y.id === r.id); return !!q && q.value === r.value && q.points === r.points; });
+      });
+    if (same) return;
     const snap: AssessmentSnapshot = {
       id: Date.now().toString(36),
       timestamp: new Date().toISOString(),

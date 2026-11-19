@@ -67,14 +67,12 @@ interface Props {
 export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageData, scale }) => {
   const { capabilities, totalScore, overallUtilizationLevel, loading, error, tenant, date, stats, start, refresh } = coverageData;
   const navigate = useNavigate();
-  const lastSavedRef = useRef<string>("");
   const [chartSize, setChartSize] = useState(500);
   const [isMobile, setIsMobile] = useState(false);
   const viewMode = (view === "recommendations" ? "recommendations" : "coverage") as ViewMode;
   const rootRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [expandedPolar, setExpandedPolar] = useState(false);
-  const wasLoadingRef = useRef(false);
   /** Smart report via Dynatrace Assist. */
   const [showSmartReport, setShowSmartReport] = useState(false);
 
@@ -218,26 +216,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
   /** True when no criterion of any capability could be measured. */
   const nothingMeasured = capabilities.length > 0 && capabilities.every(c => c.assessedCount === 0);
 
-  // Save snapshot only when an assessment run finishes (loading transitions true → false).
-  // In demo mode we DELIBERATELY skip the save: canned scenario values would
-  // mix with real snapshots in Evolution Over Time and corrupt trend lines.
-  useEffect(() => {
-    if (loading) {
-      wasLoadingRef.current = true;
-      return;
-    }
-    // Wait for adoption: it is one of the three parts of the score being saved.
-    if (wasLoadingRef.current && capabilities.length > 0 && coverageData.scoreSettled !== false) {
-      wasLoadingRef.current = false;
-      const sig = capabilities.map(c => `${c.name}:${c.score}`).join(",");
-      // A run in which nothing could be measured (no connection, expired
-      // session) is not a result: saving it would put a 0% run in the history.
-      if (!nothingMeasured && sig !== lastSavedRef.current) {
-        lastSavedRef.current = sig;
-        history.saveSnapshot(capabilities, totalScore, tenant);
-      }
-    }
-  }, [loading, capabilities, totalScore, tenant, history]);
+  // The run is saved to the history in App.tsx, so it is saved on any page.
 
   // Auto-size chart — use ResizeObserver for notebook/embedded containers
   useEffect(() => {
