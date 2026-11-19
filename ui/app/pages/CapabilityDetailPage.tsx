@@ -268,7 +268,7 @@ const CriteriaChart: React.FC<{ rows: Row[]; totalUsers?: number }> = ({ rows, t
  *  run — a wide band means the parts disagree. Runs saved before the parts were
  *  stored have a band of zero width. */
 export const TrendChart: React.FC<{ points: { t: number; v: number; lo: number; hi: number }[]; name: string; color: string }> = ({ points, name, color }) => {
-  if (points.length < 2) return <Text textStyle="small" style={{ color: NEUTRAL }}>Not enough runs</Text>;
+  if (points.length === 0) return <Text textStyle="small" style={{ color: NEUTRAL }}>No saved run yet</Text>;
   const line = { name: "Score", unit: "%", datapoints: points.map(p => ({ start: new Date(p.t), value: p.v })) };
   const band = { name: "Parts range", unit: "%", datapoints: points.map(p => ({ start: new Date(p.t), y0: p.lo, y1: p.hi })) };
   return (

@@ -77,16 +77,18 @@ const Delta: React.FC<{ d: number | null; size?: number }> = ({ d, size = 12 }) 
 };
 
 /** A reading in the newer run with where it came from. */
-const ChangeMeter: React.FC<{ label: React.ReactNode; from: number | null; to: number | null }> = ({ label, from, to }) => (
+const ChangeMeter: React.FC<{ label: React.ReactNode; from: number | null; to: number | null; solo?: boolean }> = ({ label, from, to, solo }) => (
   <Flex flexDirection="column" gap={4} style={{ minWidth: 0 }}>
     <MeterBarChart value={Math.floor(to ?? 0)} min={0} max={100} color={scoreBand(to ?? 0).token} size="size8" formatter={pctFormat}>
       <MeterBarChart.Label>{label}</MeterBarChart.Label>
       <MeterBarChart.Value>{to == null ? "—" : pctFormat(Math.floor(to))}</MeterBarChart.Value>
     </MeterBarChart>
-    <Flex alignItems="center" justifyContent="space-between" gap={8}>
-      <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{from == null ? "—" : `${Math.floor(from)}%`} → {to == null ? "—" : `${Math.floor(to)}%`}</Text>
-      <Delta d={from != null && to != null ? Math.floor(to) - Math.floor(from) : null} size={11} />
-    </Flex>
+    {!solo && (
+      <Flex alignItems="center" justifyContent="space-between" gap={8}>
+        <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{from == null ? "—" : `${Math.floor(from)}%`} → {to == null ? "—" : `${Math.floor(to)}%`}</Text>
+        <Delta d={from != null && to != null ? Math.floor(to) - Math.floor(from) : null} size={11} />
+      </Flex>
+    )}
   </Flex>
 );
 
@@ -110,9 +112,11 @@ const signed = (n: number) => `${n > 0 ? "+" : ""}${Math.round(n * 10) / 10}`;
 interface Props {
   snapshots: AssessmentSnapshot[];
   loading?: boolean;
+  /** A run is in flight: its result is about to join the history. */
+  assessing?: boolean;
 }
 
-export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false }) => {
+export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, assessing = false }) => {
   const navigate = useNavigate();
   // Newest first; only runs scored the way today's are.
   const runs = useMemo(() => [...snapshots]
@@ -146,7 +150,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false }) =
     return to.capabilities.map(c => {
       const prev = from.capabilities.find(p => p.name === c.name);
       return { name: c.name, color: c.color, to: c, from: prev, delta: prev ? c.score - prev.score : null };
-    }).sort((a, b) => (a.delta ?? 0) - (b.delta ?? 0));
+    }).sort((a, b) => (a.delta ?? 0) - (b.delta ?? 0) || a.to.score - b.to.score);
   }, [to, from]);
 
   // Why each score moved: the parts, the criteria behind them, and anything
@@ -232,28 +236,31 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false }) =
     return { t: new Date(s2.timestamp).getTime(), v, lo: parts.length ? Math.min(...parts) : v, hi: parts.length ? Math.max(...parts) : v };
   }), [runs, cap]);
 
-  if (loading && runs.length === 0) {
+  if ((loading || assessing) && runs.length === 0) {
     return <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}><ProgressCircle aria-label="Loading saved runs" /></Flex>;
   }
-  if (runs.length < 2 || !to || !from) {
+  if (!to || !from) {
     return (
       <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
         <EmptyState>
           <EmptyState.VisualPreset context="chart" type="something-missing" />
-          <EmptyState.Title>Not enough runs to compare</EmptyState.Title>
-          <EmptyState.Details>Evolution compares two saved runs scored with coverage, utilization and adoption. Each completed assessment is saved automatically.</EmptyState.Details>
+          <EmptyState.Title>No saved run yet</EmptyState.Title>
+          <EmptyState.Details>Each completed assessment is saved automatically and shows up here.</EmptyState.Details>
           <EmptyState.Actions><Button variant="emphasized" onClick={() => navigate("/")}>Go to assessment</Button></EmptyState.Actions>
         </EmptyState>
       </Flex>
     );
   }
 
+  // One saved run: the page shows it as the baseline. The comparison panels
+  // appear with the second run.
+  const solo = runs.length === 1;
   const band = scoreBand(to.totalScore);
   const capColor = cap ? (to.capabilities.find(c => c.name === cap)?.color ?? Colors.Charts.Categorical.Color01.Default) : Colors.Charts.Categorical.Color01.Default;
   const clearCap = cap ? <Chip color="primary" size="condensed">{cap}<Chip.DeleteButton aria-label={`Clear the ${cap} filter`} onClick={() => setCap(null)} /></Chip> : null;
   return (
     <Flex flexDirection="column" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-      <IntelligenceBar
+      {!solo && <IntelligenceBar
         key={`${from.id}-${to.id}`}
         questions={QUESTIONS.evolution}
         ctx={{
@@ -263,29 +270,31 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false }) =
           lens: LENS.evolution,
           pageNote: evolutionFacts(from, to),
         }}
-      />
+      />}
       <Flex flexDirection="column" gap={16} style={{ padding: "16px 20px 32px" }}>
         <Flex alignItems="center" gap={12} flexWrap="wrap">
           <Heading level={2}>Evolution</Heading>
           <Text style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: band.token }}>{to.totalScore}%</Text>
-          <Delta d={to.totalScore - from.totalScore} size={14} />
+          {solo ? <Chip size="condensed" color="primary">First run</Chip> : <Delta d={to.totalScore - from.totalScore} size={14} />}
           <Flex alignItems="center" gap={16} flexWrap="wrap" style={{ marginLeft: "auto" }}>
-            <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{fmtRun(from.timestamp)} → {fmtRun(to.timestamp)}</Text>
-            <ToggleButtonGroup value={since} onChange={(v: string) => setSince(v as Since)}>
-              {SINCE.map(v => <ToggleButtonGroup.Item key={v} value={v}>{v}</ToggleButtonGroup.Item>)}
-            </ToggleButtonGroup>
+            <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{solo ? fmtRun(to.timestamp) : `${fmtRun(from.timestamp)} → ${fmtRun(to.timestamp)}`}</Text>
+            {!solo && (
+              <ToggleButtonGroup value={since} onChange={(v: string) => setSince(v as Since)}>
+                {SINCE.map(v => <ToggleButtonGroup.Item key={v} value={v}>{v}</ToggleButtonGroup.Item>)}
+              </ToggleButtonGroup>
+            )}
           </Flex>
         </Flex>
 
         {/* Two panels that share the row and stack when it gets narrow: a spanning
             item in an auto-fit grid wrapped alone and left the row half empty. */}
         <Flex style={{ flexWrap: "wrap", gap: 16, alignItems: "stretch" }}>
-          <Panel title="What changed in the score" style={{ flex: "1 1 300px" }}>
+          <Panel title={solo ? "Score" : "What changed in the score"} style={{ flex: "1 1 300px" }}>
             <Flex flexDirection="column" gap={12}>
-              <ChangeMeter label="Overall score" from={from.totalScore} to={to.totalScore} />
-              <ChangeMeter label="Coverage" from={part(from, "coverage")} to={part(to, "coverage")} />
-              <ChangeMeter label="Utilization" from={part(from, "utilization")} to={part(to, "utilization")} />
-              <ChangeMeter label="Adoption" from={part(from, "adoption")} to={part(to, "adoption")} />
+              <ChangeMeter label="Overall score" from={from.totalScore} to={to.totalScore} solo={solo} />
+              <ChangeMeter label="Coverage" from={part(from, "coverage")} to={part(to, "coverage")} solo={solo} />
+              <ChangeMeter label="Utilization" from={part(from, "utilization")} to={part(to, "utilization")} solo={solo} />
+              <ChangeMeter label="Adoption" from={part(from, "adoption")} to={part(to, "adoption")} solo={solo} />
             </Flex>
           </Panel>
 
@@ -295,7 +304,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false }) =
         </Flex>
 
         {/* Why the score moved: every change traced to its part and its criteria */}
-        <Panel title="What caused the change">
+        {!solo && <Panel title="What caused the change">
           {causes.caps.length === 0 && causes.added.length === 0 && causes.removed.length === 0 ? (
             <Text textStyle="small" style={{ color: NEUTRAL }}>Nothing changed between these two runs</Text>
           ) : (
@@ -368,23 +377,23 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false }) =
               </Accordion>
             </Flex>
           )}
-        </Panel>
+        </Panel>}
 
-        <Panel title="Capabilities" right={<Flex alignItems="center" gap={12}>{clearCap}<Text textStyle="small" style={{ color: NEUTRAL }}>Largest drop first</Text></Flex>}>
+        <Panel title="Capabilities" right={<Flex alignItems="center" gap={12}>{clearCap}<Text textStyle="small" style={{ color: NEUTRAL }}>{solo ? "Lowest score first" : "Largest drop first"}</Text></Flex>}>
           <Grid style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px 28px" }}>
             {caps.map(c => {
               return (
                 <Flex key={c.name} flexDirection="column" style={{ minWidth: 0 }}>
                   <ChangeMeter
                     label={<Link onClick={() => setCap(cap === c.name ? null : c.name)}>{c.name}</Link>}
-                    from={c.from?.score ?? null} to={c.to.score} />
+                    from={c.from?.score ?? null} to={c.to.score} solo={solo} />
                 </Flex>
               );
             })}
           </Grid>
         </Panel>
 
-        <Panel title="Criteria that changed" right={
+        {!solo && <Panel title="Criteria that changed" right={
           <Flex alignItems="center" gap={12}>
             {clearCap}
             <Chip color="success" size="condensed">Gained {gained}</Chip><Chip color="critical" size="condensed">Lost {lost}</Chip>
@@ -394,7 +403,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false }) =
               <DataTable.Pagination defaultPageSize={10} />
             </DataTable>
           )}
-        </Panel>
+        </Panel>}
       </Flex>
     </Flex>
   );
