@@ -17,7 +17,7 @@
 
 import { publicClient } from "@dynatrace-sdk/client-davis-copilot";
 import { buildReportPrompt, type ReportContext } from "./reportPrompt";
-import { classifyError, type DavisError } from "./davisRecommendations";
+import { classifyError, type DavisError } from "./davisError";
 
 export type SmartReportResult =
   | { ok: true; markdown: string }
@@ -27,11 +27,11 @@ export type SmartReportResult =
 export const SMART_REPORT_SUGGESTIONS: { label: string; ask: string }[] = [
   {
     label: "Board briefing",
-    ask: "What would a board-level briefing of our observability posture look like, with the main risks framed in business terms and a clear ask at the end?",
+    ask: "What would a board-level briefing of our observability posture look like: where we are strong, where the exposure is according to the unmet criteria, and one clear ask at the end?",
   },
   {
-    label: "90-day team plan",
-    ask: "How should each team act on this assessment over the next 90 days? Which capability does each stream of work belong to, and what outcome should we expect?",
+    label: "Team plan",
+    ask: "How should each team act on this assessment? Which capability does each stream of work belong to, in what order, and what does each change make visible or possible?",
   },
   {
     label: "Risk narrative",
@@ -62,7 +62,7 @@ export async function generateSmartReportText(
         ],
         annotations: {
           origin_app: "my.pulse.assessment",
-          prompt_version: "smart-report-v1",
+          prompt_version: "smart-report-v2",
         },
       },
     });

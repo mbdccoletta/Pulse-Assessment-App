@@ -11,26 +11,33 @@
 // Shipped to production in v2.5.6. No Davis call fires until the user
 // submits a request, so simply opening the modal spends no quota.
 
+import { Chip } from "@dynatrace/strato-components/content";
 import React, { useState } from "react";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Text, Strong } from "@dynatrace/strato-components/typography";
 import { Button } from "@dynatrace/strato-components/buttons";
-import { Modal } from "@dynatrace/strato-components-preview/overlays";
+import { Modal } from "@dynatrace/strato-components/overlays";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import { openDynatraceAssist } from "../ai/assistIntent";
 import { generateSmartReportText, SMART_REPORT_SUGGESTIONS } from "../ai/smartReport";
 import type { ReportContext } from "../ai/reportPrompt";
 import { generateAiNarrativePdf } from "../reports/aiNarrativePdf";
-import type { DavisError } from "../ai/davisRecommendations";
+import type { DavisError } from "../ai/davisError";
 
 interface SmartReportModalProps {
   open: boolean;
   onClose: () => void;
   ctx: ReportContext;
+  /** Loads the measured FinOps facts. Called only when the request is about
+   *  cost, energy or carbon: those queries are a billable scan. */
+  loadFinopsNote?: () => Promise<string | undefined>;
   dk: boolean;
 }
 
-export const SmartReportModal: React.FC<SmartReportModalProps> = ({ open, onClose, ctx, dk }) => {
+/** Requests that need cost, energy or carbon figures (EN, PT, ES). */
+const FINOPS_ASK = /finops|cost|spend|cloud|bill|budget|saving|carbon|energy|emission|sustainab|custo|gasto|nuvem|fatura|orçamento|econom|carbono|energia|emiss|sustentab|consumo|gasto|nube|factura|presupuesto|ahorr|sostenib/i;
+
+export const SmartReportModal: React.FC<SmartReportModalProps> = ({ open, onClose, ctx, loadFinopsNote, dk }) => {
   const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DavisError | null>(null);
@@ -41,8 +48,18 @@ export const SmartReportModal: React.FC<SmartReportModalProps> = ({ open, onClos
 
   const effectiveAsk = ask.trim() || SMART_REPORT_SUGGESTIONS[0].ask;
 
-  const openInAssist = () => {
+  /** The context for this request: FinOps facts are fetched only when it asks about them. */
+  const contextFor = async (request: string): Promise<ReportContext> => {
+    if (ctx.finopsNote || !loadFinopsNote || !FINOPS_ASK.test(request)) return ctx;
+    const note = await loadFinopsNote().catch(() => undefined);
+    return note ? { ...ctx, finopsNote: note } : ctx;
+  };
+
+  const openInAssist = async () => {
     setError(null);
+    setBusy(true);
+    const ctx = await contextFor(effectiveAsk);
+    setBusy(false);
     // Intents only work when the app runs embedded in the Dynatrace shell.
     // On the local dev server the platform rejects them ("detached mode"),
     // so surface that instead of closing on a silent failure.
@@ -57,7 +74,7 @@ export const SmartReportModal: React.FC<SmartReportModalProps> = ({ open, onClos
   const generatePdf = async () => {
     setBusy(true);
     setError(null);
-    const result = await generateSmartReportText(ctx, effectiveAsk);
+    const result = await generateSmartReportText(await contextFor(effectiveAsk), effectiveAsk);
     setBusy(false);
     if (!result.ok) {
       setError(result.err);
@@ -84,22 +101,9 @@ export const SmartReportModal: React.FC<SmartReportModalProps> = ({ open, onClos
 
         <Flex gap={6} flexWrap="wrap">
           {SMART_REPORT_SUGGESTIONS.map(s => (
-            <Flex
-              key={s.label}
-              role="button" tabIndex={0}
-              onClick={() => setAsk(s.ask)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setAsk(s.ask); } }}
-              style={{
-                padding: "3px 10px", borderRadius: 12, cursor: "pointer", fontSize: 12,
-                border: `1px solid ${ask === s.ask ? accent : border}`,
-                color: ask === s.ask ? accent : textSec,
-                background: ask === s.ask ? (dk ? "rgba(99,102,241,0.14)" : "rgba(99,102,241,0.08)") : "transparent",
-                fontWeight: ask === s.ask ? 700 : 500,
-                userSelect: "none",
-              }}
-            >
+            <Chip key={s.label} color={ask === s.ask ? "primary" : "neutral"} variant={ask === s.ask ? "accent" : "emphasized"} onClick={() => setAsk(s.ask)}>
               {s.label}
-            </Flex>
+            </Chip>
           ))}
         </Flex>
 

@@ -119,6 +119,38 @@ async function probeQuery(query: string): Promise<{ ok: boolean; detail: string;
   }
 }
 
+/** One cheap probe: does this tenant lack the Traces on Grail entitlement?
+ *  Used to switch Trace Proxy Mode on by itself, before the first run.
+ *  Any other outcome (spans readable, a scope problem, a network error)
+ *  answers false: the normal catalog runs and each criterion reports for itself. */
+export async function tracesNotEntitled(): Promise<boolean> {
+  if (simulateNoTraces()) return true;
+  const spans = PROBE_QUERIES.find(q => q.id === "spans");
+  if (!spans) return false;
+  const r = await probeQuery(spans.query);
+  return !r.ok && r.entitlement;
+}
+
+/** Dev-only simulation of an environment without the classic entity tables. */
+function simulateNoClassicEntities(): boolean {
+  if (!isDevEnvironment()) return false;
+  try {
+    if (typeof window === "undefined") return false;
+    const p = new URLSearchParams(window.location.search).get("noEntities");
+    return p === "1" || p === "true" || window.localStorage.getItem("cca.noEntities") === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** One cheap probe: does this environment lack the classic entity model
+ *  (`fetch dt.entity.*`)? Then the run reads Smartscape (../entity-model.ts). */
+export async function classicEntitiesMissing(): Promise<boolean> {
+  if (simulateNoClassicEntities()) return true;
+  const r = await probeQuery("fetch dt.entity.host | limit 1 | summarize count()");
+  return !r.ok && r.noClassicEntities;
+}
+
 export function usePreflight() {
   const [checks, setChecks] = useState<PreflightCheck[]>(
     PROBE_QUERIES.map(p => ({ id: p.id, label: p.label, scope: p.scope, status: "pending" as const }))

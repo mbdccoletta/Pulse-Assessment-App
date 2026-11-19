@@ -25,7 +25,7 @@
 // (operative) threshold. s10 has no honest entity-level proxy (measured
 // 11% vs 53%) and is excluded instead.
 //
-// AI Observability is excluded as a whole capability: gen_ai.* attributes
+// AI/LLM Observability is excluded as a whole capability: gen_ai.* attributes
 // exist ONLY on spans — there is no honest proxy. Its absence is disclosed
 // in the TraceProxyBanner and becomes the enablement conversation.
 
@@ -120,7 +120,7 @@ export interface TraceProxyInfo {
  * thresholds), unproxiable span criteria are dropped from the criteria
  * array (scoring divides by criteria.length, so they leave the
  * denominator — the customer is not penalised for a missing entitlement),
- * and capabilities left with zero criteria (AI Observability) are dropped.
+ * and capabilities left with zero criteria (AI/LLM Observability) are dropped.
  */
 export function applyTraceProxyMode(
   caps: CapabilityDef[],

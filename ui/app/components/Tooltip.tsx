@@ -1,5 +1,5 @@
 import React from "react";
-import { Tooltip as StratoTooltip } from "@dynatrace/strato-components-preview/overlays";
+import { Tooltip as StratoTooltip } from "@dynatrace/strato-components/overlays";
 import { Text } from "@dynatrace/strato-components/typography";
 
 interface Props {

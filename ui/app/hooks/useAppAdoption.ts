@@ -68,18 +68,26 @@ export interface UseAppAdoptionResult {
 
 const WINDOW_DAYS = 30;
 
+/** What a page reads before the app's single adoption fetch has anything. */
+export const NO_ADOPTION: UseAppAdoptionResult = {
+  loading: true, unavailable: false, apps: [], byCapability: {}, totalUsers: 0, windowDays: WINDOW_DAYS, refresh: () => {},
+};
+
 /** Distinct users + query count per app id, over the window. Service
  *  accounts (heimdall) are excluded so the count reflects real people. */
+// Keyed on client.application_context — the documented field for "which app
+// ran this query". The earlier version parsed DT_APP_ID out of client.source,
+// which is missing on many apps' queries: on a real tenant it showed Dashboards
+// and Dynatrace Assist with no users and Problems at half its real audience.
+// The platform shell itself (dynatrace.appshell) is not an app people choose.
 const ADOPTION_QUERY = `
 fetch dt.system.events, from:now()-${WINDOW_DAYS}d
 | filter event.kind == "QUERY_EXECUTION_EVENT"
-| filter isNotNull(client.source) and contains(client.source, "DT_APP_ID=")
+| filter isNotNull(client.application_context) and client.application_context != "dynatrace.appshell"
 | filter isNotNull(user.email) and not(contains(user.email, "heimdall.dynatrace.com"))
-| fieldsAdd appId = splitString(splitString(client.source, "DT_APP_ID=")[1], "&")[0]
-| filter isNotNull(appId) and appId != ""
-| summarize users = countDistinct(user.email), queries = count(), by:{appId}
+| summarize users = countDistinct(user.email), queries = count(), by:{appId = client.application_context}
 | sort users desc, queries desc
-| limit 60`;
+| limit 200`;
 
 const TOTAL_USERS_QUERY = `
 fetch dt.system.events, from:now()-${WINDOW_DAYS}d
@@ -96,10 +104,17 @@ const num = (v: unknown): number => {
 
 async function runQuery(query: string): Promise<Record<string, unknown>[] | null> {
   try {
-    const res = await queryExecutionClient.queryExecute({
+    let res: { state?: string; result?: unknown; requestToken?: string } | undefined = await queryExecutionClient.queryExecute({
       body: { query, requestTimeoutMilliseconds: 30_000, maxResultRecords: 200 },
     });
-    if (res?.state === "FAILED" || res?.state === "CANCELLED") return null;
+    // 30 days of system events can outlive the request timeout on a large
+    // tenant: poll for the result instead of reading "no adoption".
+    const token = res?.requestToken;
+    for (let i = 0; res?.state === "RUNNING" && token && i < 10; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      res = await queryExecutionClient.queryPoll({ requestToken: token });
+    }
+    if (res?.state !== "SUCCEEDED" && res?.state !== undefined) return null;
     const records = (res?.result as { records?: Record<string, unknown>[] } | undefined)?.records;
     return Array.isArray(records) ? records : null;
   } catch (err) {
@@ -111,6 +126,10 @@ async function runQuery(query: string): Promise<Record<string, unknown>[] | null
 
 export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
   const [loading, setLoading] = useState(false);
+  /** True once a first answer (data or failure) arrived. Until then the hook
+   *  reports loading, so nothing scores or saves adoption as zero in the gap
+   *  between being enabled and the query starting. */
+  const [done, setDone] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [apps, setApps] = useState<AppUsage[]>([]);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -136,6 +155,7 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
         setApps([]);
         setUnavailable(true);
         setLoading(false);
+        setDone(true);
         return;
       }
       const parsed: AppUsage[] = rows
@@ -150,9 +170,20 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
         })
         .filter(a => a.appId !== "");
 
+      // Without the population there is no share to compute: adoption is then
+      // "not measured", never 0% for every capability.
+      const total = totalRows && totalRows[0] ? num(totalRows[0].users) : 0;
+      if (total <= 0) {
+        setApps(parsed);
+        setUnavailable(true);
+        setLoading(false);
+        setDone(true);
+        return;
+      }
       setApps(parsed);
-      setTotalUsers(totalRows && totalRows[0] ? num(totalRows[0].users) : 0);
+      setTotalUsers(total);
       setLoading(false);
+      setDone(true);
     })();
 
     return () => { cancelled = true; };
@@ -172,12 +203,12 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
     // Penetration against the whole active population, capped at 100 (the
     // per-app count can never exceed the platform total, but a stale total
     // from a failed second query should not produce >100%).
-    entry.rate = totalUsers > 0 ? Math.min(100, Math.round((entry.users / totalUsers) * 100)) : 0;
+    entry.rate = totalUsers > 0 ? Math.min(100, Math.floor((entry.users / totalUsers) * 100)) : 0;
   }
 
   const refresh = useCallback(() => setRunId(n => n + 1), []);
 
-  return { loading, unavailable, apps, byCapability, totalUsers, windowDays: WINDOW_DAYS, refresh };
+  return { loading: loading || (enabled && !done), unavailable, apps, byCapability, totalUsers, windowDays: WINDOW_DAYS, refresh };
 }
 
 export { OTHER_BUCKET };

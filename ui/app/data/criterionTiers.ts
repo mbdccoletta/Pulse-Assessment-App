@@ -40,6 +40,8 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   i20: "bestPractice",   // Cloud namespace metric coverage
   i21: "bestPractice",   // Container restart monitoring
   i22: "excellence",     // Container resource limits
+  i23: "bestPractice",   // Problems with root cause
+  i24: "excellence",     // Problems with automated response
 
   // ─── 2. APPLICATION OBSERVABILITY ───
   a1:  "foundation",     // Service tracing coverage
@@ -53,8 +55,10 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   a9:  "excellence",     // Messaging span coverage
   a10: "excellence",     // Multi-service trace depth
   a11: "bestPractice",   // Service-process mapping
-  a12: "excellence",     // Service tagging utilization
+  a12: "bestPractice",     // Service tagging utilization
   a13: "excellence",     // Database call depth
+  a14: "bestPractice",   // Problems with root cause
+  a15: "excellence",     // Problems with automated response
 
   // ─── 3. DIGITAL EXPERIENCE ───
   d1:  "foundation",     // RUM action coverage
@@ -68,6 +72,8 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   d9:  "excellence",     // Mobile app coverage
   d10: "excellence",     // Synthetic location diversity
   d11: "bestPractice",   // Synthetic availability coverage
+  d12: "bestPractice",   // Problems with root cause
+  d13: "excellence",     // Problems with automated response
 
   // ─── 4. LOG ANALYTICS ───
   l1:  "foundation",     // Host log coverage
@@ -79,8 +85,7 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   l9:  "bestPractice",   // Log severity diversity
   l5:  "excellence",     // Process group log correlation
   l8:  "excellence",     // K8s log coverage
-  l10: "excellence",     // Log retention validation
-  l11: "foundation",     // Dedicated buckets usage
+  l11: "bestPractice",     // Dedicated buckets usage
   l12: "bestPractice",   // Structured logging
   l13: "excellence",     // Span-correlated logs
   l14: "bestPractice",   // Log volume balance
@@ -88,30 +93,15 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   l16: "bestPractice",   // Custom attribute enrichment
 
   // ─── 5. APPLICATION SECURITY ───
-  s1:  "foundation",     // Service security coverage
-  s3:  "foundation",     // Runtime vulnerability baseline
-  s4:  "foundation",     // Database interaction security
-  s2:  "bestPractice",   // Security event type coverage
-  s5:  "bestPractice",   // Error log security coverage
-  s6:  "bestPractice",   // Warn log security coverage
-  s7:  "excellence",     // Event kind diversity
-  s8:  "excellence",     // Failed request coverage
-  s9:  "excellence",     // Davis security problem coverage
-  s10: "foundation",     // HTTP request surface coverage
-  s11: "bestPractice",   // Attack detection coverage
+  s13: "foundation",  // Runtime Vulnerability Analytics active
+  s1: "bestPractice",  // Runtime vulnerability coverage
+  s11: "bestPractice",  // Runtime Application Protection
+  s12: "bestPractice",  // Security Posture Management
+  s2: "excellence",  // Third-party security findings
+  t4: "foundation",  // Detection findings
+  t12: "bestPractice",  // External detection sources
 
   // ─── 6. THREAT OBSERVABILITY ───
-  t1:  "foundation",     // Davis problem entity coverage
-  t4:  "foundation",     // Security event service coverage
-  t5:  "foundation",     // Error log threat coverage
-  t2:  "bestPractice",   // Root cause analysis coverage
-  t3:  "bestPractice",   // Problem category coverage
-  t6:  "bestPractice",   // Log source threat coverage
-  t7:  "bestPractice",   // Log entity enrichment
-  t8:  "excellence",     // Trace-correlated threat logs
-  t9:  "excellence",     // Recurring root cause detection
-  t10: "excellence",     // Problem resolution coverage
-  t11: "bestPractice",   // Event entity correlation
 
   // ─── 7. AI OBSERVABILITY ───
   ai1: "foundation",     // AI span service coverage
@@ -123,6 +113,12 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   ai7: "excellence",     // Guardrail coverage
   ai8: "excellence",     // Cost tracking coverage
   ai9: "excellence",     // AI tracing service breadth
+  ai10: "bestPractice",  // Agent tool-call tracing
+  ai18: "excellence",    // dtctl driven by AI agents
+  ai12: "excellence",    // Agentic AI in use
+  ai14: "excellence",    // Agentic workflows
+  ai15: "bestPractice",  // Problems with root cause
+  ai16: "excellence",    // Problems with automated response
 
   // ─── 8. BUSINESS OBSERVABILITY ───
   b1:  "foundation",     // Service bizevent coverage
@@ -133,18 +129,53 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   b6:  "excellence",     // Session-linked events
   b7:  "excellence",     // Trace-linked events
   b8:  "excellence",     // Cost center coverage
+  b9: "bestPractice",    // Problems with root cause
+  b10: "excellence",     // Problems with automated response
 
   // ─── 9. SOFTWARE DELIVERY ───
-  sd1: "foundation",     // Service deployment coverage
-  sd5: "foundation",     // Service request baseline
-  sd7: "foundation",     // Process group coverage
-  sd2: "bestPractice",   // Custom deployment coverage
-  sd3: "bestPractice",   // Event kind diversity
-  sd6: "bestPractice",   // Service failure baseline
-  sd4: "excellence",     // Event type diversity
-  sd8: "excellence",     // Davis problem detection
-  sd9: "bestPractice",   // Process group tagging
-  sd10: "excellence",    // Ownership assignment
+  sd1: "bestPractice",     // Service deployment coverage
+  sd2: "foundation",   // CI/CD deployment events
+  sd10: "bestPractice",    // Ownership assignment
+  sd11: "bestPractice",  // Problems with root cause
+  sd12: "excellence",    // Problems with automated response
+  sd13: "excellence",    // Release validation (SRG)
+  // ── Workflows, placed by what they do ──
+  i25: "excellence",     // Infrastructure automation workflows
+  d14: "excellence",     // Synthetic checks run by workflows
+  t13: "excellence",     // Security automation workflows
+  sd14: "excellence",    // Pipeline integration workflows
+  // ── Assist, MCP and dtctl, placed by the data they read ──
+  i26: "bestPractice",   // Assist, MCP and dtctl usage
+  a16: "bestPractice",   // Assist, MCP and dtctl usage
+  d15: "bestPractice",   // Assist, MCP and dtctl usage
+  l17: "bestPractice",   // Assist, MCP and dtctl usage
+  s14: "bestPractice",   // Assist, MCP and dtctl usage
+  t14: "bestPractice",   // Assist, MCP and dtctl usage
+  b11: "bestPractice",   // Assist, MCP and dtctl usage
+  g9: "bestPractice",   // Assist, MCP and dtctl usage
+  g10: "bestPractice",   // SLOs defined
+  g11: "excellence",   // Custom anomaly detectors configured
+  g12: "bestPractice",   // Adaptive or seasonal baselines in alerts
+  g13: "bestPractice",   // Problems lasting 5 minutes or more
+  l18: "bestPractice",   // Custom log pipelines configured
+  s15: "bestPractice",   // Critical vulnerabilities without public exposure
+  ai19: "bestPractice",   // Response model recorded
+  // ── Platform Governance ──
+  g2: "foundation",      // OneAgent version currency
+  g3: "bestPractice",    // Host monitoring cost allocated
+  g4: "bestPractice",    // Logs with security context
+  g5: "bestPractice",    // Workflow execution success
+  g6: "bestPractice",    // ITSM or chat integration in workflows
+  g8: "excellence",      // Human approval in workflows
+  // ── FinOps & Sustainability ──
+  f1: "foundation",      // Cost and carbon calculation running
+  f2: "foundation",      // Hosts with carbon measurement
+  f3: "foundation",      // Cloud spend ingested
+  f4: "bestPractice",    // Cloud spend with an owner
+  f5: "bestPractice",    // Kubernetes namespaces with carbon measurement
+  f6: "bestPractice",    // Hosts in active use
+  f7: "excellence",      // Spend under commitment discount
+  f8: "excellence",      // Energy in productive use
 
 
 };

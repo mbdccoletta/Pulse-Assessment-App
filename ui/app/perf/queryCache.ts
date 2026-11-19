@@ -72,7 +72,11 @@ const TTL_MS = 24 * 60 * 60 * 1000;
 /** Identifier of the per-tenant cache document. There's exactly one per
  *  tenant. Naming intentionally short and stable to avoid orphans on schema
  *  rollover. */
-const DOC_ID = 'pulse-querycache';
+// "-2": the first id was deleted by an early force-refresh. A deleted document
+// only moves to the trash and keeps its id reserved, so it could never be
+// created again and every open of the app became a full-cost run. The cache is
+// now emptied in place (see clearAndFlush) and this id is never deleted.
+const DOC_ID = 'pulse-querycache-2';
 const DOC_TYPE = 'pulse-querycache';
 
 /** Tiny non-cryptographic hash (FNV-1a 32-bit). Same family used in
@@ -262,22 +266,26 @@ export class QueryCache {
     }
   }
 
-  /** Drop every entry without writing. Used by the "🗘 Force refresh"
-   *  control to guarantee the next run hits Grail for every query. */
+  /** Empties the cache so the next run reads every query again. The document
+   *  is overwritten with no entries, NEVER deleted: a deleted document goes to
+   *  the trash with its id still reserved, the next create answers 409, and
+   *  from then on nothing is cached and every open pays for a full run. */
   async clearAndFlush(): Promise<void> {
     this.entries.clear();
     if (!this.docVersion) {
       // Nothing on the server to clear.
       return;
     }
+    const empty: CacheDocument = { schemaVersion: 1, tenantId: this.tenantId, entries: {} };
     try {
-      await documentsClient.deleteDocument({
+      await documentsClient.updateDocument({
         id: DOC_ID,
         optimisticLockingVersion: this.docVersion,
+        body: { name: DOC_ID, type: DOC_TYPE, content: new Blob([JSON.stringify(empty)], { type: 'application/json' }) },
       });
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn('[QueryCache] clear failed (ok, just means next run is full-cost):', err);
+      console.warn('[QueryCache] clear failed: the next run is served from the cache it could not empty:', err);
     }
   }
 

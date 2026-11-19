@@ -7,7 +7,7 @@ result is a numerator divided by a denominator → coverage %.
 Source of truth: `ui/app/queries.ts`. This doc is a consolidated index — when
 queries.ts changes, re-run the extraction (see bottom) and update this file.
 
-Version: v2.5.5 (criteria set unchanged in feat/davis-insights branch; see "What actually reaches Grail" for how Economy Mode rewrites the executed windows).
+Version: v2.6.0 (123 criteria). The per-capability lists below date from v2.5.5; the 2.6.0 changes are summarized in the table and in CHANGELOG.md.
 
 ---
 
@@ -20,8 +20,11 @@ Version: v2.5.5 (criteria set unchanged in feat/davis-insights branch; see "What
 | **Spans** (`fetch spans`) | App Obs tracing, AI Obs, some App Security | `storage:spans:read` |
 | **Logs** (`fetch logs`) | Log Analytics, cloud-enrichment, security logs | `storage:logs:read` |
 | **Events** (`fetch events`) | Security events, Software Delivery deployments | `storage:events:read` |
-| **Davis problems** (`fetch dt.davis.problems`) | problem coverage across Infra / Threat / Delivery | `storage:events:read` |
-| **BizEvents** (`fetch bizevents`) | all of Business Observability | `storage:bizevents:read` |
+| **Davis problems** (`fetch dt.davis.problems`) | problem coverage; root cause and automated response per capability (i23/i24, a14/a15, d12/d13, sd11/sd12, ai15/ai16, b9/b10) — query included | `storage:events:read` |
+| **BizEvents** (`fetch bizevents`) | all of Business Observability; Site Reliability Guardian validations (sd13) | `storage:bizevents:read` |
+| **Davis events** (`fetch dt.davis.events`) | deployment markers (sd1, deployment scope of sd11/sd12) — query included | `storage:events:read` |
+| **System events** (`fetch dt.system.events`) | adoption (QUERY_EXECUTION_EVENT); Assist / agentic / MCP (GENAI_EVENT, ai11–ai13); agentic workflows (BILLING_USAGE_EVENT AI Units, ai14); problem → workflow link (WORKFLOW_EVENT) | `storage:system:read` |
+| **Field snapshot** (`fieldsSnapshot logs`) | log buckets (l11) and log field shares (l3, l4, l5, l13, l16, t7, t8, i14–i17) — scans no raw data | `storage:logs:read` |
 
 ---
 

@@ -34,7 +34,7 @@
 import { useEffect, useState } from "react";
 import { sendIntent } from "@dynatrace-sdk/navigation";
 import { publicClient } from "@dynatrace-sdk/client-davis-copilot";
-import { buildAssessmentContext, type ReportContext } from "./reportPrompt";
+import { buildAssessmentContext, buildInstruction, type ReportContext } from "./reportPrompt";
 
 /** Native Assist app + intent ids (from the Conversation starters guide). */
 export const DAVIS_COPILOT_APP_ID = "dynatrace.davis.copilot";
@@ -42,23 +42,6 @@ export const ASK_QUESTION_INTENT_ID = "ask-question";
 
 /** Our app id — sent as origin-app so Assist shows the Pulse icon. */
 const ORIGIN_APP_ID = "my.pulse.assessment";
-
-/** Hidden instruction context (≤ 2.5K chars per the guide). Same tone and
- *  naming rules we validated on the embedded prompt (v6): friendly SE tone,
- *  plain-English check names, no internal codes, no invented settings. */
-const ASSIST_INSTRUCTION =
-  "Write in a clear, friendly, professional tone — approachable but precise, " +
-  "like an experienced Dynatrace SE writing for a colleague or customer. " +
-  "Use plain markdown with headings for major sections, short paragraphs, and " +
-  "lists where they aid scanning. " +
-  "Refer to every assessment check by its plain-English name exactly as given " +
-  "in the supplementary context (e.g. \"Cloud region enrichment\"); never use " +
-  "internal codes like i15 or a3, and never rename what a check measures. " +
-  "Make recommendations concrete: name the actual Dynatrace Settings path, " +
-  "integration, OneAgent flag, OpenPipeline rule, or telemetry attribute, and " +
-  "state the expected outcome in numbers where possible. Do not invent " +
-  "Dynatrace features, settings, or URLs — if unsure a control exists, " +
-  "describe the goal instead.";
 
 export interface OpenAssistOptions {
   /** The visible question (conversation starter body or user-typed text). */
@@ -99,7 +82,9 @@ export function openDynatraceAssist({ prompt, ctx, execute = false, extraContext
         execute,
         contexts: [
           { type: "supplementary", value: supplementary.slice(0, 100_000) },
-          { type: "instruction", value: ASSIST_INSTRUCTION.slice(0, 2_500) },
+          // One instruction for every AI surface (../ai/reportPrompt.ts): the
+          // Assist conversation follows the same rules as the embedded answers.
+          { type: "instruction", value: buildInstruction(ctx).slice(0, 2_500) },
           { type: "document-retrieval", value: "dynatrace" },
           { type: "origin-app", value: ORIGIN_APP_ID },
         ],
@@ -134,7 +119,7 @@ export function useConversationSkillAvailable(active: boolean): boolean | null {
     publicClient
       .listAvailableSkills()
       .then((response) => {
-        if (!cancelled) setAvailable(response.skills?.includes("conversation") ?? false);
+        if (!cancelled) setAvailable(((response.skills ?? []) as string[]).some(k => k === "conversation" || k === "operator"));
       })
       .catch(() => {
         if (!cancelled) setAvailable(false);

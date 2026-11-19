@@ -1,21 +1,26 @@
-import React, { Suspense } from "react";
-import { Route, Routes } from "react-router-dom";
-import { Flex } from "@dynatrace/strato-components/layouts";
-import { Page } from "@dynatrace/strato-components-preview/layouts";
+import { ToastContainer } from "@dynatrace/strato-components/notifications";
+import React, { Suspense, useMemo } from "react";
+import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { AppHeader, Flex, HelpMenu, PageLayout } from "@dynatrace/strato-components/layouts";
 import { Skeleton, SkeletonText } from "@dynatrace/strato-components/content";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useAssessmentHistory } from "./hooks/useAssessmentHistory";
 import { useCoverageData } from "./hooks/useCoverageData";
 import { useScaleTier } from "./hooks/useScaleTier";
+import { useAppAdoption } from "./hooks/useAppAdoption";
+import { withPulseScore } from "./pulseScore";
 
 const CoverageAssessment = React.lazy(() =>
   import("./pages/CoverageAssessment").then(m => ({ default: m.CoverageAssessment }))
 );
-const ComparisonPage = React.lazy(() =>
-  import("./pages/ComparisonPage").then(m => ({ default: m.ComparisonPage }))
+const GuidePage = React.lazy(() =>
+  import("./pages/GuidePage").then(m => ({ default: m.GuidePage }))
 );
-const AiInsightsPage = React.lazy(() =>
-  import("./pages/AiInsightsPage").then(m => ({ default: m.AiInsightsPage }))
+const EvolutionPage = React.lazy(() =>
+  import("./pages/EvolutionPage").then(m => ({ default: m.EvolutionPage }))
+);
+const CapabilityDetailPage = React.lazy(() =>
+  import("./pages/CapabilityDetailPage").then(m => ({ default: m.CapabilityDetailPage }))
 );
 
 export const App = () => {
@@ -28,16 +33,63 @@ export const App = () => {
   // In a customer tenant with neither, the diagnostic surface is hidden.
   // Thread the scale metadata into useCoverageData so the downloadable
   // perf report records exactly which tier was auto-detected vs forced.
-  const coverageData = useCoverageData(scale.tier, {
+  const rawCoverage = useCoverageData(scale.tier, {
     autoTier: scale.autoTier,
     manualOverride: scale.override,
     hostCount: scale.hostCount,
   });
+  // The capability score combines coverage, utilization and adoption
+  // (./pulseScore.ts). Applied once here so every screen, the snapshot and
+  // the reports read the same number.
+  const adoption = useAppAdoption(rawCoverage.capabilities.length > 0);
+  // Memoized on the capability array itself: the hook returns a new object each
+  // render, and a new `capabilities` identity would restart every effect that
+  // depends on it.
+  const scored = useMemo(() => {
+    const known = !adoption.loading && !adoption.unavailable;
+    const capabilities = withPulseScore(rawCoverage.capabilities, { known, byCapability: adoption.byCapability });
+    const totalScore = capabilities.length > 0
+      ? Math.floor(capabilities.reduce((s, c) => s + c.score, 0) / capabilities.length)
+      : 0;
+    return { capabilities, totalScore };
+  }, [rawCoverage.capabilities, adoption.loading, adoption.unavailable, adoption.byCapability]);
+  const coverageData = { ...rawCoverage, ...scored, scoreSettled: !adoption.loading, adoption };
+
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const go = (to: string) => (e: React.MouseEvent) => { e.preventDefault(); navigate(to); };
+  const NAV = [
+    { to: "/", label: "Overview", on: pathname === "/" || pathname.startsWith("/capability") },
+    { to: "/summary", label: "Overall score", on: pathname === "/summary" },
+    { to: "/compare", label: "Evolution", on: pathname === "/compare" },
+    { to: "/guide", label: "Guide", on: pathname === "/guide" },
+  ];
 
   return (
     <ErrorBoundary>
-      <Page>
-        <Page.Main>
+      <AppHeader>
+        <AppHeader.Navigation>
+          <AppHeader.Logo appName="Pulse Assessment" href="/" onClick={go("/")} />
+          {NAV.map(n => (
+            <AppHeader.NavigationItem key={n.to} isSelected={n.on} href={n.to} onClick={go(n.to)}>
+              {n.label}
+            </AppHeader.NavigationItem>
+          ))}
+        </AppHeader.Navigation>
+        <AppHeader.ActionItems>
+          {/* The assessment page portals Refresh and Reports here. */}
+          <div id="pulse-header-actions" style={{ display: "flex", alignItems: "center", gap: 8 }} />
+        </AppHeader.ActionItems>
+        <AppHeader.Menus>
+          <HelpMenu entries={{
+            documentation: { href: "https://docs.dynatrace.com/docs", target: "_blank" },
+            about: "default",
+          }} />
+        </AppHeader.Menus>
+      </AppHeader>
+      <ToastContainer />
+      <PageLayout>
+        <PageLayout.Content>
           <Suspense fallback={
             <Flex flexDirection="column" gap={16} style={{ padding: 32 }}>
               <Skeleton height={48} width="30%" />
@@ -51,13 +103,15 @@ export const App = () => {
             </Flex>
           }>
             <Routes>
-              <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} scale={scale} />} />
-              <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} loading={history.loading} saveSnapshot={history.saveSnapshot} />} />
-              <Route path="/ai-insights" element={<AiInsightsPage coverageData={coverageData} scale={scale} />} />
+              <Route path="/" element={<CoverageAssessment view="coverage" history={history} coverageData={coverageData} scale={scale} />} />
+              <Route path="/guide" element={<GuidePage coverageData={coverageData} />} />
+              <Route path="/summary" element={<CoverageAssessment view="recommendations" history={history} coverageData={coverageData} scale={scale} />} />
+              <Route path="/compare" element={<EvolutionPage snapshots={history.snapshots} loading={history.loading} />} />
+              <Route path="/capability/:name" element={<CapabilityDetailPage coverageData={coverageData} history={history} />} />
             </Routes>
           </Suspense>
-        </Page.Main>
-      </Page>
+        </PageLayout.Content>
+      </PageLayout>
     </ErrorBoundary>
   );
 };

@@ -26,9 +26,13 @@ const clean = (s: string) =>
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\*(.+?)\*/g, "$1")
     .replace(/`{1,3}/g, "")
-    .replace(/≥/g, ">=").replace(/→/g, "->").replace(/≈/g, "~")
-    .replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/·/g, "-").replace(/—/g, "-")
-    .replace(/[^\x20-\x7E]/g, "");
+    .replace(/≥/g, ">=").replace(/≤/g, "<=").replace(/→/g, "->").replace(/≈/g, "~")
+    .replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[—–]/g, "-").replace(/…/g, "...")
+    .replace(/^\[[ xX]\]\s*/, "")
+    // The built-in PDF fonts are Latin-1: keep accented letters (the report is
+    // often written in Portuguese or Spanish), drop only what they cannot draw.
+    .replace(/−/g, "-").replace(/€/g, "EUR").replace(/•/g, "-").replace(/[\u2009\u202F]/g, " ")
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
 
 /** Build without saving — lets tests/preview harnesses render offline. */
 export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): jsPDF {
@@ -36,29 +40,29 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
   const W = 210, H = 297, M = 15, CW = W - 2 * M;
   let y = 0;
 
-  const paintBg = () => { pdf.setFillColor(11, 11, 26); pdf.rect(0, 0, W, H, "F"); };
-  const addTopBar = () => { pdf.setFillColor(55, 100, 220); pdf.rect(0, 0, W, 3, "F"); };
+  const paintBg = () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, 0, W, H, "F"); };
+  const addTopBar = () => { /* light page: no bar */ };
   const ensureSpace = (need: number) => {
     if (y + need > H - 18) { pdf.addPage(); paintBg(); addTopBar(); y = 20; }
   };
 
   // ── header ──
   paintBg(); addTopBar();
-  pdf.setTextColor(55, 100, 220);
+  pdf.setTextColor(28, 82, 194);
   pdf.setFontSize(7); pdf.setFont("helvetica", "bold");
-  pdf.text("DYNATRACE PLATFORM - PULSE ASSESSMENT - SMART REPORT", W / 2, 12, { align: "center" });
-  pdf.setTextColor(232, 232, 240);
+  pdf.text("PULSE ASSESSMENT  |  SMART REPORT", W / 2, 12, { align: "center" });
+  pdf.setTextColor(22, 22, 29);
   pdf.setFontSize(19); pdf.setFont("helvetica", "bold");
   const titleLines = pdf.splitTextToSize(clean(meta.title), CW);
   pdf.text(titleLines, W / 2, 23, { align: "center" });
   y = 23 + titleLines.length * 8;
   pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
-  pdf.setTextColor(140, 145, 180);
-  pdf.text(`${meta.tenant}  -  ${meta.date}  -  Coverage ${meta.coverage}%  -  Utilization ${meta.utilization}/100`, W / 2, y, { align: "center" });
+  pdf.setTextColor(105, 108, 125);
+  pdf.text(`${meta.tenant}  |  ${meta.date}`, W / 2, y, { align: "center" });
   y += 6;
   // The request that produced this report — provenance for the reader.
   pdf.setFontSize(7.5);
-  pdf.setTextColor(120, 125, 160);
+  pdf.setTextColor(105, 108, 125);
   const askLines = pdf.splitTextToSize(`"${clean(meta.ask)}"`, CW - 20);
   pdf.text(askLines, W / 2, y, { align: "center" });
   y += askLines.length * 3.6 + 8;
@@ -66,23 +70,22 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
   // ── markdown body ──
   const sectionHeader = (title: string) => {
     ensureSpace(20);
-    pdf.setFillColor(30, 45, 90);
-    pdf.roundedRect(M, y - 4, CW, 10, 2, 2, "F");
-    pdf.setFontSize(11); pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(255, 255, 255);
-    pdf.text(clean(title), M + 5, y + 2.8);
-    y += 13;
+    pdf.setFontSize(13); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(22, 22, 29);
+    pdf.text(clean(title), M, y + 2.8);
+    pdf.setDrawColor(222, 224, 232); pdf.setLineWidth(0.2); pdf.line(M, y + 5.3, W - M, y + 5.3);
+    y += 12;
   };
   const subHeader = (title: string) => {
     ensureSpace(10);
     pdf.setFontSize(9.5); pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(140, 190, 255);
+    pdf.setTextColor(28, 82, 194);
     pdf.text(clean(title), M, y);
     y += 5.5;
   };
   const paragraph = (text: string, indent = 0) => {
     pdf.setFontSize(8.5); pdf.setFont("helvetica", "normal");
-    pdf.setTextColor(200, 205, 228);
+    pdf.setTextColor(22, 22, 29);
     const lines = pdf.splitTextToSize(clean(text), CW - indent);
     for (const ln of lines) {
       ensureSpace(5);
@@ -93,7 +96,7 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
   };
   const bulletItem = (text: string) => {
     ensureSpace(6);
-    pdf.setFillColor(55, 100, 220);
+    pdf.setFillColor(28, 82, 194);
     pdf.circle(M + 1.5, y - 1.2, 0.9, "F");
     paragraph(text, 6);
   };
@@ -110,7 +113,15 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
     if (/^#{1,2}\s+/.test(trimmed)) { flushPara(); sectionHeader(trimmed.replace(/^#{1,2}\s+/, "")); continue; }
     if (/^#{3,6}\s+/.test(trimmed)) { flushPara(); subHeader(trimmed.replace(/^#{3,6}\s+/, "")); continue; }
     if (/^[-*+]\s+/.test(trimmed)) { flushPara(); bulletItem(trimmed.replace(/^[-*+]\s+/, "")); continue; }
-    if (/^\d+[.)]\s+/.test(trimmed)) { flushPara(); bulletItem(trimmed); continue; }
+    // Numbered items keep their own number: no bullet in front of it.
+    if (/^\d+[.)]\s+/.test(trimmed)) { flushPara(); paragraph(trimmed, 4); continue; }
+    // Tables: the separator row is dropped, each row becomes one readable line.
+    if (/^\|.*\|$/.test(trimmed)) {
+      flushPara();
+      if (/^\|[\s:|-]+\|$/.test(trimmed)) continue;
+      paragraph(trimmed.slice(1, -1).split("|").map(c => c.trim()).filter(Boolean).join("   |   "), 4);
+      continue;
+    }
     if (/^[-=_*]{3,}$/.test(trimmed)) { flushPara(); continue; }  // horizontal rules
     paraBuf.push(trimmed);
   }
@@ -121,11 +132,11 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
   for (let i = 1; i <= pages; i++) {
     pdf.setPage(i);
     pdf.setFontSize(6); pdf.setFont("helvetica", "normal");
-    pdf.setTextColor(90, 95, 130);
-    pdf.text(`Dynatrace Platform - Pulse Assessment  |  ${meta.tenant}  |  ${meta.date}`, M, H - 8);
+    pdf.setTextColor(105, 108, 125);
+    pdf.text(`Pulse Assessment  |  ${meta.tenant}  |  ${meta.date}`, M, H - 8);
     pdf.text(`Page ${i} / ${pages}`, W - M, H - 8, { align: "right" });
-    pdf.setTextColor(200, 170, 90);
-    pdf.text("Generated with Davis CoPilot - review before sharing.", W / 2, H - 8, { align: "center" });
+    pdf.setTextColor(160, 110, 0);
+    pdf.text("Generated with Dynatrace Assist - review before sharing.", W / 2, H - 8, { align: "center" });
   }
 
   return pdf;
