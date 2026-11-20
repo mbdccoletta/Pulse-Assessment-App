@@ -33,6 +33,7 @@ import { loadFinOpsData, finopsNote, type FinOpsData } from "../finopsData";
 import { applyTraceProxyMode } from "../trace-proxy";
 import { TIER_CONFIG } from "../scale-tier";
 import { applyLogMetricMode, logMetricAvailable } from "../log-metric";
+import { loadOwnershipTeams, type OwnershipTeam } from "../teams";
 import { TraceProxyBanner } from "../components/TraceProxyBanner";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
 
@@ -171,7 +172,10 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
 
   /* ── Reports: three PDFs and the raw data, all from the on-screen results ── */
   const appName = useAppNames();
+  /** Ownership teams for the "teams to involve" lines: read once, when the first report is asked for. */
+  const teamsRef = useRef<OwnershipTeam[] | null | undefined>(undefined);
   const reportInput = useCallback(() => ({
+    teams: teamsRef.current ?? null,
     capabilities, totalScore, tenant, date,
     adoption: adoption.unavailable || adoption.loading ? undefined
       : { windowDays: adoption.windowDays, totalUsers: adoption.totalUsers, byCapability: adoption.byCapability, apps: adoption.apps },
@@ -188,7 +192,10 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
     if (exporting || capabilities.length === 0) return;
     setExporting(true);
     setTimeout(async () => {
-      try { job(await loadReports()); } finally { setExporting(false); }
+      try {
+        if (teamsRef.current === undefined) teamsRef.current = await loadOwnershipTeams();
+        job(await loadReports());
+      } finally { setExporting(false); }
     }, 0);
   }, [exporting, capabilities.length]);
   const generateReport = useCallback((kind: ReportKind, lang: ReportLang) =>

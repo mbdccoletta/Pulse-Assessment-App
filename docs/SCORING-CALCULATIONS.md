@@ -1,7 +1,7 @@
 # Pulse Assessment: scoring calculations
 
 How the app turns query results into scores, bands, verdicts and "gain if met" points.
-This document describes version 3.0.9 (`app.config.json`). The code is the source of truth;
+This document describes version 3.0.10 (`app.config.json`). The code is the source of truth;
 every section names the file it was checked against.
 
 Summary of the model:
@@ -92,7 +92,7 @@ Source: `ui/app/hooks/useCoverageData.ts` (`tierCounts`, `FOUNDATION_WEIGHT`, `B
 Every criterion belongs to one tier (`CRITERION_TIERS`; an id missing from the map falls back to Foundation).
 Not assessed criteria are left out of the tier totals as well.
 
-In the 3.0.9 catalog every capability has criteria in all three tiers. Application Security, Threat Observability,
+In the 3.0.10 catalog every capability has criteria in all three tiers. Application Security, Threat Observability,
 Software Delivery and Platform Governance have a single Foundation criterion, so their Foundation share is 0 or 1.
 
 ### 3.2 Formula
@@ -126,7 +126,7 @@ A tier with nothing assessed has a share of 0. Its weight is not redistributed.
 | Best practice | `effB = 0`, the Excellence gate stays closed | 60 |
 | Excellence | Its 15 points cannot be earned | 85 |
 
-With the 3.0.9 catalog a tier is empty only when all of its criteria are not assessed. Where Foundation
+With the 3.0.10 catalog a tier is empty only when all of its criteria are not assessed. Where Foundation
 has a single criterion and it is not assessed, utilization is 0.
 
 ## 4. Adoption
