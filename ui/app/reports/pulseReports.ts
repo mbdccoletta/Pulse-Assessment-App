@@ -131,7 +131,7 @@ const WORDS: Record<ReportLang, Words> = {
     titles: { overall: "Overall score", plan: "Action plan", criteria: "Criteria detail" },
     score: "Score", overall: "Overall score", coverage: "Coverage", utilization: "Utilization", adoption: "Adoption",
     capabilities: "Capabilities", capability: "Capability", verdict: "Verdict", nextStep: "Next step",
-    teams: "Teams to involve", noTeams: "no team with this responsibility is registered in Ownership", andMore: "and {n} more",
+    teams: "Teams to involve", noTeams: "no team registered in Ownership", andMore: "and {n} more",
     responsibilities: { development: "Development", security: "Security", operations: "Operations", infrastructure: "Infrastructure", lineOfBusiness: "Line of business" },
     actFirst: "Where to act first", whatToDo: "What to do", criterion: "Criterion", value: "Value", target: "Target", gain: "Gain",
     tier: "Tier", state: "State", met: "Met", notMet: "Not met", notAssessed: "Not assessed",
@@ -155,7 +155,7 @@ const WORDS: Record<ReportLang, Words> = {
     titles: { overall: "Pontuação geral", plan: "Plano de ação", criteria: "Detalhe dos critérios" },
     score: "Pontuação", overall: "Pontuação geral", coverage: "Cobertura", utilization: "Utilização", adoption: "Adoção",
     capabilities: "Capacidades", capability: "Capacidade", verdict: "Veredito", nextStep: "Próximo passo",
-    teams: "Times a envolver", noTeams: "nenhum time com essa responsabilidade está cadastrado no Ownership", andMore: "e mais {n}",
+    teams: "Times a envolver", noTeams: "nenhum time cadastrado no Ownership", andMore: "e mais {n}",
     responsibilities: { development: "Desenvolvimento", security: "Segurança", operations: "Operações", infrastructure: "Infraestrutura", lineOfBusiness: "Linha de negócio" },
     actFirst: "Onde agir primeiro", whatToDo: "O que fazer", criterion: "Critério", value: "Valor", target: "Meta", gain: "Ganho",
     tier: "Nível", state: "Estado", met: "Atendido", notMet: "Não atendido", notAssessed: "Não avaliado",
@@ -186,7 +186,7 @@ const WORDS: Record<ReportLang, Words> = {
     titles: { overall: "Puntuación general", plan: "Plan de acción", criteria: "Detalle de criterios" },
     score: "Puntuación", overall: "Puntuación general", coverage: "Cobertura", utilization: "Utilización", adoption: "Adopción",
     capabilities: "Capacidades", capability: "Capacidad", verdict: "Veredicto", nextStep: "Próximo paso",
-    teams: "Equipos a involucrar", noTeams: "ningún equipo con esta responsabilidad está registrado en Ownership", andMore: "y {n} más",
+    teams: "Equipos a involucrar", noTeams: "ningún equipo registrado en Ownership", andMore: "y {n} más",
     responsibilities: { development: "Desarrollo", security: "Seguridad", operations: "Operaciones", infrastructure: "Infraestructura", lineOfBusiness: "Línea de negocio" },
     actFirst: "Dónde actuar primero", whatToDo: "Qué hacer", criterion: "Criterio", value: "Valor", target: "Meta", gain: "Ganancia",
     tier: "Nivel", state: "Estado", met: "Cumplido", notMet: "No cumplido", notAssessed: "No evaluado",
@@ -610,30 +610,38 @@ function appsBlock(k: Kit, T: Words, input: ReportInput) {
 }
 
 /** Capability heading used by the plan and the criteria detail. */
-/** "Teams to involve (Operations, Development): A, B, C": the environment's
- *  Ownership teams that hold a responsibility the capability calls for. */
-const TEAMS_SHOWN = 12;
-function teamsText(T: Words, capability: string, input: ReportInput): { head: string; body: string } {
-  const t = teamsFor(capability, input.teams);
-  const head = `${T.teams} (${t.responsibilities.map(r => T.responsibilities[r]).join(", ")})`;
-  if (t.teams.length === 0) return { head, body: T.noTeams };
-  const shown = t.teams.slice(0, TEAMS_SHOWN).join(", ");
-  return { head, body: t.teams.length > TEAMS_SHOWN ? `${shown} ${T.andMore.replace("{n}", String(t.teams.length - TEAMS_SHOWN))}` : shown };
+/** Teams to involve in a capability, one line per responsibility it calls
+ *  for: "Security: A, B". From the environment's Ownership teams. */
+const TEAMS_SHOWN = 8;
+function teamsLines(T: Words, capability: string, input: ReportInput): { label: string; names: string }[] {
+  return teamsFor(capability, input.teams).map(g => {
+    const shown = g.teams.slice(0, TEAMS_SHOWN).join(", ");
+    return {
+      label: T.responsibilities[g.responsibility],
+      names: g.teams.length === 0 ? T.noTeams : g.teams.length > TEAMS_SHOWN ? `${shown} ${T.andMore.replace("{n}", String(g.teams.length - TEAMS_SHOWN))}` : shown,
+    };
+  });
 }
-const teamsLine = (T: Words, capability: string, input: ReportInput) => { const t = teamsText(T, capability, input); return `${t.head}: ${t.body}`; };
+/** The lines, drawn: the responsibility in ink, its teams beside it. */
+function teamsRows(k: Kit, T: Words, capability: string, input: ReportInput, x: number, w: number) {
+  for (const g of teamsLines(T, capability, input)) {
+    k.ensure(6);
+    k.font(8.5, true); k.color(INK); k.text(g.label, x, k.y);
+    k.para(g.names, { size: 8.5, c: DIM, x: x + 30, w: w - 30, gap: 0.6 });
+  }
+}
 
 /** One entry per capability: who to bring to the conversation. */
 function teamsBlock(k: Kit, T: Words, caps: CapabilityResult[], input: ReportInput) {
   const { M, CW } = k;
   k.h2(T.teams);
   for (const c of caps) {
-    const t = teamsText(T, c.name, input);
-    k.ensure(12);
+    k.ensure(16);
     k.dot(M + 1.2, k.y - 1, hex(c.color));
     k.font(9.5, true); k.color(INK); k.text(c.name, M + 5, k.y);
-    k.font(8); k.color(DIM); k.text(t.head.replace(`${T.teams} `, "").replace(/^\(|\)$/g, ""), M + CW, k.y, { align: "right" });
-    k.y += 4.2;
-    k.para(t.body, { size: 8.5, c: DIM, x: M + 5, w: CW - 5, gap: 3 });
+    k.y += 4.6;
+    teamsRows(k, T, c.name, input, M + 5, CW - 5);
+    k.y += 2.5;
   }
 }
 
@@ -658,7 +666,10 @@ function capabilityHead(k: Kit, T: Words, c: CapabilityResult, input: ReportInpu
   k.font(8.5, true); k.color(VERDICT_RGB[dx.id]); k.text(T.verdicts[dx.id].label.toUpperCase(), M, k.y);
   const lw = k.pdf.getTextWidth(safe(T.verdicts[dx.id].label.toUpperCase())) + 4;
   k.para(`${T.nextStep}: ${T.verdicts[dx.id].action}`, { size: 8.5, c: DIM, x: M + lw, w: CW - lw, gap: 1.5 });
-  k.para(teamsLine(T, c.name, input), { size: 8.5, c: DIM, gap: 3 });
+  k.y += 1.5;
+  k.font(8.5, true); k.color(DIM); k.text(T.teams.toUpperCase(), M, k.y); k.y += 4.4;
+  teamsRows(k, T, c.name, input, M, CW);
+  k.y += 3;
 }
 
 // ── Reports ─────────────────────────────────────────────────────────────────

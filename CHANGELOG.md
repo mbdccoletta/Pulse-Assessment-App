@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.11] — 2026-11-20
+
+### Changed
+- Teams to involve are cross-team. Each capability now calls for every responsibility its criteria depend on, the lead one first (for example Development, Security and Operations for AI/LLM Observability; Operations, Security and Infrastructure for Platform Governance), and the reports list the teams grouped by responsibility, so it is clear who does which part of the work.
+
 ## [3.0.10] — 2026-11-20
 
 ### Added
