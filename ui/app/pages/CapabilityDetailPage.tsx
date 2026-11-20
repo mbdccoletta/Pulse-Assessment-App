@@ -13,6 +13,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import Typography from "@dynatrace/strato-design-tokens/typography";
 import { Button } from "@dynatrace/strato-components/buttons";
+import { showToast } from "@dynatrace/strato-components/notifications";
+import { loadFinOpsData } from "../finopsData";
 import { ExternalLink, Heading, Text } from "@dynatrace/strato-components/typography";
 import { Flex, Surface, Grid } from "@dynatrace/strato-components/layouts";
 import { Chip, EmptyState, HealthIndicator, InformationOverlay, SkeletonText, Accordion } from "@dynatrace/strato-components/content";
@@ -131,6 +133,8 @@ export const Panel: React.FC<{ title: string; right?: React.ReactNode; children:
     {children}
   </Surface>
 );
+
+const FINOPS_CAPABILITY = "FinOps & Sustainability";
 
 export const pctFormat = (v: number) => `${Math.floor(v * 10) / 10}%`;
 
@@ -344,6 +348,8 @@ interface Props {
 }
 
 export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history }) => {
+  /** FinOps report from this page: the same PDF the Reports menu builds. */
+  const [finopsBusy, setFinopsBusy] = useState(false);
   const { name = "" } = useParams();
   const navigate = useNavigate();
   /** Tier picked in "Utilization tiers": narrows What to do and Criteria. */
@@ -389,6 +395,21 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
   const clearTier = tierLabel ? <Chip color="primary" size="condensed">{tierLabel}<Chip.DeleteButton aria-label={`Clear the ${tierLabel} filter`} onClick={() => setTier(null)} /></Chip> : null;
   const u = cap.utilization;
   const adoptionRan = !adoption.unavailable && !adoption.loading;
+  const finopsReport = async (lang: "en" | "pt" | "es") => {
+    if (finopsBusy) return;
+    setFinopsBusy(true);
+    try {
+      const d = await loadFinOpsData();
+      if (!d) { showToast({ type: "warning", title: "No FinOps data", message: "Cost & Carbon Optimization has written no cost or carbon data in this environment." }); return; }
+      (await import("../reports/pulseReports")).generateFinOpsReport({
+        capabilities: coverageData.capabilities, totalScore: coverageData.totalScore, tenant: coverageData.tenant, date: coverageData.date,
+        adoption: adoptionRan ? { windowDays: adoption.windowDays, totalUsers: adoption.totalUsers, byCapability: adoption.byCapability, apps: adoption.apps } : undefined,
+        history: history.snapshots, appName,
+      }, d, lang);
+    } catch {
+      showToast({ type: "critical", title: "The FinOps report could not be built", message: "Try again from the Reports menu on the Overview." });
+    } finally { setFinopsBusy(false); }
+  };
   const ad = adoption.byCapability[cap.name];
   const dx = diagnose({
     coverage: cap.coverageScore ?? cap.score,
@@ -485,6 +506,22 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
 
         {/* What to do: every unmet criterion as an action, highest score gain first */}
         <ActionList cap={cap} ctx={{ tenant: coverageData.tenant, date: coverageData.date, overallCoverage: coverageData.totalScore, overallUtilization: coverageData.overallUtilizationLevel, capabilities: [cap] }} tier={tier} />
+
+        {/* FinOps: the detail (cost per host, idle hosts, energy, emissions) lives in the report */}
+        {cap.name === FINOPS_CAPABILITY && (
+          <Panel title="FinOps report" right={
+            <Flex alignItems="center" gap={8} flexWrap="wrap">
+              {(["en", "pt", "es"] as const).map(l => (
+                <Button key={l} size="condensed" disabled={finopsBusy} onClick={() => finopsReport(l)}>
+                  {l === "en" ? "English" : l === "pt" ? "Português" : "Español"}
+                </Button>
+              ))}
+            </Flex>}>
+            <Flex gap={6} flexWrap="wrap">
+              {["Cost by host and cluster", "Idle hosts", "Energy", "Carbon emissions"].map(x => <Chip key={x} size="condensed" color="neutral">{x}</Chip>)}
+            </Flex>
+          </Panel>
+        )}
 
         {/* Criteria and history */}
         {/* Two panels that share the row and stack when it gets narrow. */}
