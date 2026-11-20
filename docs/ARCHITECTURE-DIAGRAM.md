@@ -1,475 +1,262 @@
-# Pulse Assessment - Architecture & Logic Diagrams
+# Architecture diagrams
 
-Diagramas em **Mermaid** cobrindo a logica do app v2.5.5. Visualizam no GitHub, GitLab, VS Code (preview), Obsidian, ou qualquer renderer Markdown.
+Mermaid diagrams for Pulse Assessment 3.0.3. Each one follows the code under `ui/app/`; the text reference is [ARCHITECTURE.md](ARCHITECTURE.md). GitHub and the VS Code Markdown preview (with a Mermaid extension) render them directly.
 
-Para exportar como imagem: `npx @mermaid-js/mermaid-cli -i ARCHITECTURE-DIAGRAM.md -o diagram.png`.
+## 1. Module map
 
----
-
-## 1. Visao geral - fluxo do usuario
-
-Do clique em "Run Assessment" ao radar final.
+`App.tsx` owns the shared state (history, scale tier, assessment results, adoption) and applies the three-part score once. Pages receive that state as props; they call the AI and report modules only on a click.
 
 ```mermaid
-flowchart TD
-    A([User opens Pulse]) --> B{Has saved<br/>snapshot?}
-    B -->|Yes| C[Show last snapshot<br/>+ radar]
-    B -->|No| D[Idle state<br/>capability picker]
-    C --> E[User clicks Run]
-    D --> E
-    E --> F[useCoverageData.start]
-    F --> G[Detect Scale Tier]
-    G --> H[Build DQL queries<br/>scaleQuery for each criterion]
-    H --> I{Cache hit?}
-    I -->|Yes| J[Reuse cached result<br/>0 GB scanned, $0]
-    I -->|No| K[Execute DQL<br/>via SDK queryExecutionClient]
-    K --> L[Record perf<br/>bytes, ms, records]
-    J --> M[Compute criterion<br/>numerator / denominator x 100]
-    L --> M
-    M --> N[Compare vs thresholds<br/>pass = 1, fail = 0]
-    N --> O[Aggregate per capability]
-    O --> P[Compute Coverage score<br/>pass / total x 100]
-    O --> Q[Compute Utilization score<br/>weighted by tier]
-    P --> R[Render radar + cards]
-    Q --> R
-    R --> S[Save snapshot to<br/>Document Store]
-    R --> T[DPS cost badge<br/>USD per GB scanned]
+flowchart TB
+    subgraph Shell["Shell"]
+        MAIN["main.tsx<br/>AppRoot + MemoryRouter"]
+        APP["App.tsx<br/>routes, header, score, history save"]
+    end
 
-    style F fill:#3B82F6,color:#fff
-    style I fill:#10B981,color:#fff
-    style M fill:#8B5CF6,color:#fff
-    style P fill:#F59E0B,color:#fff
-    style Q fill:#EC4899,color:#fff
-    style T fill:#06B6D4,color:#fff
+    subgraph Pages["pages/"]
+        OV["CoverageAssessment<br/>Overview (radar)"]
+        OS["ExecutiveSummary<br/>Overall score"]
+        EV["EvolutionPage"]
+        GU["GuidePage"]
+        CD["CapabilityDetailPage"]
+    end
+
+    subgraph Hooks["hooks/"]
+        UCD["useCoverageData"]
+        UAA["useAppAdoption"]
+        UAH["useAssessmentHistory"]
+        UST["useScaleTier"]
+    end
+
+    subgraph Engine["Catalog and scoring"]
+        Q["queries.ts<br/>11 capabilities, 137 criteria"]
+        ADAPT["log-metric.ts<br/>trace-proxy.ts<br/>entity-model.ts"]
+        SCALE["scale-tier.ts"]
+        CACHE["perf/queryCache.ts"]
+        SCORE["pulseScore.ts<br/>passLine.ts<br/>diagnosis.ts"]
+    end
+
+    subgraph OnClick["Loaded or called on a click"]
+        AI["ai/<br/>reportPrompt, pageIntelligence,<br/>smartReport, assistIntent"]
+        REP["reports/<br/>pulseReports, aiNarrativePdf"]
+        FIN["finopsData.ts"]
+    end
+
+    subgraph Platform["Dynatrace platform"]
+        GRAIL[("Grail (DQL)")]
+        CFG[("Settings API<br/>SLO service")]
+        DOCS[("Document Store")]
+        COPILOT["Davis CoPilot"]
+        ASSIST["Dynatrace Assist app"]
+    end
+
+    MAIN --> APP
+    APP --> Pages
+    APP --> Hooks
+    OV --> OS
+    OV --> ADAPT
+    ADAPT --> Q
+    UCD --> SCALE
+    UCD --> CACHE
+    UCD --> GRAIL
+    UCD --> CFG
+    UAA --> GRAIL
+    UST --> GRAIL
+    UAH --> DOCS
+    CACHE --> DOCS
+    APP --> SCORE
+    Pages --> AI
+    OV --> REP
+    OV --> FIN
+    FIN --> GRAIL
+    AI --> COPILOT
+    AI --> ASSIST
 ```
 
----
+## 2. Run flow: from open to saved snapshot
 
-## 2. Camadas da aplicacao
+The run starts on the first mount of the Overview page. A run inside 24 hours is answered from the cache document; Refresh empties that document first. The snapshot is saved from `App.tsx` only after adoption has answered, so the saved score has all three parts.
 
-Como o codigo se organiza por responsabilidade.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant P as CoverageAssessment
+    participant C as useCoverageData
+    participant K as QueryCache
+    participant G as Grail and config APIs
+    participant A as useAppAdoption
+    participant R as App.tsx
+    participant H as useAssessmentHistory
+
+    U->>P: Opens the app
+    P->>G: Three probes in parallel
+    G-->>P: Traces entitled? Classic entities? Log metric?
+    P->>C: start(adapted catalog)
+    C->>K: load()
+    K-->>C: Entries younger than 24h
+    C->>G: Phase 1: entity-count denominators
+    Note over C: Criteria with a zero or failed denominator are skipped
+    loop Phase 2: unique queries, 10 workers
+        alt Cache hit
+            K-->>C: Cached value
+        else Miss or configuration read
+            C->>G: scaleQuery(query, tier) or settings and SLO read
+            G-->>C: Value and scanned bytes
+        end
+    end
+    C->>K: flush()
+    C-->>R: Coverage and utilization per capability
+    R->>A: Enabled once capabilities exist
+    A->>G: Users per app and total users, 30 days
+    A-->>R: Adoption per capability
+    R->>R: withPulseScore(), total score
+    R->>H: saveSnapshot() if measured and changed
+    H->>H: Skip if equal to the latest run of the day
+    H-->>U: Run stored (localStorage and Document Store)
+```
+
+## 3. Scoring pipeline
+
+A criterion that cannot be measured is "not assessed" and leaves every denominator. Coverage and utilization come from `useCoverageData`, adoption from `useAppAdoption`; `withPulseScore()` averages them and `diagnose()` names the result without changing it.
+
+```mermaid
+flowchart TB
+    QA["Numerator query A"] --> VAL
+    QB["Denominator query B<br/>or constant"] --> VAL
+    VAL{"A failed, or B is 0 or less?"}
+    VAL -->|yes| NA["Not assessed<br/>(out of all denominators)"]
+    VAL -->|no| V["value = floor(A / B x 1000) / 10<br/>capped at 100<br/>(raw A when there is no denominator)"]
+    V --> PL{"value >= pass line?<br/>(middle threshold)"}
+    PL -->|yes| MET["Met"]
+    PL -->|no| UNMET["Not met"]
+
+    MET --> COV
+    UNMET --> COV
+    COV["Coverage<br/>floor(met / assessed x 100)"]
+
+    MET --> TIERS
+    UNMET --> TIERS
+    TIERS["Share met per tier<br/>f = Foundation, b = Best practice, e = Excellence"]
+    TIERS --> GATE["effB = b if f >= 0.8, else 0<br/>effE = e if effB >= 0.6, else 0"]
+    GATE --> UTIL["Utilization<br/>floor(f x 60 + effB x 25 + effE x 15)"]
+
+    SYS["dt.system.events, 30 days<br/>distinct users per app"] --> RATE["rate = floor(max users among the<br/>capability's apps / active users x 100)"]
+    RATE --> ADO["Adoption<br/>min(100, floor(rate / 20 x 100))"]
+
+    COV --> CAP
+    UTIL --> CAP
+    ADO --> CAP
+    CAP["Capability score<br/>floor(average of the parts)<br/>two parts when adoption is unknown"]
+    CAP --> TOTAL["Overall score<br/>floor(average of capability scores)"]
+    CAP --> DX["diagnose()<br/>Healthy, Skin-deep, Unwatched,<br/>Starved, Dark, Not assessed"]
+    COV --> DX
+    UTIL --> DX
+    RATE --> DX
+```
+
+## 4. Environment adaptation: probes to catalog
+
+Three probes decide how the catalog is rewritten before the run. The order is fixed: log metric, then trace proxy, then Smartscape. Each executed query then passes through `scaleQuery()`, which applies the scale tier and the cost rules to hot sources only.
+
+```mermaid
+flowchart TB
+    START["First mount of CoverageAssessment"] --> PROBES
+
+    subgraph PROBES["Probes, in parallel"]
+        P1["logMetricAvailable()<br/>timeseries on dt.log.status_per_entity_count"]
+        P2["tracesNotEntitled()<br/>fetch spans, entitlement error?"]
+        P3["classicEntitiesMissing()<br/>fetch dt.entity.host, UNKNOWN_DATA_OBJECT?"]
+    end
+
+    PROBES --> BASE["CAPABILITIES<br/>(queries.ts)"]
+    BASE --> D1{"Log metric found<br/>and classic entities exist?"}
+    D1 -->|yes| LM["applyLogMetricMode<br/>l1, l2, l6, l7, l8, l9 read the metric"]
+    D1 -->|no| D2
+    LM --> D2{"Traces not entitled?"}
+    D2 -->|yes| TP["applyTraceProxyMode<br/>proxied: metric or topology query<br/>no proxy: criterion removed"]
+    D2 -->|no| D3
+    TP --> D3{"Classic entities missing?"}
+    D3 -->|yes| SM["applySmartscapeModel<br/>smartscapeNodes statements,<br/>dt.smartscape.* dimensions<br/>no equivalent: criterion removed"]
+    D3 -->|no| RUN
+    SM --> RUN["start(caps)"]
+
+    RUN --> SQ{"Hot source?<br/>logs, spans, events, bizevents"}
+    SQ -->|no| ASIS["Executed as written"]
+    SQ -->|yes| TIER["Tier window<br/>large: 30 min, xlarge: 5 min"]
+    TIER --> SAMP{"Both sides plain counts,<br/>same window?"}
+    SAMP -->|yes| S1["samplingRatio: 1000"]
+    SAMP -->|no| S2["Shorter window<br/>15 min, or at most 4 h"]
+    S1 --> LIMIT["scanLimitGBytes: 50"]
+    S2 --> LIMIT
+```
+
+## 5. Dynatrace Intelligence request
+
+One prompt builder serves the Intelligence bar, the Smart Report and the hand-off to Assist. The app computes every number the answer may quote; the instruction is cut to 2,500 characters and the request text is kept under 9,000.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant B as IntelligenceBar
+    participant F as pageIntelligence.ts
+    participant P as reportPrompt.ts
+    participant D as Davis CoPilot
+    participant S as Dynatrace Assist app
+
+    Note over B,F: The page passes its lens, questions and computed facts
+    U->>B: Clicks a question
+    B->>P: buildReportPrompt(ctx, question + bullet suffix)
+    P->>P: buildAssessmentContext(), page facts up to 6,000 chars
+    P->>P: Over 9,000 chars? Weakest criteria 4, then 2, then 0, then truncate
+    P->>P: buildInstruction(): lens + rules, cut to 2,500 chars
+    P-->>B: text and instruction
+    B->>D: recommenderConversation(text, instruction, document-retrieval)
+    alt Answer
+        D-->>B: Markdown
+        B-->>U: Bulleted answer, kept for this question
+    else Error
+        D-->>B: HTTP error
+        B-->>U: Message and hint from davisError.ts
+    end
+
+    opt Go deeper in Assist
+        U->>B: Clicks the button
+        B->>S: sendIntent(prompt, supplementary context, instruction)
+        S-->>U: Conversation in the Assist app
+    end
+```
+
+## 6. Reports
+
+The report code and jsPDF are loaded on the first click. All reports read the capability results already on screen; only the FinOps report and a cost-related Smart Report request run additional queries.
 
 ```mermaid
 flowchart LR
-    subgraph UI["Presentation"]
-        direction TB
-        APP[App.tsx<br/>routes + ErrorBoundary]
-        PAGES[pages/<br/>CoverageAssessment<br/>ComparisonPage]
-        COMP[components/<br/>TechRadar - canvas<br/>CapabilityCards<br/>DpsCostBadge<br/>ScaleTierBanner]
-    end
+    MENU["Reports menu<br/>(CoverageAssessment)"]
+    INPUT["reportInput()<br/>capabilities, total score, adoption,<br/>history, app names, run block"]
+    MENU --> INPUT
 
-    subgraph HOOKS["Hooks - state + side effects"]
-        direction TB
-        UCD[useCoverageData<br/>orchestrates queries]
-        UST[useScaleTier<br/>auto-detects host count]
-        UDM[useDevMode<br/>SE gating ?dev=1]
-        UAH[useAssessmentHistory<br/>Document Store CRUD]
-    end
+    INPUT --> PDF["generateReport(kind, input, lang)<br/>kind: overall, plan, criteria<br/>lang: en, pt, es"]
+    PDF --> F1["PDF download"]
 
-    subgraph LOGIC["Domain logic"]
-        direction TB
-        QRY[queries.ts<br/>~94 criteria + thresholds]
-        TIERS[criterionTiers.ts<br/>tier classification]
-        ST[scale-tier.ts<br/>tier decision rules]
-        UTIL[utils/colors.ts<br/>SCORE_BANDS]
-    end
+    INPUT --> RAW["exportRawData(format, input)"]
+    RAW --> F2["JSON or CSV download"]
 
-    subgraph PERF["Performance"]
-        direction TB
-        CACHE[queryCache.ts<br/>24h Doc Store cache]
-        REPORT[buildReport.ts<br/>perf JSON export]
-        TYPES[types.ts<br/>PerfReport schema]
-    end
+    MENU --> FIN["loadFinOpsData()<br/>bizevents from Cost & Carbon Optimization"]
+    FIN --> FQ{"Data found?"}
+    FQ -->|yes| FPDF["generateFinOpsReport(input, data, lang)"]
+    FQ -->|no| TOAST["Toast: No FinOps data"]
+    FPDF --> F3["PDF download"]
 
-    subgraph SDK["Dynatrace SDKs"]
-        direction TB
-        QEC[queryExecutionClient<br/>DQL -> Grail]
-        DOC[client-document<br/>persistence]
-    end
-
-    UI --> HOOKS
-    HOOKS --> LOGIC
-    HOOKS --> PERF
-    HOOKS --> SDK
-    PERF --> SDK
-
-    style UI fill:#3B82F615
-    style HOOKS fill:#8B5CF615
-    style LOGIC fill:#10B98115
-    style PERF fill:#F59E0B15
-    style SDK fill:#EC489915
+    MENU --> SMART["SmartReportModal<br/>free-text request"]
+    SMART --> COST{"Request mentions cost,<br/>energy or carbon?"}
+    COST -->|yes| NOTE["finopsNote() added to the context"]
+    COST -->|no| ASK
+    NOTE --> ASK{"Output"}
+    ASK -->|Generate PDF| GEN["generateSmartReportText()<br/>Davis CoPilot"]
+    GEN --> NARR["generateAiNarrativePdf()"]
+    NARR --> F4["PDF download"]
+    ASK -->|Open in Assist| INT["openDynatraceAssist()<br/>intent to the Assist app"]
 ```
-
----
-
-## 3. Como cada criterio vira um numero
-
-A operacao basica que se repete 94 vezes.
-
-```mermaid
-flowchart TD
-    A[Criterion def<br/>id, label, query, queryB,<br/>thresholds, tier] --> B{Has queryB<br/>or denominatorConstant?}
-
-    B -->|queryB| C[Execute query A<br/>via DQL]
-    B -->|queryB| D[Execute query B<br/>via DQL]
-    B -->|constant| C2[Execute query A]
-    B -->|constant| E[denominator =<br/>code-level constant]
-    B -->|no| F[Execute query A<br/>result IS the %]
-
-    C --> G[valueA = result]
-    D --> H[denom = result]
-    C2 --> G2[valueA = result]
-    E --> H2[denom = constant]
-    F --> I[value = result]
-
-    G --> J{denom > 0?}
-    H --> J
-    G2 --> J2{denom > 0?}
-    H2 --> J2
-
-    J -->|Yes| K[value = valueA / denom x 100<br/>capped at 100]
-    J -->|No| L[Smart skip C3<br/>value = 0, skipped flag]
-    J2 -->|Yes| K2[value = valueA / denom x 100]
-    J2 -->|No| L
-
-    K --> M[Compare vs thresholds<br/>e.g. ≥90 ≥50 ≥1]
-    K2 --> M
-    I --> M
-    L --> N[points = 0, error = false]
-
-    M --> O{Threshold met?}
-    O -->|Yes| P[points = 1<br/>passed]
-    O -->|No| Q[points = 0<br/>not met]
-
-    P --> R[CriterionResult]
-    Q --> R
-    N --> R
-
-    style A fill:#3B82F6,color:#fff
-    style M fill:#8B5CF6,color:#fff
-    style P fill:#10B981,color:#fff
-    style Q fill:#EF4444,color:#fff
-    style L fill:#F59E0B,color:#fff
-```
-
-**Exemplo real (i1 - Host CPU coverage):**
-
-```
-query  = timeseries val=avg(dt.host.cpu.usage), by:{dt.entity.host}
-         | dedup dt.entity.host | summarize c=count()
-queryB = fetch dt.entity.host | summarize count()
-
-valueA = 87 (hosts com metrica de CPU)
-denom  = 100 (total de hosts)
-value  = 87 / 100 x 100 = 87%
-
-thresholds = [{min: 90}, {min: 50}, {min: 1}]
-87 >= 50 (passou threshold "medio") -> points = 1
-```
-
----
-
-## 4. Coverage vs Utilization - dois caminhos de agregacao
-
-Mesmos 94 criterios, duas formulas diferentes.
-
-```mermaid
-flowchart TD
-    A[Capability com<br/>N criterios] --> B[Cada criterio:<br/>points = 0 ou 1]
-
-    B --> C[Classifica por tier<br/>via CRITERION_TIERS]
-    C --> D[Foundation<br/>~3-4 criterios]
-    C --> E[Best Practice<br/>~4-5 criterios]
-    C --> F[Excellence<br/>~2-3 criterios]
-
-    B -.-> G[COVERAGE SCORE]
-    G --> H[passed = sum points]
-    H --> I[score = passed / N x 100]
-    I --> J[Renderiza no RADAR]
-
-    D --> K[fPct = passed/total]
-    E --> L[bPct = passed/total]
-    F --> M[ePct = passed/total]
-
-    K --> N{fPct ≥ 0.8?}
-    N -->|Yes| O[effB = bPct]
-    N -->|No| P[effB = 0]
-
-    O --> Q{effB ≥ 0.6?}
-    P --> Q
-    Q -->|Yes| R[effE = ePct]
-    Q -->|No| S[effE = 0]
-
-    R --> T[utilizationScore =<br/>fPct x 60 +<br/>effB x 25 +<br/>effE x 15]
-    S --> T
-
-    T --> U[Utilization Band<br/>≥80 Excellent<br/>≥60 Good<br/>≥40 Moderate<br/>≥20 Low<br/>&lt;20 N/A]
-    T --> V[Utilization Level<br/>L0/L1/L2/L3]
-
-    K --> V
-    L --> V
-    M --> V
-
-    V --> W[Renderiza nos CARDS]
-    U --> W
-
-    style G fill:#3B82F6,color:#fff
-    style T fill:#EC4899,color:#fff
-    style N fill:#F59E0B,color:#fff
-    style Q fill:#F59E0B,color:#fff
-    style J fill:#10B981,color:#fff
-    style W fill:#10B981,color:#fff
-```
-
-**Regra progressiva** (chave da formula): Best Practice so conta se Foundation >= 80%. Excellence so conta se Best Practice >= 60%. Isso evita que cliente "pule passos" e tenha utilization inflada por criterios avancados sem ter o basico.
-
----
-
-## 5. Decisao de Scale Tier (auto-detect)
-
-Como o app decide rodar queries leves ou caras.
-
-```mermaid
-flowchart TD
-    A[useScaleTier hook<br/>inicia no boot] --> B[Query rapida:<br/>fetch dt.entity.host<br/>summarize count]
-    B --> C[hostCount conhecido]
-
-    C --> D{Manual override<br/>via URL ?tier=?}
-    D -->|Yes| E[tier = override<br/>autoTier = false]
-    D -->|No| F{hostCount < 1000?}
-
-    F -->|Yes| G[tier = exact<br/>autoTier = true]
-    F -->|No| H{hostCount < 10000?}
-    H -->|Yes| I[tier = large<br/>autoTier = true]
-    H -->|No| J[tier = xlarge<br/>autoTier = true]
-
-    E --> K[scaleQuery applies tier]
-    G --> K
-    I --> K
-    J --> K
-
-    K --> L{tier == exact?}
-    L -->|Yes| M[Query unchanged<br/>full window, no scanLimit]
-
-    K --> N{tier == large?}
-    N -->|Yes| O[Add scanLimitGBytes: 500<br/>Narrow window where applicable]
-
-    K --> P{tier == xlarge?}
-    P -->|Yes| Q[Add scanLimitGBytes: 100<br/>Narrow window aggressively<br/>Show ≈ prefix in UI]
-
-    M --> R[Execute DQL]
-    O --> R
-    Q --> R
-
-    R --> S[Render ScaleTierBanner<br/>shows tier + host count<br/>warning if sampling active]
-
-    style A fill:#3B82F6,color:#fff
-    style F fill:#F59E0B,color:#fff
-    style H fill:#F59E0B,color:#fff
-    style J fill:#EF4444,color:#fff
-    style S fill:#06B6D4,color:#fff
-```
-
-**Por que importa**: rodar o assessment inteiro contra um tenant de 80k hosts em modo `exact` escanearia ~10 TB e custaria ~$100 por execucao. xLarge tier cai para ~$20-30 com sampling estatistico (ainda preciso suficiente para o score).
-
----
-
-## 6. Cache de queries (24h)
-
-Por que rodar de novo se nada mudou no Grail?
-
-```mermaid
-flowchart TD
-    A[executeAllUnique<br/>recebe 94 queries] --> B[Para cada query]
-    B --> C[hash = FNV-32 do DQL]
-    C --> D[cacheKey =<br/>tier:hash:windowHours]
-
-    D --> E{Tem em<br/>memoria?}
-    E -->|Yes| F[Return cached]
-    E -->|No| G{Tem no<br/>Document Store?}
-
-    G -->|Yes| H[Load + cache memoria<br/>cacheHit++]
-    G -->|No| I[Execute DQL<br/>cacheMiss++]
-
-    H --> J[ageMs < 24h?]
-    J -->|Yes| K[Use cached<br/>scannedBytes = 0]
-    J -->|No| I
-
-    I --> L[Result obtido]
-    L --> M[Store em memoria]
-    L --> N[Enqueue persist]
-
-    F --> O[Aggregate result]
-    K --> O
-    M --> O
-
-    N -.-> P[Apos run termina:<br/>persistentCache.flush]
-    P --> Q[Batch write ao<br/>Document Store]
-
-    O --> R[Score computation]
-
-    style E fill:#10B981,color:#fff
-    style G fill:#10B981,color:#fff
-    style I fill:#EF4444,color:#fff
-    style K fill:#10B981,color:#fff
-```
-
-**Numeros reais (v2.5.5, reference tenant, medidos em `dt.system.events`)**:
-- Cold run **antes** do Economy Mode: ~370 GB scanned, ~$3.70
-- Cold run **com** Economy Mode: ~41 GB scanned, ~$0.41
-- Warm run (cache 24h): 0 GB scanned, $0
-- Score: identico entre cold e warm; com Economy Mode os valores viram
-  estimativas proximas (razoes +-1,5 pp, contagens distintas ~6% menores)
-
----
-
-## 7. Estrutura de dados das 9 capabilities
-
-Hierarquia completa do dominio.
-
-```mermaid
-flowchart TD
-    A[CAPABILITIES array<br/>9 capabilities] --> B1[1. Infrastructure<br/>22 criteria<br/>color #3B82F6]
-    A --> B2[2. Application Obs<br/>13 criteria<br/>color #8B5CF6]
-    A --> B3[3. Digital Experience<br/>11 criteria<br/>color #EC4899]
-    A --> B4[4. Log Analytics<br/>8 criteria<br/>color #F59E0B]
-    A --> B5[5. App Security<br/>5 criteria<br/>color #EF4444]
-    A --> B6[6. Threat Obs<br/>4 criteria<br/>color #F97316]
-    A --> B7[7. AI Observability<br/>9 criteria<br/>color #06B6D4]
-    A --> B8[8. Business Obs<br/>4 criteria<br/>color #10B981]
-    A --> B9[9. Software Delivery<br/>5 criteria<br/>color #6366F1]
-
-    B1 --> C[Cada criterio]
-    B2 --> C
-    B3 --> C
-    B7 --> C
-
-    C --> D[id: a1, i12, ...]
-    C --> E[label: human-readable]
-    C --> F[description: tooltip]
-    C --> G[query: DQL numerator]
-    C --> H[queryB ou denominatorConstant]
-    C --> I[thresholds array]
-    C --> J[tier: foundation/<br/>bestPractice/excellence]
-
-    style A fill:#1B3A8A,color:#fff
-    style C fill:#8B5CF6,color:#fff
-```
-
-**Total**: ~94 criterios, mas executa apenas as **queries unicas** (dedup por hash) - tipicamente ~70 queries efetivas porque muitos criterios reusam o mesmo denominador.
-
----
-
-## 8. Persistencia e historico
-
-Onde os dados vivem.
-
-```mermaid
-flowchart LR
-    subgraph CLIENT[Browser - React App]
-        S[useState<br/>resultado atual]
-        H[useAssessmentHistory<br/>snapshots]
-        QC[QueryCache<br/>memoria]
-    end
-
-    subgraph DT[Dynatrace platform]
-        DS[Document Store<br/>app-scoped]
-        GRAIL[Grail<br/>logs/spans/metrics/<br/>events/entities]
-    end
-
-    QC <--->|hit/miss| DS
-    H <--->|load/save| DS
-    S -->|run starts| Q[DQL exec]
-    Q -->|fetch from| GRAIL
-    Q -->|results| S
-    S -->|user saves| H
-
-    DS -.contains.-> QC_CACHE[Cache entries<br/>name: cache:tier:hash<br/>24h TTL]
-    DS -.contains.-> SNAPSHOTS[Snapshots<br/>name: snapshot:&lt;ts&gt;<br/>full result + scores]
-
-    style GRAIL fill:#EC4899,color:#fff
-    style DS fill:#3B82F6,color:#fff
-    style CLIENT fill:#10B98115
-    style DT fill:#F59E0B15
-```
-
-**Scopes necessarios** (em `app.config.json`):
-- `storage:*:read` - acesso a Grail (logs, spans, events, metrics, entities, bizevents, buckets, system)
-- `document:documents:read/write/delete` - cache e snapshots
-
----
-
-## 9. Producao vs SE/Dev (gating)
-
-O que cliente ve vs SE.
-
-```mermaid
-flowchart TD
-    A[App loads] --> B[useDevMode hook]
-    B --> C{?dev=1<br/>ou<br/>localStorage.cca.dev?}
-
-    C -->|Yes| D[isDev = true<br/>SE Mode]
-    C -->|No| E[isDev = false<br/>Customer Mode]
-
-    D --> F[Mostra TUDO:]
-    F --> F1[Radar + cards]
-    F --> F2[ScaleTierBanner]
-    F --> F3[DPS cost badge]
-    F --> F4[Download Perf JSON]
-    F --> F5[Force Refresh button]
-    F --> F6[Export PDF report]
-
-    E --> G[Mostra customer-friendly:]
-    G --> G1[Radar + cards]
-    G --> G2[ScaleTierBanner]
-    G --> G3[DPS cost badge]
-    G --> G6[Export PDF report]
-    G -.X.-> G4[NO Perf JSON]
-    G -.X.-> G5[NO Force Refresh]
-
-    style D fill:#F59E0B,color:#fff
-    style E fill:#10B981,color:#fff
-    style F4 fill:#EF4444,color:#fff
-    style F5 fill:#EF4444,color:#fff
-```
-
----
-
-## 10. Resumo - o fluxo em uma frase
-
-```mermaid
-flowchart LR
-    A[~94 criteria DQL] --> B[Scale Tier<br/>auto-sample]
-    B --> C[Cache 24h<br/>doc store]
-    C --> D[Execute on Grail]
-    D --> E[ratio = A/B x 100]
-    E --> F[pass / fail vs threshold]
-    F --> G[Coverage avg]
-    F --> H[Utilization tier-weighted]
-    G --> I[Radar UI]
-    H --> I
-
-    style A fill:#3B82F6,color:#fff
-    style B fill:#F59E0B,color:#fff
-    style C fill:#10B981,color:#fff
-    style D fill:#EC4899,color:#fff
-    style I fill:#8B5CF6,color:#fff
-```
-
-> **Em uma linha:** *94 razoes DQL contra o proprio tenant, sampled por tier, cacheadas 24h, comparadas a thresholds hardcoded, agregadas como media (coverage) ou ponderacao progressiva (utilization).*
-
----
-
-## Como visualizar / exportar
-
-1. **GitHub / GitLab** - abre nativo, ja renderiza
-2. **VS Code** - extensao "Markdown Preview Mermaid Support" (id: `bierner.markdown-mermaid`)
-3. **Obsidian** - nativo, copia o MD para o vault
-4. **Exportar PNG/SVG**:
-   ```bash
-   npm i -g @mermaid-js/mermaid-cli
-   mmdc -i docs/ARCHITECTURE-DIAGRAM.md -o docs/diagrams/ -e png
-   ```
-5. **Online** - cole em https://mermaid.live para editar interativamente
-
-Versao: v2.5.5 | Atualize quando mudar regras de Scale Tier / Economy Mode, formula de utilization, ou estrutura de capabilities.

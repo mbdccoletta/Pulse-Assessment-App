@@ -11,12 +11,9 @@
 // the verdict is a reading of numbers the app already has.
 //
 // On the adoption cut ────────────────────────────────────────────────────
-// A pure percentage threshold does not survive contact with a real tenant.
-// On the environment this was calibrated against, the most-adopted capability
-// reached 24% of the platform population: with a 25% cut, NOTHING would ever
-// read as well adopted and every capability would fall into Dark or Unwatched.
-// So adoption counts as high when it clears the share OR an absolute floor of
-// people — whichever comes first. tools/diagnosis.test.mjs pins that.
+// Adoption counts as high at a share of active users (DEFAULT_CUTS.adoptionRate).
+// The rule can also take an absolute floor of people, but the default sets it
+// to infinity, so only the share decides. tools/diagnosis.test.mjs pins that.
 
 export type DiagnosisId =
   | "healthy"

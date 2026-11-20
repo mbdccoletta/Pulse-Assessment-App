@@ -25,7 +25,7 @@ export interface ReportCapability {
   /** Adoption as scored and shown on screen (0-100). */
   adoptionScore?: number | null;
   criteriaResults: { id: string; label: string; value: number; points: number; error: boolean; /** Could not be measured: never a failure. */ notAssessed?: boolean }[];
-  /** Utilization as shown on screen (after any consolidation factor). */
+  /** Utilization as shown on screen . */
   effectiveUtilizationScore?: number;
   utilization?: {
     utilizationScore: number;

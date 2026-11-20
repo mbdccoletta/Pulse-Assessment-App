@@ -1,252 +1,224 @@
-# Pulse Assessment — Evaluation Criteria Summary
+# Criteria summary
 
-A clear, plain-language reference for every check the assessment runs.
-94 checks across 9 capabilities. Source of truth: `ui/app/queries.ts`
-(labels, descriptions, thresholds) + `ui/app/data/criterionTiers.ts` (tiers).
+Every criterion the assessment reads: 137 criteria across 11 capabilities. This file is generated from the catalog (`ui/app/queries.ts`, `ui/app/data/criterionTiers.ts`, `ui/app/passLine.ts`); regenerate it when the catalog changes rather than editing it by hand.
 
-Version: v2.5.5 · matches the criteria set on the feat/davis-insights branch.
+## How to read the tables
 
----
+| Column | Meaning |
+|---|---|
+| Tier | Foundation, Best practice or Excellence. Utilization weighs them 60 / 25 / 15 and gates them (see `SCORING-CALCULATIONS.md`) |
+| Reading | **Share**: a numerator over a denominator, as a percentage. **Share of N**: a count over a fixed number. **Presence**: is there at least one. **Configuration count**: read from the settings API or the SLO service, with no Grail scan |
+| Met at | The value the criterion must reach. For a share with three targets it is the middle one |
 
-## How a check is evaluated
+A criterion that cannot be measured in the environment is not assessed: it leaves the score and is never counted as not met.
 
-Every check produces a **coverage percentage**:
+Readings by kind: 104 shares, 30 presence checks, 3 configuration counts.
 
-```
-result = (entities/signals WITH the feature) ÷ (total eligible) × 100
-```
+## Capabilities
 
-That percentage is compared to a **pass threshold**. Meeting it marks the
-check **passed** (1 point); otherwise **not met** (0 points).
-
-Two independent things then happen:
-
-| | Determined by | Produces |
-|---|---|---|
-| **Pass / fail** | coverage % vs the pass threshold | 1 or 0 points |
-| **Tier** | fixed classification in code (not the value) | Foundation / Best Practice / Excellence |
-
-- **Coverage score** = passed ÷ total × 100 (per capability; simple average).
-- **Utilization score** = tier-weighted, progressively gated:
-  `Foundation×60% + BestPractice×25% (if Foundation ≥ 80%) + Excellence×15% (if BP ≥ 60%)`.
-
-The three tiers represent an adoption journey:
-**Foundation** = "the essentials everyone needs" · **Best Practice** = "deeper,
-correct usage" · **Excellence** = "advanced / mature patterns".
-
-> Note on thresholds: most checks pass at **≥1%** — the assessment rewards
-> *any* adoption of a signal and lets the tier weighting drive the utilization
-> story. A handful use higher bars (e.g. diversity checks at ≥20-50%) where a
-> minimum spread is the whole point of the check.
-
----
-
-## 1. Infrastructure Observability — 22 checks (F:3 · BP:11 · E:8)
-
-Monitoring of hosts, processes, Kubernetes, and cloud platforms.
-
-| Tier | Check | What it validates | Pass |
-|---|---|---|---|
-| F | Host CPU coverage | Hosts reporting CPU metrics (any source) | ≥1% |
-| F | Host memory coverage | Hosts reporting memory metrics | ≥1% |
-| F | Host availability coverage | Hosts with availability metrics (SLA basis) | ≥1% |
-| BP | Host disk coverage | Hosts reporting disk utilisation | ≥1% |
-| BP | Host network coverage | Hosts with network interface entities | ≥1% |
-| BP | Process CPU coverage | Process groups with CPU metrics | ≥1% |
-| BP | Davis problem coverage | Hosts covered by Davis AI problem detection | ≥1% |
-| BP | Host-process topology | Hosts with detected process groups | ≥1% |
-| BP | Cloud host log enrichment | Hosts whose logs carry cloud-provider context | ≥1% |
-| BP | Cloud log enrichment | Log records enriched with cloud provider | ≥1% |
-| BP | Cloud account enrichment | Cloud logs carrying account ID | ≥1% |
-| BP | K8s node monitoring depth | Node-to-cluster ratio (node-level compute) | ≥1% |
-| BP | Cloud namespace metric coverage | K8s namespaces with container metrics | ≥1% |
-| BP | Container restart monitoring | K8s namespaces tracking container restarts | ≥1% |
-| E | K8s cluster coverage | Clusters with active workload monitoring | ≥1% |
-| E | Host disk entity coverage | Hosts with disk entities detected | ≥1% |
-| E | Cloud workload coverage | K8s namespaces running cloud-native workloads | ≥1% |
-| E | K8s workload mapping | Clusters mapped to a cloud namespace | ≥1% |
-| E | Cloud region enrichment | Cloud logs carrying region metadata | ≥1% |
-| E | Cloud AZ enrichment | Cloud logs carrying availability-zone metadata | ≥1% |
-| E | Cloud span enrichment | Services with cloud context in spans | ≥1% |
-| E | Container resource limits | K8s namespaces with defined resource limits | ≥1% |
-
-## 2. Application Observability — 13 checks (F:3 · BP:4 · E:6)
-
-Distributed tracing and service RED metrics.
-
-| Tier | Check | What it validates | Pass |
-|---|---|---|---|
-| F | Service tracing coverage | Services with active span data | ≥1% |
-| F | Root span coverage | Services with incoming-request root spans | ≥1% |
-| F | Response time coverage | Services with p95 response-time metrics | ≥1% |
-| BP | Service method coverage | Services with method-level tracing | ≥1% |
-| BP | Failure tracking coverage | Services with failure-rate metrics | ≥1% |
-| BP | Throughput coverage | Services with request-count metrics | ≥1% |
-| BP | Service-process mapping | Services linked to process groups | ≥1% |
-| E | OTel instrumentation coverage | Services with OpenTelemetry spans | ≥1% |
-| E | Database span coverage | Services with database operation spans | ≥1% |
-| E | Messaging span coverage | Services with messaging spans (Kafka/RabbitMQ/SQS) | ≥1% |
-| E | Multi-service trace depth | Traces spanning 2+ services | ≥1% |
-| E | Service tagging utilization | Services with at least one tag | ≥1% |
-| E | Database call depth | DB services touching 2+ database systems | ≥1% |
-
-## 3. Digital Experience — 11 checks (F:3 · BP:5 · E:3)
-
-Real User Monitoring, Web Vitals, and synthetic monitoring.
-
-| Tier | Check | What it validates | Pass |
-|---|---|---|---|
-| F | RUM action coverage | Web apps with user-action metrics | ≥1% |
-| F | Session tracking coverage | Web apps with session tracking | ≥1% |
-| F | LCP coverage | Web apps with Largest Contentful Paint | ≥1% |
-| BP | INP coverage | Web apps with Interaction to Next Paint | ≥1% |
-| BP | CLS coverage | Web apps with Cumulative Layout Shift | ≥1% |
-| BP | Frontend error coverage | Web apps with error tracking | ≥1% |
-| BP | Synthetic HTTP coverage | Web apps covered by HTTP synthetic monitors | ≥1% |
-| BP | Synthetic availability coverage | Synthetic-monitor-to-web-app ratio | ≥1% |
-| E | Synthetic browser coverage | Web apps covered by browser synthetics | ≥1% |
-| E | Mobile app coverage | Apps with mobile monitoring | ≥1% |
-| E | Synthetic location diversity | Location-to-monitor ratio | ≥1% |
-
-## 4. Log Analytics — 16 checks (F:4 · BP:7 · E:5)
-
-Log ingestion, enrichment, and correlation quality.
-
-| Tier | Check | What it validates | Pass |
-|---|---|---|---|
-| F | Host log coverage | Hosts sending log data | ≥1% |
-| F | Service log coverage | Services with associated logs | ≥1% |
-| F | Log source diversity | Distinct log sources vs hosts | ≥10% |
-| F | Dedicated buckets usage | Grail buckets used for logs (≥2 = healthy) | ≥50% |
-| BP | Trace-correlated logs | Logs carrying trace_id | ≥1% |
-| BP | Entity-enriched logs | Logs with host entity context | ≥1% |
-| BP | Error log coverage | Services with ERROR-level logs | ≥1% |
-| BP | Log severity diversity | Severity levels ingested (of 5) | ≥40% |
-| BP | Structured logging | Logs with structured JSON | ≥1% |
-| BP | Multi-source host logging | Hosts logging from 2+ sources | ≥1% |
-| BP | Custom attribute enrichment | Logs with custom entity enrichment | ≥1% |
-| E | Process group log correlation | Logs with process-group context | ≥1% |
-| E | K8s log coverage | K8s namespaces with logs | ≥1% |
-| E | Log retention validation | Sources active 24h vs 2h | ≥1% |
-| E | Span-correlated logs | Logs carrying span_id | ≥1% |
-| E | Log-based events | Events generated from log data | ≥50% |
-
-## 5. Application Security — 11 checks (F:4 · BP:4 · E:3)
-
-Runtime vulnerability and attack-surface visibility.
-
-| Tier | Check | What it validates | Pass |
-|---|---|---|---|
-| F | Service security coverage | Services covered by security-event detection | ≥1% |
-| F | Runtime vulnerability baseline | Services with process groups (RVA prerequisite) | ≥1% |
-| F | Database interaction security | Services with DB tracing (SQLi surface) | ≥1% |
-| F | HTTP request surface coverage | Services with HTTP request tracing | ≥1% |
-| BP | Security event type coverage | Security event types vs expected categories | ≥20% |
-| BP | Error log security coverage | Services with ERROR-level logs | ≥1% |
-| BP | Warn log security coverage | Services with WARN-level logs | ≥1% |
-| BP | Attack detection coverage | Services with attack events detected | ≥1% |
-| E | Event kind diversity | Event kinds monitored (of 5) | ≥40% |
-| E | Failed request coverage | Services tracking failed requests | ≥1% |
-| E | Davis security problem coverage | Services covered by Davis AI | ≥1% |
-
-## 6. Threat Observability — 11 checks (F:3 · BP:5 · E:3)
-
-Davis problem detection and threat-log correlation.
-
-| Tier | Check | What it validates | Pass |
-|---|---|---|---|
-| F | Davis problem entity coverage | Hosts touched by Davis problems | ≥1% |
-| F | Security event service coverage | Services with security events | ≥1% |
-| F | Error log threat coverage | Hosts with ERROR-level logs | ≥1% |
-| BP | Problem entity correlation | Davis problems with affected entities | ≥1% |
-| BP | Problem category coverage | Problem categories detected (of 4) | ≥25% |
-| BP | Log source threat coverage | Distinct log sources vs hosts | ≥10% |
-| BP | Log entity enrichment | Logs with host entity context | ≥1% |
-| BP | Event entity correlation | Events carrying affected entity IDs | ≥1% |
-| E | Trace-correlated threat logs | Logs with trace_id for attack paths | ≥1% |
-| E | Recurring affected entity detection | Entities appearing in multiple problems | ≥1% |
-| E | Problem resolution coverage | Problems that reached CLOSED | ≥1% |
-
-## 7. AI Observability — 9 checks (F:3 · BP:2 · E:4)
-
-GenAI / LLM span monitoring (72h window for bursty workloads).
-
-| Tier | Check | What it validates | Pass |
-|---|---|---|---|
-| F | AI span service coverage | Services with AI/LLM spans | ≥1% |
-| F | Token tracking coverage | AI spans tracking token usage | ≥1% |
-| F | AI error tracking coverage | AI spans with error-status tracking | ≥1% |
-| BP | AI provider diversity | Known AI providers detected (of 5) | ≥20% |
-| BP | Agent invocation coverage | AI spans with agent-invocation tracing | ≥1% |
-| E | Prompt/response tracing coverage | AI spans capturing prompt or response | ≥1% |
-| E | Guardrail coverage | AI spans with guardrail monitoring | ≥1% |
-| E | Cost tracking coverage | AI spans with cost tracking | ≥1% |
-| E | AI tracing service breadth | AI-related share of total spans | ≥1% |
-
-## 8. Business Observability — 8 checks (F:3 · BP:2 · E:3)
-
-Business events (bizevents) linking telemetry to outcomes.
-
-| Tier | Check | What it validates | Pass |
-|---|---|---|---|
-| F | Service bizevent coverage | Services with business events | ≥1% |
-| F | Bizevent type diversity | Expected event types detected (of 10) | ≥30% |
-| F | Events with service context | Business events linked to services | ≥1% |
-| BP | Bizevent provider diversity | Expected providers detected (of 5) | ≥20% |
-| BP | Revenue data coverage | Events with revenue/monetary value | ≥1% |
-| E | Session-linked events | Events linked to RUM sessions | ≥1% |
-| E | Trace-linked events | Events correlated with traces | ≥1% |
-| E | Cost center coverage | Events with cost-center / product data | ≥1% |
-
-## 9. Software Delivery — 10 checks (F:3 · BP:4 · E:3)
-
-Deployment tracking and release-readiness signals.
-
-| Tier | Check | What it validates | Pass |
-|---|---|---|---|
-| F | Service deployment coverage | Services with deployment events (24h) | ≥1% |
-| F | Service request baseline | Services with active throughput | ≥1% |
-| F | Process group coverage | Services linked to process groups | ≥1% |
-| BP | Custom deployment coverage | Services with CI/CD deployment markers | ≥1% |
-| BP | Event kind diversity | Event kinds present (of 5) | ≥40% |
-| BP | Service failure baseline | Services tracking failure rate | ≥1% |
-| BP | Process group tagging | Process groups with ≥1 tag | ≥1% |
-| E | Event type diversity | Delivery event types detected (of 10) | ≥30% |
-| E | Davis problem detection | Services covered by Davis AI | ≥1% |
-| E | Ownership assignment | Services with ownership tags | ≥1% |
-
----
-
-## Totals
-
-| Capability | Checks | Foundation | Best Practice | Excellence |
+| Capability | Criteria | Foundation | Best practice | Excellence |
 |---|---|---|---|---|
-| Infrastructure Observability | 22 | 3 | 11 | 8 |
-| Application Observability | 13 | 3 | 4 | 6 |
-| Digital Experience | 11 | 3 | 5 | 3 |
-| Log Analytics | 16 | 4 | 7 | 5 |
-| Application Security | 11 | 4 | 4 | 3 |
-| Threat Observability | 11 | 3 | 5 | 3 |
-| AI Observability | 9 | 3 | 2 | 4 |
-| Business Observability | 8 | 3 | 2 | 3 |
-| Software Delivery | 10 | 3 | 4 | 3 |
-| **Total** | **111** | **29** | **44** | **38** |
+| Infrastructure Observability | 26 | 3 | 13 | 10 |
+| Application Observability | 15 | 3 | 6 | 6 |
+| Digital Experience | 15 | 3 | 7 | 5 |
+| Log Analytics | 16 | 3 | 9 | 4 |
+| Application Security | 7 | 1 | 5 | 1 |
+| Threat Observability | 4 | 1 | 2 | 1 |
+| AI/LLM Observability | 16 | 3 | 5 | 8 |
+| Business Observability | 10 | 3 | 4 | 3 |
+| Software Delivery | 6 | 1 | 2 | 3 |
+| Platform Governance | 12 | 1 | 9 | 2 |
+| FinOps & Sustainability | 10 | 3 | 4 | 3 |
+| **Total** | **137** | **25** | **66** | **46** |
 
-> The app labels this "94 unique criteria" because several checks reuse the
-> same denominator query (deduplicated at execution). The **111** above counts
-> every scored check row across the 9 capabilities.
+## Infrastructure Observability
 
----
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| Host CPU coverage | Foundation | Share | 50% | Percentage of monitored hosts with active CPU usage metrics from any source (OneAgent, OTel, cloud integration). |
+| Host memory coverage | Foundation | Share | 50% | Percentage of monitored hosts with active memory usage metrics. |
+| Host availability coverage | Foundation | Share | 50% | Percentage of monitored hosts with availability metrics — basis for SLA reporting. |
+| Host disk coverage | Best practice | Share | 50% | Percentage of monitored hosts with active disk utilization metrics. |
+| Host network coverage | Best practice | Share | 50% | Percentage of monitored hosts with network interface entities. |
+| Process CPU coverage | Best practice | Share | 30% | Percentage of process groups with active CPU usage metrics. |
+| Davis problem coverage | Best practice | Share | 10% | Percentage of hosts covered by Davis AI problem detection. |
+| Host-process topology | Best practice | Share | 60% | Percentage of hosts with detected process groups — validates entity relationship discovery. |
+| Cloud host log enrichment | Best practice | Share | 50% | Percentage of hosts with cloud provider context in log data — validates cloud integration feeding host-level metadata. |
+| Cloud log enrichment | Best practice | Share of 100 | 20% | Percentage of log records enriched with cloud provider metadata. |
+| Cloud account enrichment | Best practice | Share | 40% | Percentage of cloud-enriched logs with account ID metadata — validates multi-account cloud governance. |
+| K8s node monitoring depth | Best practice | Share | 50% | Ratio of K8s nodes to clusters — validates node-level cloud compute monitoring. |
+| Cloud namespace metric coverage | Best practice | Share | 50% | Percentage of K8s namespaces with active container metrics — validates cloud workload observability. |
+| Container restart monitoring | Best practice | Share | 50% | Percentage of K8s namespaces with container restart tracking — critical for detecting CrashLoopBackOff and OOM issues. |
+| Problems with root cause | Best practice | Share | 50% | Share of Davis problems on infrastructure entities (hosts, processes, Kubernetes, cloud, custom devices) in the last 72h where Davis identified a root-cause entity. |
+| Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read metrics and topology through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
+| K8s cluster coverage | Excellence | Share | 50% | Percentage of Kubernetes clusters with active workload monitoring. |
+| Host disk entity coverage | Excellence | Share | 50% | Percentage of hosts with disk entities detected. |
+| Cloud workload coverage | Excellence | Share | 50% | Percentage of K8s namespaces with running cloud-native workloads. |
+| K8s workload mapping | Excellence | Share | 50% | Percentage of Kubernetes clusters with at least one detected cloud application namespace — validates workload topology. |
+| Cloud region enrichment | Excellence | Share | 40% | Percentage of cloud-enriched logs that also contain region metadata — validates multi-region observability depth. |
+| Cloud AZ enrichment | Excellence | Share | 40% | Percentage of cloud-enriched logs with availability zone metadata — validates resilience observability across failure domains. |
+| Cloud span enrichment | Excellence | Share | 20% | Percentage of services with cloud provider context in span data. |
+| Container resource limits | Excellence | Share | 50% | Percentage of K8s namespaces with defined resource limits — essential for cluster stability and resource governance. |
+| Problems with automated response | Excellence | Share | 30% | Share of Davis problems on infrastructure entities (hosts, processes, Kubernetes, cloud, custom devices) in the last 72h that triggered at least one workflow execution. |
+| Infrastructure automation workflows | Excellence | Presence | At least 1 | Workflows that ran a cloud, Kubernetes or configuration-management action (AWS, Azure, GCP, Kubernetes, Ansible connectors) in the last 24h. |
 
-## Related docs
+## Application Observability
 
-- `docs/DATA-SOURCES.md` — which Grail source (metrics / logs / spans / events /
-  bizevents / entities / Davis) each check queries.
-- `docs/SCORING-CALCULATIONS.md` — the full coverage-vs-utilization math with worked
-  examples and the progressive-gate rule.
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| Service tracing coverage | Foundation | Share | 50% | Percentage of detected services with active span data in the last 2h (OneAgent or OTel). |
+| Root span coverage | Foundation | Share | 40% | Percentage of services with root spans (incoming requests) in the last 2h. |
+| Response time coverage | Foundation | Share | 50% | Percentage of services with response time metrics (p95). |
+| Service method coverage | Best practice | Share | 30% | Percentage of services with method-level tracing. |
+| Failure tracking coverage | Best practice | Share | 40% | Percentage of services with failure rate metrics. |
+| Throughput coverage | Best practice | Share | 50% | Percentage of services with request count/throughput metrics. |
+| Service-process mapping | Best practice | Share | 50% | Percentage of services with associated process groups — validates service-to-infrastructure topology. |
+| Problems with root cause | Best practice | Share | 50% | Share of Davis problems on services and queues in the last 72h where Davis identified a root-cause entity. |
+| Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read traces through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
+| OTel instrumentation coverage | Excellence | Share | 20% | Percentage of services with OpenTelemetry spans — vendor-neutral instrumentation adoption. |
+| Database span coverage | Excellence | Share | 10% | Percentage of services with database operation spans. |
+| Messaging span coverage | Excellence | Share | 5% | Percentage of services with messaging spans (Kafka, RabbitMQ, SQS). |
+| Multi-service trace depth | Excellence | Share | 10% | Percentage of traces spanning 2+ services — validates distributed tracing depth. |
+| Database call depth | Excellence | Share | 10% | Percentage of DB-using services that interact with 2+ database systems — validates deep database monitoring across the stack. |
+| Problems with automated response | Excellence | Share | 30% | Share of Davis problems on services and queues in the last 72h that triggered at least one workflow execution. |
 
-## Regenerate
+## Digital Experience
 
-When `queries.ts` or `criterionTiers.ts` change, re-run the extraction script
-embedded in this session's history (parses labels + thresholds + tiers) and
-rebuild the tables above.
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| RUM action coverage | Foundation | Share | 50% | Percentage of web applications with active user action metrics. |
+| Session tracking coverage | Foundation | Share | 50% | Percentage of web applications with active session tracking. |
+| LCP coverage | Foundation | Share | 50% | Percentage of web applications with Largest Contentful Paint metrics — Core Web Vital. |
+| INP coverage | Best practice | Share | 50% | Percentage of web applications with Interaction to Next Paint metrics — Core Web Vital. |
+| CLS coverage | Best practice | Share | 50% | Percentage of web applications with Cumulative Layout Shift metrics — Core Web Vital. |
+| Frontend error coverage | Best practice | Share | 40% | Percentage of web applications with error tracking enabled. |
+| Synthetic HTTP coverage | Best practice | Share | 50% | Percentage of web applications covered by HTTP synthetic monitors. |
+| Synthetic availability coverage | Best practice | Share | 50% | Ratio of synthetic monitors to web applications — validates proactive availability monitoring. |
+| Problems with root cause | Best practice | Share | 50% | Share of Davis problems on web and mobile applications and synthetic monitors in the last 72h where Davis identified a root-cause entity. |
+| Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read user sessions and events through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
+| Synthetic browser coverage | Excellence | Share | 50% | Percentage of web applications covered by browser-based synthetic tests. |
+| Mobile app coverage | Excellence | Share | 10% | Percentage of total applications that have mobile monitoring. |
+| Synthetic location diversity | Excellence | Share | 50% | Ratio of synthetic locations to total synthetic monitors. |
+| Problems with automated response | Excellence | Share | 30% | Share of Davis problems on web and mobile applications and synthetic monitors in the last 72h that triggered at least one workflow execution. |
+| Synthetic checks run by workflows | Excellence | Presence | At least 1 | Workflows that ran an on-demand synthetic execution in the last 24h. |
+
+## Log Analytics
+
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| Host log coverage | Foundation | Share | 50% | Percentage of hosts sending log data in the last 2h. |
+| Service log coverage | Foundation | Share | 30% | Percentage of services with associated log data. |
+| Log source diversity | Foundation | Share | 50% | Ratio of distinct log sources to total hosts — validates breadth of log ingestion across infrastructure. |
+| Trace-correlated logs | Best practice | Share of 100 | 10% | Percentage of log records enriched with trace_id. |
+| Entity-enriched logs | Best practice | Share of 100 | 30% | Percentage of log records enriched with host entity context. |
+| Error log coverage | Best practice | Share | 10% | Percentage of services whose logs include ERROR-level entries. |
+| Log severity diversity | Best practice | Share of 5 | 60% | Percentage of severity levels being ingested (out of 5: ERROR, WARN, INFO, DEBUG, TRACE). |
+| Structured logging | Best practice | Share | 20% | Percentage of logs containing structured JSON content for better parsing and analysis. |
+| Multi-source host logging | Best practice | Share | 20% | Percentage of hosts receiving logs from 2+ distinct sources — indicates balanced log distribution. |
+| Custom device log enrichment | Best practice | Share of 100 | 10% | Percentage of logs enriched with custom device entities for extended context. |
+| Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read logs through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
+| Custom log pipelines configured | Best practice | Configuration count | At least 1 | Log pipelines the team configured in OpenPipeline to filter, mask, enrich or route logs before they are stored. Read from settings, which scans no data. |
+| Process group log correlation | Excellence | Share of 100 | 10% | Percentage of log records enriched with process group context. |
+| K8s log coverage | Excellence | Share | 50% | Percentage of K8s namespaces with log data. |
+| Span-correlated logs | Excellence | Share of 100 | 10% | Percentage of logs enriched with span_id for granular trace-to-log linking (deeper than trace_id alone). |
+| Log-based events | Excellence | Presence | At least 1 | Presence of events generated from log data — indicates established log-based alerting. |
+
+## Application Security
+
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| Runtime Vulnerability Analytics active | Foundation | Presence | At least 1 | Vulnerability state reports from Runtime Vulnerability Analytics in the last 2 hours. |
+| Runtime vulnerability coverage | Best practice | Share | 10% | Share of process groups assessed by Runtime Vulnerability Analytics in the last 2 hours. |
+| Runtime Application Protection | Best practice | Presence | At least 1 | Attack detections from Runtime Application Protection in the last 24 hours. |
+| Security Posture Management | Best practice | Presence | At least 1 | Compliance findings from Security Posture Management in the last 2 hours. |
+| Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read security findings through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
+| Vulnerabilities with Davis assessment | Best practice | Share | 50% | Share of open critical and high vulnerabilities for which Davis assessed whether data assets are reachable, in the last 2 hours. With that context a vulnerability is prioritized by real risk, not by severity alone. |
+| Third-party security findings | Excellence | Presence | At least 1 | External security tools (scanners, registries, cloud security) sending vulnerability findings to Dynatrace in the last 24 hours. |
+
+## Threat Observability
+
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| Detection findings | Foundation | Presence | At least 1 | Threat detections reaching Dynatrace in the last 24 hours, from any source. |
+| External detection sources | Best practice | Presence | At least 1 | Security products other than Dynatrace sending detections (for example cloud threat detection or endpoint protection) in the last 24 hours. |
+| Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read security findings through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
+| Security automation workflows | Excellence | Presence | At least 1 | Workflows that ran a security action (for example enriching an observable during an investigation) in the last 24h. |
+
+## AI/LLM Observability
+
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| AI span service coverage | Foundation | Share | 5% | Percentage of services with AI/LLM spans. |
+| Token tracking coverage | Foundation | Share | 50% | Percentage of AI spans with token usage tracking. |
+| AI error tracking coverage | Foundation | Share | 1% | Percentage of AI spans with error status tracking. |
+| Response model recorded | Best practice | Share | 50% | Percentage of AI spans that record the model that actually answered, so a change of model version can be traced. |
+| AI provider diversity | Best practice | Share of 5 | 40% | Percentage of known AI providers detected vs expected (out of 5). |
+| Agent invocation coverage | Best practice | Share | 10% | Percentage of AI spans with agent invocation tracing. |
+| Agent tool-call tracing | Best practice | Presence | At least 1 | Presence of agent tool executions in AI spans (gen_ai.operation.name = execute_tool) in the last 72h. |
+| Problems with root cause | Best practice | Share | 50% | Share of Davis problems on services that call an LLM in the last 72h where Davis identified a root-cause entity. |
+| Prompt/response tracing coverage | Excellence | Share | 50% | Percentage of AI spans with prompt or response tracing. |
+| Guardrail coverage | Excellence | Share | 20% | Percentage of AI spans with guardrail monitoring. |
+| Cost tracking coverage | Excellence | Share | 20% | Percentage of AI spans carrying token counts and the model, which the AI Observability app needs to calculate cost. |
+| AI tracing service breadth | Excellence | Share | 5% | Percentage of total spans that are AI-related. |
+| Agentic AI in use | Excellence | Presence | At least 1 | Agentic Dynatrace Assist sessions in the last 30 days (GENAI_EVENT with skill = operator). |
+| dtctl driven by AI agents | Excellence | Presence | At least 1 | People whose AI coding agent (for example Claude Code) ran dtctl in the last 30 days. |
+| Agentic workflows | Excellence | Presence | At least 1 | Workflows that consumed AI Units in the last 30 days, such as the SRE Agent running on a problem trigger. |
+| Problems with automated response | Excellence | Share | 30% | Share of Davis problems on services that call an LLM in the last 72h that triggered at least one workflow execution. |
+
+## Business Observability
+
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| Service bizevent coverage | Foundation | Share | 10% | Percentage of services with associated business events. |
+| Bizevent type diversity | Foundation | Share of 10 | 60% | Percentage of expected business event types detected (out of 10 baseline types). |
+| Events with service context | Foundation | Share | 20% | Percentage of business events linked to services. |
+| Bizevent provider diversity | Best practice | Share of 5 | 60% | Percentage of expected business event providers detected (out of 5 baseline providers). |
+| Revenue data coverage | Best practice | Share | 10% | Percentage of business events with revenue/monetary value. |
+| Problems with root cause | Best practice | Share | 50% | Share of Davis problems on services that emit business events in the last 72h where Davis identified a root-cause entity. |
+| Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read business events through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
+| Session-linked events | Excellence | Share | 10% | Percentage of business events linked to RUM sessions. |
+| Trace-linked events | Excellence | Share | 10% | Percentage of business events correlated with distributed traces. |
+| Problems with automated response | Excellence | Share | 30% | Share of Davis problems on services that emit business events in the last 72h that triggered at least one workflow execution. |
+
+## Software Delivery
+
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| CI/CD deployment events | Foundation | Presence | At least 1 | Deployment events from CI/CD pipelines in the last 24h (SDLC_EVENT whose type names a deployment). |
+| Service deployment coverage | Best practice | Share | 30% | Percentage of services with a deployment marker (CUSTOM_DEPLOYMENT) in the last 24h. |
+| Problems with root cause | Best practice | Share | 50% | Share of Davis problems on entities that received a deployment in the last 72h where Davis identified a root-cause entity. |
+| Problems with automated response | Excellence | Share | 30% | Share of Davis problems on entities that received a deployment in the last 72h that triggered at least one workflow execution. |
+| Release validation (Site Reliability Guardian) | Excellence | Presence | At least 1 | Site Reliability Guardian validations finished in the last 24h (business event guardian.validation.finished). |
+| Pipeline integration workflows | Excellence | Presence | At least 1 | Workflows that ran a source-control or CI/CD action (GitHub, GitLab, Jenkins, Azure DevOps connectors) in the last 24h. |
+
+## Platform Governance
+
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| OneAgent version currency | Foundation | Share | 80% | Percentage of hosts whose OneAgent was built in the last 12 months (build date read from the installed version). |
+| Logs with security context | Best practice | Share of 100 | 50% | Percentage of log records that carry dt.security_context, the field record-level access policies filter on. Read from fieldsSnapshot, which scans no raw data. |
+| Workflow execution success | Best practice | Share | 90% | Percentage of finished workflow executions in the last 24h that ended in success. |
+| ITSM or chat integration in workflows | Best practice | Presence | At least 1 | Workflows that ran a ServiceNow, Jira, Slack, Microsoft Teams, PagerDuty or email action in the last 24h. |
+| Dedicated log buckets | Best practice | Share of 2 | 100% | Number of distinct Grail buckets holding log data (expected &gt;= 2 for proper segregation). Read from fieldsSnapshot, which scans no raw data. |
+| Ownership assignment | Best practice | Share | 50% | Percentage of services with assigned ownership tags — validates team responsibility mapping for incident response. |
+| Service tagging utilization | Best practice | Share | 20% | Percentage of services with at least one tag assigned — tags enable release tracking, ownership, and filtering. |
+| Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read platform usage, audit and billing events through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
+| SLOs defined | Best practice | Configuration count | At least 1 | Service-level objectives configured in the environment, classic and from the Service-Level Objectives app. Read from configuration, which scans no data. |
+| Adaptive or seasonal baselines in alerts | Best practice | Presence | At least 1 | Alerts evaluated in the last 7 days with an auto-adaptive or seasonal baseline instead of a fixed threshold. |
+| Human approval in workflows | Excellence | Presence | At least 1 | Workflows that ran an approval task in the last 7 days, so a person confirms before a consequential action. |
+| Custom anomaly detectors configured | Excellence | Configuration count | At least 1 | Anomaly detectors the team created on its own metrics and queries. Read from settings, which scans no data. |
+
+## FinOps & Sustainability
+
+| Criterion | Tier | Reading | Met at | What it measures |
+|---|---|---|---|---|
+| Cost and carbon calculation running | Foundation | Presence | At least 1 | Workflows that ran the Cost & Carbon Optimization calculation in the last 24h. |
+| Hosts with carbon measurement | Foundation | Share | 80% | Percentage of hosts with an energy and carbon measurement from Cost & Carbon Optimization in the last 6h. |
+| Cloud spend ingested | Foundation | Presence | At least 1 | Cloud providers whose billing data (FOCUS format) was imported into Cost & Carbon Optimization in the last 30 hours (the import runs once a day). |
+| Cloud spend with an owner | Best practice | Share | 80% | Share of the imported cloud cost whose billing tags name an owner or a cost center. |
+| Kubernetes namespaces with carbon measurement | Best practice | Share | 50% | Percentage of Kubernetes namespaces with an energy and carbon measurement in the last 6h. |
+| Hosts in active use | Best practice | Share | 80% | Percentage of measured hosts whose average CPU usage in the last 6h is at or above 3%, the idle threshold Cost & Carbon Optimization applies. |
+| Host monitoring cost allocated | Best practice | Share | 50% | Percentage of host monitoring billing records in the last 24h that carry a cost center (dt.cost.costcenter). |
+| Spend under commitment discount | Excellence | Share | 30% | Share of the imported cloud cost covered by a commitment discount (savings plan or reserved capacity). |
+| Energy in productive use | Excellence | Share | 50% | Share of the energy measured on hosts in the last 6h that was not classified as wasted (idle CPU and its overhead). |
+| Business events with a cost center | Excellence | Share | 5% | Percentage of business events with cost center or product data. |

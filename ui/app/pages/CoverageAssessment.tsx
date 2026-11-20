@@ -4,10 +4,11 @@ import { createPortal } from "react-dom";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import { Button } from "@dynatrace/strato-components/buttons";
-import { Text } from "@dynatrace/strato-components/typography";
+import { Link, Text } from "@dynatrace/strato-components/typography";
+import { MeterBarChart } from "@dynatrace/strato-components/charts";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Menu } from "@dynatrace/strato-components/navigation";
-import { Chip, EmptyState, MessageContainer } from "@dynatrace/strato-components/content";
+import { Chip, EmptyState, MessageContainer, ProgressBar } from "@dynatrace/strato-components/content";
 import { showToast } from "@dynatrace/strato-components/notifications";
 import { DownloadIcon, RefreshIcon } from "@dynatrace/strato-icons";
 import type { CoverageData, ViewMode } from "../hooks/useCoverageData";
@@ -48,7 +49,7 @@ const SCALE = SCORE_BANDS.map(b => ({
 }));
 
 
-import { SCORE_BANDS } from "../utils/colors";
+import { SCORE_BANDS, scoreBand } from "../utils/colors";
 
 interface Props {
   /** Which result view this route shows; navigation lives in the AppHeader. */
@@ -139,6 +140,9 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
   const [entityModelInfo, setEntityModelInfo] = useState<SmartscapeModelInfo | null>(null);
   useEffect(() => {
     if (autoRanRef.current || loading || capabilities.length > 0) { if (capabilities.length > 0) setPreparing(false); return; }
+    // Wait for the host count: it picks the scale tier, and a run started
+    // before it would read with the wrong windows.
+    if (scale?.detecting) return;
     autoRanRef.current = true;
     (async () => {
       const [noTraces, noEntities, logMetric] = await Promise.all([
@@ -154,7 +158,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
       setPreparing(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, capabilities.length]);
+  }, [loading, capabilities.length, scale?.detecting]);
 
   /** Banner metadata for the current run's selection; null when off. */
   const traceProxyInfo = useMemo(() => {
@@ -257,7 +261,19 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
       overflow: "auto", boxSizing: "border-box", padding: "0",
       fontFamily: "inherit",
       background: bg, color: text, transition: "background 0.4s, color 0.4s" }}>
-      {/* Chart */}
+      {/* A run in flight: say so. Without this the page stayed blank until the
+          last query returned, on first open and on every Refresh. */}
+      {(loading || preparing) && (
+        <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
+          <Flex flexDirection="column" gap={8} style={{ width: "min(420px, 100%)" }}>
+            <ProgressBar value={loading && coverageData.progress > 0 ? coverageData.progress : "indeterminate"}>
+              <ProgressBar.Label>Assessing the environment</ProgressBar.Label>
+              {loading && coverageData.progress > 0 && <ProgressBar.Value>{`${Math.floor(coverageData.progress)}%`}</ProgressBar.Value>}
+            </ProgressBar>
+          </Flex>
+        </Flex>
+      )}
+
       {/* No start page: the app opens on the assessment. This only shows if a run produced nothing. */}
       {!loading && !preparing && capabilities.length === 0 && (
         <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
@@ -291,10 +307,9 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
           {headerSlot && createPortal(
           <Flex alignItems="center" gap={8}>
             <Button onClick={freshRun} size="condensed"><Button.Prefix><RefreshIcon /></Button.Prefix>Refresh</Button>
-            {/* Reports — persona PDFs (Executive / Tactical / Technical)
-                and the Custom builder are client-side jsPDF and ship to
-                every tenant. The Smart (Assist) item is the ONLY
-                Davis-powered entry and stays dev-only. */}
+            {/* Reports: the PDFs and the raw export are built in the browser
+                (jsPDF). The Smart report is the only entry that calls Davis
+                CoPilot, and only when the user submits it. */}
             {(
               <Menu>
                 <Menu.Trigger>
@@ -402,13 +417,13 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
           <Flex style={{ flex: 1, flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: "auto" }}>
           {viewMode === "coverage" ? (<>
             {/* Left: chart + scale */}
-            <Flex flexDirection="column" alignItems="center" justifyContent="center" style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "visible", position: "relative" }}>
-              <ExpandChartButton onClick={() => setExpandedPolar(true)} style={{ position: "absolute", top: 4, right: 8, zIndex: 10 }} />
+            <Flex flexDirection="column" alignItems="center" justifyContent={isMobile ? "flex-start" : "center"} style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "visible", position: "relative" }}>
+              {!isMobile && <ExpandChartButton onClick={() => setExpandedPolar(true)} style={{ position: "absolute", top: 4, right: 8, zIndex: 10 }} />}
               {/* Lead: where to look first. The three lowest capabilities below "Good", each one click from its detail. */}
               {(() => {
                 const low = capabilities.map((c, i) => ({ c, i })).filter(x => x.c.score < 60).sort((a, b) => a.c.score - b.c.score).slice(0, 3);
                 return (
-                  <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ position: "absolute", top: 8, left: 16, right: 48, zIndex: 10 }}>
+                  <Flex alignItems="center" gap={8} flexWrap="wrap" style={isMobile ? { alignSelf: "stretch", padding: "12px 16px 0" } : { position: "absolute", top: 8, left: 16, right: 48, zIndex: 10 }}>
                     <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>{low.length > 0 ? "Needs attention" : "All capabilities at 60% or above"}</Text>
                     {low.map(({ c, i }) => (
                       <Chip key={c.name} color={c.score < 40 ? "critical" : "warning"} onClick={(e: React.MouseEvent) => { e.stopPropagation(); openCapability(i); }}>
@@ -419,9 +434,26 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                 );
               })()}
               {/* Three-part radar: coverage, utilization and adoption per capability; click opens the detail */}
-              <Flex alignItems="center" justifyContent="center" style={{ width: "100%", flex: 1, minHeight: 0, paddingTop: 44 }}>
-                <PulseRadar capabilities={capabilities} totalScore={totalScore} size={chartSize} onOpen={openCapability} onOpenOverall={() => navigate("/summary")} />
-              </Flex>
+              {isMobile ? (
+                /* A phone is too narrow for the radar's labels: the same scores as a list, lowest first. */
+                <Flex flexDirection="column" gap={16} style={{ alignSelf: "stretch", padding: "16px 16px 32px" }}>
+                  <Flex alignItems="baseline" gap={8}>
+                    <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>Overall score</Text>
+                    <Link onClick={() => navigate("/summary")}><strong style={{ fontVariantNumeric: "tabular-nums" }}>{totalScore}%</strong></Link>
+                    <Text textStyle="small" style={{ color: scoreBand(totalScore).token }}>{scoreBand(totalScore).label}</Text>
+                  </Flex>
+                  {capabilities.map((c, i) => ({ c, i })).sort((a, b) => a.c.score - b.c.score).map(({ c, i }) => (
+                    <MeterBarChart key={c.name} value={Math.floor(c.score)} min={0} max={100} color={scoreBand(c.score).token} size="size8" formatter={(v: number) => `${Math.floor(v)}%`}>
+                      <MeterBarChart.Label><Link onClick={() => openCapability(i)}>{c.name}</Link></MeterBarChart.Label>
+                      <MeterBarChart.Value>{`${Math.floor(c.score)}%`}</MeterBarChart.Value>
+                    </MeterBarChart>
+                  ))}
+                </Flex>
+              ) : (
+                <Flex alignItems="center" justifyContent="center" style={{ width: "100%", flex: 1, minHeight: 0, paddingTop: 44 }}>
+                  <PulseRadar capabilities={capabilities} totalScore={totalScore} size={chartSize} onOpen={openCapability} onOpenOverall={() => navigate("/summary")} />
+                </Flex>
+              )}
             </Flex>
 
             {/* ── Expanded TechRadar Modal ── */}

@@ -27,6 +27,8 @@ import { passLine } from "../passLine";
 import { SCORE_BANDS, scoreBand } from "../utils/colors";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
+import { PT } from "./i18n/pt";
+import { ES } from "./i18n/es";
 import { APP_VERSION } from "../appVersion";
 import { IDLE_CPU } from "../finopsData";
 import type { FinOpsData } from "../finopsData";
@@ -69,6 +71,7 @@ type TierKey = "foundation" | "bestPractice" | "excellence";
 // ── Words ───────────────────────────────────────────────────────────────────
 
 interface Words {
+  lang: ReportLang;
   product: string;
   titles: Record<ReportKind, string>;
   score: string; overall: string; coverage: string; utilization: string; adoption: string;
@@ -119,6 +122,7 @@ const method = (l: ReportLang): string[] => {
 
 const WORDS: Record<ReportLang, Words> = {
   en: {
+    lang: "en",
     product: "Pulse Assessment",
     titles: { overall: "Overall score", plan: "Action plan", criteria: "Criteria detail" },
     score: "Score", overall: "Overall score", coverage: "Coverage", utilization: "Utilization", adoption: "Adoption",
@@ -140,6 +144,7 @@ const WORDS: Record<ReportLang, Words> = {
     verdicts: EN_VERDICTS,
   },
   pt: {
+    lang: "pt",
     product: "Pulse Assessment",
     titles: { overall: "Pontuação geral", plan: "Plano de ação", criteria: "Detalhe dos critérios" },
     score: "Pontuação", overall: "Pontuação geral", coverage: "Cobertura", utilization: "Utilização", adoption: "Adoção",
@@ -168,6 +173,7 @@ const WORDS: Record<ReportLang, Words> = {
     },
   },
   es: {
+    lang: "es",
     product: "Pulse Assessment",
     titles: { overall: "Puntuación general", plan: "Plan de acción", criteria: "Detalle de criterios" },
     score: "Puntuación", overall: "Puntuación general", coverage: "Cobertura", utilization: "Utilización", adoption: "Adopción",
@@ -201,6 +207,20 @@ const WORDS: Record<ReportLang, Words> = {
 
 const stateOf = (r: Row): "met" | "notMet" | "notAssessed" => (r.notAssessed || r.error ? "notAssessed" : r.points > 0 ? "met" : "notMet");
 const cleanLabel = (r: Row) => r.label.replace(/\s*\(%\)\s*$/, "");
+
+/** A criterion's name, description and action in the report's language.
+ *  English is the catalog itself; a criterion missing from a translation falls
+ *  back to English rather than print nothing. Capability names stay as
+ *  Dynatrace writes them: they are product names. */
+const CRITERION_TEXT: Partial<Record<ReportLang, Record<string, { label: string; description: string; action: string }>>> = { pt: PT, es: ES };
+function textOf(r: Row, lang: ReportLang): { label: string; description: string; action: string | undefined } {
+  const t = CRITERION_TEXT[lang]?.[r.id];
+  return {
+    label: t?.label || cleanLabel(r),
+    description: t?.description || r.description,
+    action: t?.action || CRITERION_ACTIONS[r.id]?.action,
+  };
+}
 const isPresence = (r: Row) => r.count != null;
 
 function targetOf(r: Row): number | null {
@@ -229,7 +249,7 @@ function verdictOf(c: CapabilityResult, input: ReportInput) {
 }
 
 const avg = (xs: number[]) => (xs.length ? Math.floor(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
-const round1 = (n: number) => Math.round(n * 10) / 10;
+const round1 = (n: number) => Math.floor(n * 10 + 1e-9) / 10;
 
 function overallParts(caps: CapabilityResult[]) {
   const ad = caps.map(c => c.adoptionScore).filter((x): x is number => x != null);
@@ -433,7 +453,7 @@ function actionRows(k: Kit, T: Words, actions: Action[], o: { showCap: boolean; 
   for (const a of actions) {
     k.ensure(o.detail ? 20 : 10);
     k.mark(M + 1.4, k.y - 1, "notMet");
-    k.font(9.5, true); k.color(INK); k.text(cleanLabel(a.r), col.name, k.y);
+    k.font(9.5, true); k.color(INK); k.text(textOf(a.r, T.lang).label, col.name, k.y);
     k.font(9); k.text(fmtValue(a.r, T), col.value, k.y, { align: "right" });
     k.color(DIM); k.text(fmtTarget(a.r, T), col.target, k.y, { align: "right" });
     k.font(9.5, true); k.color(PASS); k.text(a.gain > 0 ? `+${a.gain.toFixed(1)} ${T.pts}` : "-", col.gain, k.y, { align: "right" });
@@ -441,8 +461,8 @@ function actionRows(k: Kit, T: Words, actions: Action[], o: { showCap: boolean; 
     if (o.showCap) { k.font(8); k.color(DIM); k.text(`${a.c.name}  |  ${T.tiers[a.r.tier]}`, col.name, k.y); k.y += 4; }
     if (o.detail) {
       if (!o.showCap) { k.font(8); k.color(DIM); k.text(T.tiers[a.r.tier], col.name, k.y); k.y += 4; }
-      k.para(a.r.description, { size: 8, c: DIM, x: col.name, w: CW - 5, gap: 0.8 });
-      const act = CRITERION_ACTIONS[a.r.id]?.action;
+      k.para(textOf(a.r, T.lang).description, { size: 8, c: DIM, x: col.name, w: CW - 5, gap: 0.8 });
+      const act = textOf(a.r, T.lang).action;
       if (act) k.para(`${T.whatToDo}: ${act}`, { size: 8.5, x: col.name, w: CW - 8, gap: 0.8 });
     }
     k.y += 2.5;
@@ -597,11 +617,11 @@ export function buildReport(kind: ReportKind, input: ReportInput, lang: ReportLa
           k.ensure(12);
           const st = stateOf(r);
           k.mark(M + 1.4, k.y - 1, st);
-          k.font(9.5, true); k.color(INK); k.text(cleanLabel(r), M + 5, k.y);
+          k.font(9.5, true); k.color(INK); k.text(textOf(r, lang).label, M + 5, k.y);
           k.font(9, true); k.color(st === "met" ? PASS : st === "notMet" ? FAIL : DIM); k.text(fmtValue(r, T), M + 132, k.y, { align: "right" });
           k.font(9); k.color(DIM); k.text(fmtTarget(r, T), M + CW, k.y, { align: "right" });
           k.y += 4;
-          k.para(r.description, { size: 8, c: DIM, x: M + 5, w: CW - 5, gap: 2.5 });
+          k.para(textOf(r, lang).description, { size: 8, c: DIM, x: M + 5, w: CW - 5, gap: 2.5 });
         }
         k.y += 2;
       }

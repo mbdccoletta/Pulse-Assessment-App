@@ -4,6 +4,33 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.3] — 2026-11-20
+
+### Added
+- PDF reports in Portuguese and Spanish now print criterion names, descriptions and actions in the report's language (`ui/app/reports/i18n/`). Capability names stay as Dynatrace writes them. A criterion missing from a translation falls back to English.
+- A progress bar while the assessment runs. The Overview and Overall score pages were blank until the last query returned, on first open and on every Refresh.
+
+### Fixed
+- A host count that arrived after the run had started ran the whole assessment a second time on environments of 5,000 hosts or more. A run now starts only on an explicit trigger, and the first run waits for the host count.
+- The Guide disagreed with the engine in five places: the verdict order, coverage counting assessed criteria only, scores being rounded down, the score without adoption, and an empty tier counting as 0%. It also described adoption as all of a capability's apps together; the reading is the capability's most used app.
+- "Gain if met" points were rounded to one decimal and could round up. They are floored, like every other figure.
+- The Large scale tier advertised a 200 GB scan cap; the cap applied was, and stays, 50 GB per query. The text now says so.
+- The assessment measures whether the platform is used correctly, not how good the data looks. Two criteria judged the data and had pass lines with no Dynatrace rule behind them: "Problems lasting 5 minutes or more" is removed (problems are already assessed by "Problems with root cause"), and "Critical vulnerabilities without public exposure" is replaced by "Vulnerabilities with Davis assessment": the share of open critical and high vulnerabilities for which Davis could assess reachable data assets, met at 50% like the root-cause criteria. The catalog has 137 criteria.
+- Criterion "Custom attribute enrichment" renamed "Custom device log enrichment": it measures logs carrying a custom device entity.
+
+### Changed
+- Evolution is a complete page from the first run. With one saved run it reads that run as the baseline: the parts of each capability with the lowest one marked, every criterion that is not met with its value and target, the criteria closest to passing, and its own Dynatrace Intelligence questions. The comparison view takes over from the second run.
+- Narrow screens: the Overview shows the capabilities as a list instead of the radar, pages no longer run wider than the screen, and tables wrap text instead of cutting it.
+- Measured cost of a full fresh run: 44 GiB on a tenant ingesting about 18 million log records a minute (137 GiB before 3.0.0).
+
+### Removed
+- Scope `storage:filter-segments:read`: no code read segments. The app now requests 17 scopes.
+- Dependencies with no import: `chart.js`, `react-chartjs-2`, `@dynatrace-sdk/client-classic-environment-v2`. `@dynatrace-sdk/navigation` and `@dynatrace-sdk/app-environment` were imported without being declared and are now declared.
+- Dead code: the consolidation factor (nothing set it), the preflight hook, three trace-proxy entries for criteria that no longer exist, and unused components and helpers.
+
+### Documentation
+- `ARCHITECTURE.md`, `ARCHITECTURE-DIAGRAM.md`, `SCORING-CALCULATIONS.md` and `DESIGN-SYSTEM.md` rewritten from the 3.x code. `CRITERIA-SUMMARY.md` is now generated from the catalog by `tools/gen-criteria-summary.mjs`. `PERFORMANCE-REPORT-80K-HOSTS.md` is marked as a historical 2.4 measurement.
+
 ## [3.0.2] — 2026-11-19
 
 ### Changed

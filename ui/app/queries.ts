@@ -1,10 +1,12 @@
 // ═══════════════════════════════════════════════════════════
-// DQL Queries & Coverage Rules v5 — 100% COVERAGE MODEL
+// The criteria catalog
 //
-// EVERY criterion measures a coverage percentage (0–100%):
-//   query  = numerator (entities/signals with the feature)
-//   queryB = denominator (total entities/signals eligible)
-//   result = query / queryB × 100
+// A criterion is read in one of three ways:
+//   query / queryB             a share: numerator over a denominator query
+//   query / denominatorConstant a share of a known constant, or with the
+//                              constant 1 a presence check (is there any?)
+//   settings:count, slos:count a configuration count, read from the settings
+//                              API or the SLO service (no Grail scan)
 //
 // OTel-inclusive: queries detect data from OneAgent, OpenTelemetry,
 // and any other ingest source. No OneAgent-specific filters.
@@ -560,7 +562,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         thresholds: [{ min: 100 }, { min: 50 }],
       },
       {
-        id: "l16", label: "Custom attribute enrichment (%)",
+        id: "l16", label: "Custom device log enrichment (%)",
         description: "Percentage of logs enriched with custom device entities for extended context.",
         query: "fieldsSnapshot logs | filter field == \"dt.entity.custom_device\" | fields relative_count",
         denominatorConstant: 100,
@@ -631,11 +633,11 @@ export const CAPABILITIES: CapabilityDef[] = [
         thresholds: [{ min: 100 }],
       },
       {
-        id: "s15", label: "Critical vulnerabilities without public exposure (%)",
-        description: "Share of open critical and high vulnerabilities that Davis does not see exposed to the public network, in the last 2 hours.",
-        query: "fetch security.events, from:now()-2h | filter event.type == \"VULNERABILITY_STATE_REPORT_EVENT\" and event.level == \"VULNERABILITY\" | filter vulnerability.resolution.status == \"OPEN\" and in(vulnerability.risk.level, {\"CRITICAL\", \"HIGH\"}) | filter vulnerability.davis_assessment.exposure_status != \"PUBLIC_NETWORK\" | summarize count = countDistinct(vulnerability.display_id)",
+        id: "s16", label: "Vulnerabilities with Davis assessment (%)",
+        description: "Share of open critical and high vulnerabilities for which Davis assessed whether data assets are reachable, in the last 2 hours. With that context a vulnerability is prioritized by real risk, not by severity alone.",
+        query: "fetch security.events, from:now()-2h | filter event.type == \"VULNERABILITY_STATE_REPORT_EVENT\" and event.level == \"VULNERABILITY\" | filter vulnerability.resolution.status == \"OPEN\" and in(vulnerability.risk.level, {\"CRITICAL\", \"HIGH\"}) | filter isNotNull(vulnerability.davis_assessment.data_assets_status) and vulnerability.davis_assessment.data_assets_status != \"NOT_AVAILABLE\" | summarize count = countDistinct(vulnerability.display_id)",
         queryB: "fetch security.events, from:now()-2h | filter event.type == \"VULNERABILITY_STATE_REPORT_EVENT\" and event.level == \"VULNERABILITY\" | filter vulnerability.resolution.status == \"OPEN\" and in(vulnerability.risk.level, {\"CRITICAL\", \"HIGH\"}) | summarize count = countDistinct(vulnerability.display_id)",
-        thresholds: [{ min: 90 }],
+        thresholds: [{ min: 50 }],
       },
     ],
   },
@@ -1013,13 +1015,6 @@ export const CAPABILITIES: CapabilityDef[] = [
         query: "fetch dt.system.events, from:now()-7d | filter event.kind == \"ANALYZER_EXECUTION_EVENT\" | filter contains(dt.analyzer.name, \"AutoAdaptive\") or contains(dt.analyzer.name, \"SeasonalBaseline\") | summarize count = countDistinct(dt.task.id)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
-      },
-      {
-        id: "g13", label: "Problems lasting 5 minutes or more (%)",
-        description: "Share of closed Davis problems in the last 72h that stayed open for at least 5 minutes. Problems that open and close within minutes are alert noise.",
-        query: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | filter event.status == \"CLOSED\" | filter resolved_problem_duration >= 5m | summarize count = countDistinctExact(event.id)",
-        queryB: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | filter event.status == \"CLOSED\" | summarize count = countDistinctExact(event.id)",
-        thresholds: [{ min: 80 }],
       },
     ],
   },

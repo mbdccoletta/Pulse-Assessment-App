@@ -20,14 +20,13 @@
 //   a8  DB services          spans 6   vs DATABASE_SERVICE callers 1  (low here;
 //       better on OneAgent-classic estates where DBs are modeled as entities)
 //   a10 multi-service        27% of traces vs 40% of services w/ outgoing calls
-//   s8  failing services     spans 7   vs failure_count>0 services 11 (Δ+4pts)
 // Every proxied check keeps the same pass/fail outcome at its lowest
-// (operative) threshold. s10 has no honest entity-level proxy (measured
-// 11% vs 53%) and is excluded instead.
+// (operative) threshold.
 //
-// AI/LLM Observability is excluded as a whole capability: gen_ai.* attributes
-// exist ONLY on spans — there is no honest proxy. Its absence is disclosed
-// in the TraceProxyBanner and becomes the enablement conversation.
+// AI/LLM Observability loses every span criterion: gen_ai.* attributes exist
+// ONLY on spans, so there is no honest proxy. The capability is then scored on
+// its few criteria that do not read spans. The exclusion is disclosed in the
+// TraceProxyBanner and becomes the enablement conversation.
 
 import { CAPABILITIES, type CapabilityDef, type Criterion } from "./queries";
 
@@ -88,20 +87,10 @@ const PROXIES: Record<string, ProxyDef> = {
     queryB: DB_CALLER_SERVICES,
     note: "Proxy: DB-calling services connected to 2+ distinct DATABASE_SERVICE entities (topology), instead of 2+ db.system values on spans.",
   },
-  s4: {
-    query: DB_CALLER_SERVICES,
-    note: "Proxy: services with topology calls to DATABASE_SERVICE entities — same SQL-surface signal as span-based DB tracing, from the entity model.",
-  },
-  s8: {
-    query:
-      "timeseries val = sum(dt.service.request.failure_count), by:{dt.entity.service} | fieldsAdd m = arrayMax(val) | filter m > 0 | summarize c = count()",
-    note: "Proxy: services with non-zero request failure counts (metrics). Validated Δ+4pts vs span truth.",
-  },
 };
 
 /** Human-readable reasons for the span checks that have NO honest proxy. */
 export const PROXY_EXCLUSION_REASONS: Record<string, string> = {
-  s10: "HTTP request surface needs http.request.method on spans — entity service types misstate it (validated 11% vs 53%).",
   i18: "Cloud span enrichment has no metric/topology equivalent; cloud context is already measured via logs and hosts (i13–i17).",
 };
 
@@ -160,8 +149,3 @@ export function applyTraceProxyMode(
   return { caps: out, info: { proxiedIds, excludedIds, excludedCapabilities } };
 }
 
-/** Static counts over the FULL catalog, for banner copy that must not vary
- *  with the user's capability selection. */
-export function fullCatalogProxyInfo(): TraceProxyInfo {
-  return applyTraceProxyMode(CAPABILITIES).info;
-}
