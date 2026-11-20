@@ -1,7 +1,7 @@
 # Pulse Assessment: scoring calculations
 
 How the app turns query results into scores, bands, verdicts and "gain if met" points.
-This document describes version 3.0.8 (`app.config.json`). The code is the source of truth;
+This document describes version 3.0.9 (`app.config.json`). The code is the source of truth;
 every section names the file it was checked against.
 
 Summary of the model:
@@ -92,7 +92,7 @@ Source: `ui/app/hooks/useCoverageData.ts` (`tierCounts`, `FOUNDATION_WEIGHT`, `B
 Every criterion belongs to one tier (`CRITERION_TIERS`; an id missing from the map falls back to Foundation).
 Not assessed criteria are left out of the tier totals as well.
 
-In the 3.0.8 catalog every capability has criteria in all three tiers. Application Security, Threat Observability,
+In the 3.0.9 catalog every capability has criteria in all three tiers. Application Security, Threat Observability,
 Software Delivery and Platform Governance have a single Foundation criterion, so their Foundation share is 0 or 1.
 
 ### 3.2 Formula
@@ -126,7 +126,7 @@ A tier with nothing assessed has a share of 0. Its weight is not redistributed.
 | Best practice | `effB = 0`, the Excellence gate stays closed | 60 |
 | Excellence | Its 15 points cannot be earned | 85 |
 
-With the 3.0.8 catalog a tier is empty only when all of its criteria are not assessed. Where Foundation
+With the 3.0.9 catalog a tier is empty only when all of its criteria are not assessed. Where Foundation
 has a single criterion and it is not assessed, utilization is 0.
 
 ## 4. Adoption
@@ -231,8 +231,9 @@ Unwatched, Starved, Skin-deep, Dark, Healthy, Not assessed.
 
 Source: `ui/app/pulseScore.ts` (`gainIfMet`); per-overall division in `ui/app/pages/ExecutiveSummary.tsx`, `ui/app/ai/pageIntelligence.ts` (`gains`) and `ui/app/reports/pulseReports.ts`.
 
-The points shown beside an action estimate what the capability score gains if that one unmet
-criterion were met and nothing else changed.
+The gain estimates how much the capability score would rise if that one unmet criterion were met
+and nothing else changed. It is internal: it orders the actions and decides the gain icon. No
+screen, Dynatrace Intelligence answer or report shows the figure.
 
 ```
 coverageGain    = 100 / assessed                         (not floored)
@@ -254,8 +255,8 @@ gain (overall)    = floor1(gain (capability) / number of capabilities)
 | The gain is an estimate | The real score floors coverage and the final average; the gain does not |
 | Gains do not add up exactly | Each one is computed with every other criterion unchanged |
 
-The capability page shows the capability gain. The Overall score page, the reports and the
-Dynatrace Intelligence facts show the overall gain.
+The capability page orders its actions by the capability gain. The Overall score page, the
+reports and the Dynatrace Intelligence facts order theirs by the overall gain.
 
 ## 9. Worked examples
 

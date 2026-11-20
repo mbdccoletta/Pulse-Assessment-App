@@ -76,7 +76,7 @@ interface Words {
   titles: Record<ReportKind, string>;
   score: string; overall: string; coverage: string; utilization: string; adoption: string;
   capabilities: string; capability: string; verdict: string; nextStep: string;
-  actFirst: string; whatToDo: string; criterion: string; value: string; target: string; gain: string; pts: string;
+  actFirst: string; whatToDo: string; criterion: string; value: string; target: string; gain: string;
   tier: string; state: string; met: string; notMet: string; notAssessed: string;
   overTime: string; apps: string; people: string; queries: string; ofUsers: string;
   howToRead: string; method: string[];
@@ -99,24 +99,24 @@ const method = (l: ReportLang): string[] => {
     "Cobertura: os dados existem? É a proporção dos critérios da capacidade que foram atendidos. Um critério é atendido quando o valor medido alcança a meta.",
     `Utilização: quão profunda é a configuração? Os mesmos critérios, agrupados em três níveis com pesos ${f} / ${b} / ${e} (Foundation, Best practice, Excellence). Best practice só conta com Foundation em 80% ou mais; Excellence só conta com Best practice em 60% ou mais.`,
     `Adoção: as pessoas usam? É a proporção de usuários ativos que abriram os apps da capacidade no período. Vale 100 quando chega a ${a}% dos usuários ativos.`,
-    `Veredito: lê as três partes juntas e não altera a pontuação. Uma parte é considerada alta a partir de ${c.coverage} pontos (adoção: ${c.adoptionRate}% dos usuários ativos).`,
-    "Ganho: pontos que a pontuação sobe se aquele critério passar a ser atendido.",
+    `Veredito: lê as três partes juntas e não altera a pontuação. Uma parte é considerada alta a partir de ${c.coverage}% (adoção: ${c.adoptionRate}% dos usuários ativos).`,
+    "Ganho: a seta marca os critérios que elevam a pontuação quando passam a ser atendidos. Eles aparecem do maior efeito para o menor.",
   ];
   if (l === "es") return [
     "La puntuación de cada capacidad es el promedio de tres lecturas, de 0 a 100. La puntuación general es el promedio de las capacidades.",
     "Cobertura: ¿existen los datos? Es la proporción de criterios de la capacidad que se cumplen. Un criterio se cumple cuando el valor medido alcanza la meta.",
     `Utilización: ¿qué tan profunda es la configuración? Los mismos criterios, agrupados en tres niveles con pesos ${f} / ${b} / ${e} (Foundation, Best practice, Excellence). Best practice solo cuenta con Foundation en 80% o más; Excellence solo cuenta con Best practice en 60% o más.`,
     `Adopción: ¿la gente lo usa? Es la proporción de usuarios activos que abrieron las apps de la capacidad en el período. Vale 100 cuando llega al ${a}% de los usuarios activos.`,
-    `Veredicto: lee las tres partes juntas y no cambia la puntuación. Una parte se considera alta desde ${c.coverage} puntos (adopción: ${c.adoptionRate}% de los usuarios activos).`,
-    "Ganancia: puntos que sube la puntuación si ese criterio pasa a cumplirse.",
+    `Veredicto: lee las tres partes juntas y no cambia la puntuación. Una parte se considera alta desde ${c.coverage}% (adopción: ${c.adoptionRate}% de los usuarios activos).`,
+    "Ganancia: la flecha marca los criterios que elevan la puntuación cuando pasan a cumplirse. Aparecen del mayor efecto al menor.",
   ];
   return [
     "Each capability score is the average of three readings, from 0 to 100. The overall score is the average of the capabilities.",
     "Coverage: is the data there? The share of the capability's criteria that are met. A criterion is met when its measured value reaches its target.",
     `Utilization: how deep is the setup? The same criteria, grouped in three tiers weighted ${f} / ${b} / ${e} (Foundation, Best practice, Excellence). Best practice only counts once Foundation reaches 80%; Excellence only once Best practice reaches 60%.`,
     `Adoption: do people use it? The share of active users who opened the capability's apps in the period. It counts as 100 at ${a}% of active users.`,
-    `Verdict: reads the three parts together and does not change the score. A part is high from ${c.coverage} points (adoption: ${c.adoptionRate}% of active users).`,
-    "Gain: points the score rises if that criterion becomes met.",
+    `Verdict: reads the three parts together and does not change the score. A part is high from ${c.coverage}% (adoption: ${c.adoptionRate}% of active users).`,
+    "Gain: an arrow marks the criteria that raise the score when they become met. They are listed from the largest effect to the smallest.",
   ];
 };
 
@@ -127,7 +127,7 @@ const WORDS: Record<ReportLang, Words> = {
     titles: { overall: "Overall score", plan: "Action plan", criteria: "Criteria detail" },
     score: "Score", overall: "Overall score", coverage: "Coverage", utilization: "Utilization", adoption: "Adoption",
     capabilities: "Capabilities", capability: "Capability", verdict: "Verdict", nextStep: "Next step",
-    actFirst: "Where to act first", whatToDo: "What to do", criterion: "Criterion", value: "Value", target: "Target", gain: "Gain", pts: "pts",
+    actFirst: "Where to act first", whatToDo: "What to do", criterion: "Criterion", value: "Value", target: "Target", gain: "Gain",
     tier: "Tier", state: "State", met: "Met", notMet: "Not met", notAssessed: "Not assessed",
     overTime: "Score over time", apps: "Most used apps", people: "people", queries: "queries", ofUsers: "of active users",
     howToRead: "How to read this report", method: method("en"),
@@ -149,7 +149,7 @@ const WORDS: Record<ReportLang, Words> = {
     titles: { overall: "Pontuação geral", plan: "Plano de ação", criteria: "Detalhe dos critérios" },
     score: "Pontuação", overall: "Pontuação geral", coverage: "Cobertura", utilization: "Utilização", adoption: "Adoção",
     capabilities: "Capacidades", capability: "Capacidade", verdict: "Veredito", nextStep: "Próximo passo",
-    actFirst: "Onde agir primeiro", whatToDo: "O que fazer", criterion: "Critério", value: "Valor", target: "Meta", gain: "Ganho", pts: "pts",
+    actFirst: "Onde agir primeiro", whatToDo: "O que fazer", criterion: "Critério", value: "Valor", target: "Meta", gain: "Ganho",
     tier: "Nível", state: "Estado", met: "Atendido", notMet: "Não atendido", notAssessed: "Não avaliado",
     overTime: "Pontuação ao longo do tempo", apps: "Apps mais usados", people: "pessoas", queries: "consultas", ofUsers: "dos usuários ativos",
     howToRead: "Como ler este relatório", method: method("pt"),
@@ -178,7 +178,7 @@ const WORDS: Record<ReportLang, Words> = {
     titles: { overall: "Puntuación general", plan: "Plan de acción", criteria: "Detalle de criterios" },
     score: "Puntuación", overall: "Puntuación general", coverage: "Cobertura", utilization: "Utilización", adoption: "Adopción",
     capabilities: "Capacidades", capability: "Capacidad", verdict: "Veredicto", nextStep: "Próximo paso",
-    actFirst: "Dónde actuar primero", whatToDo: "Qué hacer", criterion: "Criterio", value: "Valor", target: "Meta", gain: "Ganancia", pts: "pts",
+    actFirst: "Dónde actuar primero", whatToDo: "Qué hacer", criterion: "Criterio", value: "Valor", target: "Meta", gain: "Ganancia",
     tier: "Nivel", state: "Estado", met: "Cumplido", notMet: "No cumplido", notAssessed: "No evaluado",
     overTime: "Puntuación en el tiempo", apps: "Apps más usadas", people: "personas", queries: "consultas", ofUsers: "de los usuarios activos",
     howToRead: "Cómo leer este informe", method: method("es"),
@@ -518,7 +518,17 @@ function actionRows(k: Kit, T: Words, actions: Action[], o: { showCap: boolean; 
     k.font(9.5, true); k.color(INK); k.text(textOf(a.r, T.lang).label, col.name, k.y);
     k.font(9); k.text(fmtValue(a.r, T), col.value, k.y, { align: "right" });
     k.color(DIM); k.text(fmtTarget(a.r, T), col.target, k.y, { align: "right" });
-    k.font(9.5, true); k.color(PASS); k.text(a.gain > 0 ? `+${a.gain.toFixed(1)} ${T.pts}` : "-", col.gain, k.y, { align: "right" });
+    // Gain as a mark, not a number: an up arrow when meeting it raises the score, a dash when it does not.
+    {
+      const ax = col.gain - 2.2, ay = k.y - 1.2;
+      if (a.gain > 0) {
+        k.fill(PASS);
+        k.pdf.triangle(ax - 1.7, ay, ax + 1.7, ay, ax, ay - 2.2, "F");
+        k.pdf.rect(ax - 0.45, ay, 0.9, 1.9, "F");
+      } else {
+        k.pdf.setDrawColor(DIM[0], DIM[1], DIM[2]); k.pdf.setLineWidth(0.5); k.pdf.line(ax - 1.6, ay, ax + 1.6, ay);
+      }
+    }
     k.y += 4.2;
     if (o.showCap) { k.font(8); k.color(DIM); k.text(`${a.c.name}  |  ${T.tiers[a.r.tier]}`, col.name, k.y); k.y += 4; }
     if (o.detail) {
@@ -871,8 +881,11 @@ export function generateReport(kind: ReportKind, input: ReportInput, lang: Repor
  *  tool or AI without access to the app. */
 export function buildRawData(input: ReportInput) {
   const caps = input.capabilities;
+  // Position of each unmet criterion inside its capability, largest effect on the score first.
+  const actionOrder = new Map(caps.map(c => [c.name,
+    new Map(unmet(c, 1).sort((x, y) => y.gain - x.gain).map((x, i) => [x.r.id, i + 1]))] as const));
   return {
-    schema: "pulse-assessment/raw-data/1",
+    schema: "pulse-assessment/raw-data/2",
     generatedBy: `Pulse Assessment ${APP_VERSION}`,
     environment: input.tenant,
     assessmentDate: input.date,
@@ -889,8 +902,8 @@ export function buildRawData(input: ReportInput) {
       coverage: "Share of the capability's assessed criteria that are met. A criterion is met when value >= target.",
       utilization: `Criteria grouped in tiers weighted foundation ${FOUNDATION_WEIGHT} / bestPractice ${BEST_PRACTICE_WEIGHT} / excellence ${EXCELLENCE_WEIGHT}. bestPractice counts only when foundation >= 80% met; excellence only when bestPractice >= 60% met.`,
       adoption: `Share of active users who opened the capability's apps in the adoption window, scaled so that ${ADOPTION_FULL_RATE}% of active users = 100.`,
-      verdict: `Reads the three parts together; it does not change the score. A part is high at ${DEFAULT_CUTS.coverage} points or more (adoption: ${DEFAULT_CUTS.adoptionRate}% of active users or more).`,
-      gain: "scoreGainIfMet: points the capability score rises if this criterion becomes met. overallGainIfMet: the same for the overall score.",
+      verdict: `Reads the three parts together; it does not change the score. A part is high at ${DEFAULT_CUTS.coverage}% or more (adoption: ${DEFAULT_CUTS.adoptionRate}% of active users or more).`,
+      actionOrder: "For a criterion that is not met: its position among the capability's unmet criteria, ordered by how much the capability score rises when it becomes met. 1 raises it the most. null for criteria that are met or not assessed.",
       criterionUnits: "percent: value and target are percentages. count: value is a count and the target is at least 1. number: plain number.",
       bands: SCORE_BANDS.map(b => ({ label: b.label, from: b.min, to: b.max === 100 ? 100 : b.max - 1 })),
     },
@@ -915,7 +928,6 @@ export function buildRawData(input: ReportInput) {
         tiers: (["foundation", "bestPractice", "excellence"] as TierKey[]).map(t => ({ tier: t, met: c.utilization[t].passed, total: c.utilization[t].total })),
         criteria: c.criteriaResults.map(r => {
           const st = stateOf(r);
-          const g = st === "notMet" ? gainIfMet(c, r.tier) : 0;
           return {
             id: r.id,
             name: cleanLabel(r),
@@ -927,8 +939,7 @@ export function buildRawData(input: ReportInput) {
             target: targetOf(r),
             numerator: r.num ?? null,
             denominator: r.den ?? null,
-            scoreGainIfMet: round1(g),
-            overallGainIfMet: round1(g / caps.length),
+            actionOrder: actionOrder.get(c.name)?.get(r.id) ?? null,
             whyItMatters: CRITERION_IMPORTANCE[r.id] ?? null,
             whatToDo: CRITERION_ACTIONS[r.id]?.action ?? null,
             documentation: CRITERION_ACTIONS[r.id]?.docUrl ?? null,
@@ -965,11 +976,11 @@ export function buildRawCsv(input: ReportInput): string {
   const data = buildRawData(input);
   const head = ["capability", "capability_score", "capability_coverage", "capability_utilization", "capability_adoption", "capability_verdict",
     "criterion_id", "criterion", "tier", "state", "unit", "value", "target", "numerator", "denominator",
-    "score_gain_if_met", "overall_gain_if_met", "what_to_do", "description", "dql"];
+    "action_order", "what_to_do", "description", "dql"];
   const rows = data.capabilities.flatMap(c => c.criteria.map(r => [
     c.name, c.score, c.coverage, c.utilization, c.adoption, c.verdict,
     r.id, r.name, r.tier, r.state, r.unit, r.value, r.target, r.numerator, r.denominator,
-    r.scoreGainIfMet, r.overallGainIfMet, r.whatToDo, r.description, r.dql,
+    r.actionOrder, r.whatToDo, r.description, r.dql,
   ]));
   return [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
 }

@@ -12,7 +12,7 @@ Pulse Assessment is a native **Dynatrace App** that scores an environment's obse
 - **Three-part score** — each capability score is the average of coverage, utilization and adoption (see below). Percentages are floored, never rounded up
 - **Verdict per capability** — a named diagnosis (for example data nobody opens, or usage ahead of coverage) instead of a bare number
 - **Four pages** — Overview (radar and capabilities), Overall score, Evolution and Guide, plus a detail page per capability
-- **Guided remediation** — the action and the documentation link for every unmet criterion, with the points the score gains
+- **Guided remediation** — the action and the documentation link for every unmet criterion, ordered by how much each one raises the score
 - **Evolution** — every completed run is saved (one per day kept for 90 days); the page compares the latest run with a baseline and traces each change to its part and its criteria. On the first run the page reads that run as the baseline: what holds each score and which criteria are closest to passing
 - **Dynatrace Intelligence on every page** — page-specific questions answered by Davis CoPilot from the numbers on screen; one answer costs 3 AI Units and nothing is asked until you click
 - **Reports** — the Overall score PDF carries the Overview radar. Overall, Action plan and Criteria PDFs in English, Portuguese and Spanish (criterion names, descriptions and actions are translated; capability names stay as Dynatrace writes them), a FinOps report, a Smart Report written by Davis CoPilot, and raw data as JSON or CSV
@@ -34,13 +34,17 @@ Pulse Assessment is a native **Dynatrace App** that scores an environment's obse
 
 ![Overall score](docs/screenshots/screenshot-overall.jpg)
 
-**Capability detail** — the three parts, the actions with the points each one adds, and every criterion by tier.
+**Capability detail** — the three parts, the actions ordered by how much each one raises the score, and every criterion by tier.
 
 ![Capability detail](docs/screenshots/screenshot-capability.jpg)
 
 **FinOps & Sustainability** — the capability page offers the FinOps report directly.
 
 ![FinOps](docs/screenshots/screenshot-finops.jpg)
+
+**Platform Governance** — ownership, automation, and the data protection criteria: masking, retention and the audit trail.
+
+![Platform Governance](docs/screenshots/screenshot-governance.jpg)
 
 **Evolution** — the latest run against a baseline, with each change traced to its part and its criteria.
 

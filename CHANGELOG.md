@@ -4,6 +4,12 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.9] — 2026-11-20
+
+### Changed
+- No points anywhere. Screens, Dynatrace Intelligence answers and reports no longer state a number of points or a point difference. A change is a Strato icon (arrow up for a gain, arrow down for a loss, a dash for no change) beside the before and after percentages. Actions keep their order, largest effect on the score first, and carry the gain icon.
+- Raw data export: `scoreGainIfMet` and `overallGainIfMet` are replaced by `actionOrder`, the position of an unmet criterion inside its capability. Schema `pulse-assessment/raw-data/2`.
+
 ## [3.0.8] — 2026-11-20
 
 ### Added
