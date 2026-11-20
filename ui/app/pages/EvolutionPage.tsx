@@ -28,7 +28,8 @@ import { CAPABILITIES } from "../queries";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { Panel, StateMark, TrendChart, pctFormat } from "./CapabilityDetailPage";
 import { IntelligenceBar } from "../components/IntelligenceBar";
-import { LENS, QUESTIONS, evolutionFacts } from "../ai/pageIntelligence";
+import { LENS, LENS_BASELINE, QUESTIONS, QUESTIONS_BASELINE, baselineFacts, evolutionFacts } from "../ai/pageIntelligence";
+import { passLine } from "../passLine";
 
 const MONO = Typography.Code.Small.Default.Family;
 const PASS = Colors.Charts.Status.Ideal.Default;
@@ -43,7 +44,12 @@ type State = "pass" | "fail" | "na";
 
 /** Criteria read as a share (they divide by a second query). */
 const IS_RATIO: Record<string, boolean> = {};
-for (const cap of CAPABILITIES) for (const cr of cap.criteria) if (cr.queryB || (cr.denominatorConstant != null && cr.denominatorConstant !== 1)) IS_RATIO[cr.id] = true;
+/** The value each criterion must reach (../passLine.ts). */
+const TARGET: Record<string, number | null> = {};
+for (const cap of CAPABILITIES) for (const cr_ of cap.criteria) {
+  if (cr_.queryB || (cr_.denominatorConstant != null && cr_.denominatorConstant !== 1)) IS_RATIO[cr_.id] = true;
+  TARGET[cr_.id] = passLine(cr_.thresholds.map(t => t.min));
+}
 /** A reading with the state in front; the number is left out when the criterion
  *  is a presence check or no longer in the catalog (its unit is not known). */
 const reading = (r: SnapRow | undefined) => {
@@ -107,7 +113,7 @@ const CAUSE_CHIP: Record<CauseKind, { label: string; color: "neutral" | "primary
   assessed: { label: "Now assessed", color: "primary" },
 };
 const PART_LABEL = { coverage: "Coverage", utilization: "Utilization", adoption: "Adoption" } as const;
-const signed = (n: number) => `${n > 0 ? "+" : ""}${Math.round(n * 10) / 10}`;
+const signed = (n: number) => `${n > 0 ? "+" : ""}${Math.trunc(n * 10 + Math.sign(n) * 1e-9) / 10}`;
 
 interface Props {
   snapshots: AssessmentSnapshot[];
@@ -206,6 +212,48 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
       // Lost criteria first: they are the ones to act on.
       .sort((a, b) => (a.now === b.now ? 0 : a.now === "fail" ? -1 : 1));
   }, [to, from, cap]);
+  // With one saved run there is nothing to compare, so the page reads the run
+  // as a baseline: what holds each score and which unmet criteria are nearest
+  // their target. Those are the ones a second run is most likely to show as gained.
+  const closest = useMemo(() => {
+    if (!to) return [];
+    return to.capabilities.flatMap(c => c.criteriaResults
+      .filter(r => stateOf(r) === "fail" && IS_RATIO[r.id] && TARGET[r.id] != null)
+      .map(r => {
+        const value = Math.floor(r.value * 10) / 10, target = TARGET[r.id] as number;
+        return { cap: c, r, value, target, gap: Math.max(0, Math.ceil((target - value) * 10) / 10) };
+      }))
+      .filter(x => !cap || x.cap.name === cap)
+      .sort((a, b) => a.gap - b.gap);
+  }, [to, cap]);
+  type Near = (typeof closest)[number];
+  const nearColumns = [
+    { id: "criterion", header: "Criterion", minWidth: 160, autoWidth: true, accessor: (c: Near) => cleanName(c.r.label), cell: ({ rowData }: { rowData: Near }) => {
+      const act = CRITERION_ACTIONS[rowData.r.id]?.action;
+      return <DataTable.DefaultCell>{act ? <Tooltip text={act}><Text>{cleanName(rowData.r.label)}</Text></Tooltip> : cleanName(rowData.r.label)}</DataTable.DefaultCell>;
+    } },
+    { id: "capability", header: "Capability", minWidth: 150, autoWidth: true, accessor: (c: Near) => c.cap.name, cell: ({ rowData }: { rowData: Near }) => (
+      <DataTable.DefaultCell><Link onClick={() => openCap(rowData.cap.name)}>{rowData.cap.name}</Link></DataTable.DefaultCell>
+    ) },
+    { id: "value", header: "Value", width: 100, alignment: "right" as const, accessor: (c: Near) => `${c.value}%` },
+    { id: "target", header: "Target", width: 100, alignment: "right" as const, accessor: (c: Near) => `${c.target}%` },
+    { id: "gap", header: "Gap (pts)", width: 110, alignment: "right" as const, accessor: (c: Near) => c.gap },
+  ];
+  /** Per capability: its parts, the lowest one, and the criteria that are not met. */
+  const baseline = useMemo(() => {
+    if (!to) return [];
+    return [...to.capabilities].sort((a, b) => a.score - b.score).map(c => {
+      const parts = (["coverage", "utilization", "adoption"] as const).map(k => ({ key: k, value: c[k] ?? null }));
+      const known = parts.filter(p => p.value != null);
+      const lowest = known.length ? known.reduce((m, p) => ((p.value as number) < (m.value as number) ? p : m)).key : null;
+      return {
+        name: c.name, color: c.color, score: c.score, parts, lowest, adoptionRate: c.adoptionRate ?? null,
+        unmet: c.criteriaResults.filter(r => stateOf(r) === "fail"),
+        notAssessed: c.criteriaResults.filter(r => stateOf(r) === "na"),
+      };
+    });
+  }, [to]);
+
   const gained = changes.filter(c => c.now === "pass").length;
   const lost = changes.filter(c => c.now === "fail").length;
   type Change = (typeof changes)[number];
@@ -260,17 +308,19 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
   const clearCap = cap ? <Chip color="primary" size="condensed">{cap}<Chip.DeleteButton aria-label={`Clear the ${cap} filter`} onClick={() => setCap(null)} /></Chip> : null;
   return (
     <Flex flexDirection="column" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-      {!solo && <IntelligenceBar
+      <IntelligenceBar
         key={`${from.id}-${to.id}`}
-        questions={QUESTIONS.evolution}
+        questions={solo ? QUESTIONS_BASELINE : QUESTIONS.evolution}
         ctx={{
           tenant: to.tenant, date: to.timestamp.slice(0, 10), overallCoverage: to.totalScore,
           overallUtilization: part(to, "utilization") ?? 0,
           capabilities: to.capabilities.map(c => ({ name: c.name, score: c.score, coverageScore: c.coverage, adoptionRate: c.adoptionRate ?? null, adoptionScore: c.adoption ?? null, criteriaResults: c.criteriaResults.filter(r => !r.notAssessed) })),
-          lens: LENS.evolution,
-          pageNote: evolutionFacts(from, to),
+          lens: solo ? LENS_BASELINE : LENS.evolution,
+          pageNote: solo
+            ? baselineFacts(to, closest.slice(0, 12).map(x => ({ capability: x.cap.name, label: cleanName(x.r.label), value: x.value, target: x.target, gap: x.gap })))
+            : evolutionFacts(from, to),
         }}
-      />}
+      />
       <Flex flexDirection="column" gap={16} style={{ padding: "16px 20px 32px" }}>
         <Flex alignItems="center" gap={12} flexWrap="wrap">
           <Heading level={2}>Evolution</Heading>
@@ -279,9 +329,9 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
           <Flex alignItems="center" gap={16} flexWrap="wrap" style={{ marginLeft: "auto" }}>
             <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{solo ? fmtRun(to.timestamp) : `${fmtRun(from.timestamp)} → ${fmtRun(to.timestamp)}`}</Text>
             {!solo && (
-              <ToggleButtonGroup value={since} onChange={(v: string) => setSince(v as Since)}>
+              <Flex style={{ maxWidth: "100%", overflowX: "auto" }}><ToggleButtonGroup value={since} onChange={(v: string) => setSince(v as Since)}>
                 {SINCE.map(v => <ToggleButtonGroup.Item key={v} value={v}>{v}</ToggleButtonGroup.Item>)}
-              </ToggleButtonGroup>
+              </ToggleButtonGroup></Flex>
             )}
           </Flex>
         </Flex>
@@ -304,6 +354,55 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
         </Flex>
 
         {/* Why the score moved: every change traced to its part and its criteria */}
+        {solo && (
+          <Panel title="What holds each score" right={<Text textStyle="small" style={{ color: NEUTRAL }}>Lowest score first</Text>}>
+            <Accordion multiple defaultExpanded={baseline.slice(0, 2).map(c => c.name)}>
+              {baseline.map(c => (
+                <Accordion.Section key={c.name} id={c.name}>
+                  <Accordion.SectionLabel>
+                    <Grid gridTemplateColumns="minmax(0, 1fr) 90px" gap={12} alignItems="center" width="100%">
+                      <Flex alignItems="center" gap={8}>
+                        <Flex style={{ display: "inline-flex", width: 8, height: 8, borderRadius: "50%", background: c.color, flexShrink: 0 }} />
+                        <Text textStyle="base-emphasized">{c.name}</Text>
+                      </Flex>
+                      <Text textStyle="base-emphasized" style={{ fontFamily: MONO, color: scoreBand(c.score).token, textAlign: "right" }}>{c.score}%</Text>
+                    </Grid>
+                  </Accordion.SectionLabel>
+                  <Accordion.SectionContent>
+                    <Flex flexDirection="column" gap={12}>
+                      <Grid gridTemplateColumns="repeat(auto-fit, minmax(min(100%, 200px), 1fr))" gap={12}>
+                        {c.parts.map(p => (
+                          <Flex key={p.key} flexDirection="column" gap={2}>
+                            <Text textStyle="small" style={{ color: NEUTRAL }}>{PART_LABEL[p.key]}</Text>
+                            <Text textStyle="base-emphasized" style={{ fontFamily: MONO }}>{p.value == null ? "—" : `${Math.floor(p.value)}%`}</Text>
+                            {p.key === c.lowest && <Flex><Chip size="condensed" color="warning">Lowest part</Chip></Flex>}
+                            {p.key === "adoption" && c.adoptionRate != null && <Text textStyle="small" style={{ color: NEUTRAL }}>{c.adoptionRate}% of active users</Text>}
+                          </Flex>
+                        ))}
+                      </Grid>
+                      {c.unmet.length === 0 && c.notAssessed.length === 0 ? (
+                        <Text textStyle="small" style={{ color: NEUTRAL }}>Every criterion is met</Text>
+                      ) : (
+                        <Flex flexDirection="column" gap={6}>
+                          {[...c.unmet, ...c.notAssessed].map(r => (
+                            <Grid key={r.id} gridTemplateColumns="130px minmax(0, 1fr) minmax(0, 1fr)" gap={12} alignItems="center">
+                              <Flex><StateMark state={stateOf(r) === "fail" ? "fail" : "na"} label /></Flex>
+                              <Text textStyle="small-emphasized">{cleanName(r.label)}</Text>
+                              <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>
+                                {stateOf(r) === "fail" && IS_RATIO[r.id] && TARGET[r.id] != null ? `${fmtValue(r)}  →  ${TARGET[r.id]}%` : ""}
+                              </Text>
+                            </Grid>
+                          ))}
+                        </Flex>
+                      )}
+                    </Flex>
+                  </Accordion.SectionContent>
+                </Accordion.Section>
+              ))}
+            </Accordion>
+          </Panel>
+        )}
+
         {!solo && <Panel title="What caused the change">
           {causes.caps.length === 0 && causes.added.length === 0 && causes.removed.length === 0 ? (
             <Text textStyle="small" style={{ color: NEUTRAL }}>Nothing changed between these two runs</Text>
@@ -393,13 +492,23 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
           </Grid>
         </Panel>
 
+        {solo && (
+          <Panel title="Closest to passing" right={<Flex alignItems="center" gap={12}>{clearCap}<Text textStyle="small" style={{ color: NEUTRAL }}>Smallest gap first</Text></Flex>}>
+            {closest.length === 0 ? <Text textStyle="small" style={{ color: NEUTRAL }}>No unmet share criteria</Text> : (
+              <DataTable data={closest} columns={nearColumns} fullWidth sortable defaultLineWrap variant={{ rowDensity: "condensed" }}>
+                <DataTable.Pagination defaultPageSize={10} />
+              </DataTable>
+            )}
+          </Panel>
+        )}
+
         {!solo && <Panel title="Criteria that changed" right={
           <Flex alignItems="center" gap={12}>
             {clearCap}
             <Chip color="success" size="condensed">Gained {gained}</Chip><Chip color="critical" size="condensed">Lost {lost}</Chip>
           </Flex>}>
           {changes.length === 0 ? <Text textStyle="small" style={{ color: NEUTRAL }}>No criteria changed state</Text> : (
-            <DataTable data={changes} columns={changeColumns} fullWidth sortable variant={{ rowDensity: "condensed" }}>
+            <DataTable data={changes} columns={changeColumns} fullWidth sortable defaultLineWrap variant={{ rowDensity: "condensed" }}>
               <DataTable.Pagination defaultPageSize={10} />
             </DataTable>
           )}

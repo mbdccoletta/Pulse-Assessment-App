@@ -2,7 +2,7 @@
 //
 // Who actually USES the platform, per capability.
 //
-// The 111 checks answer "is the data there?". This hook answers the other
+// The criteria answer "is the data there?". This hook answers the other
 // half: "does anyone open the app that consumes it?" — a capability at 95%
 // coverage with one active user is a very different story from the same
 // 95% with a whole team in it.
@@ -24,10 +24,11 @@
 //   - This is platform usage, not data usage: a dashboard that queries logs
 //     counts for whoever opened it, not for "Log Analytics" as such.
 //
-// NEVER feeds a score. Adoption is reported next to coverage; the
-// assessment maths stays untouched.
+// Adoption is one of the three parts of a capability score (../pulseScore.ts).
+// The reading itself is the largest single-app audience of the capability,
+// never a sum across apps: the same person usually opens several.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { capabilityForApp, OTHER_BUCKET } from "../data/appCapabilityMap";
 
@@ -189,6 +190,8 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
     return () => { cancelled = true; };
   }, [enabled, runId]);
 
+  // Memoized: App.tsx keys the score on this object's identity.
+  const byCapability = useMemo(() => {
   const byCapability: Record<string, CapabilityAdoption> = {};
   for (const a of apps) {
     const entry = byCapability[a.capability] ?? { users: 0, rate: 0, apps: [] };
@@ -205,6 +208,8 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
     // from a failed second query should not produce >100%).
     entry.rate = totalUsers > 0 ? Math.min(100, Math.floor((entry.users / totalUsers) * 100)) : 0;
   }
+  return byCapability;
+  }, [apps, totalUsers]);
 
   const refresh = useCallback(() => setRunId(n => n + 1), []);
 

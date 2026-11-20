@@ -12,8 +12,8 @@
 //      returns the markdown answer, and the caller renders it through
 //      ../reports/aiNarrativePdf.ts into the app's PDF shell.
 //
-// DEV ONLY: like every Davis surface in this app, Smart Reports are gated
-// in production since v2.5.6; the call only happens on explicit submit.
+// The call only happens on explicit submit: nothing is sent to Davis CoPilot
+// until the user asks for the report.
 
 import { publicClient } from "@dynatrace-sdk/client-davis-copilot";
 import { buildReportPrompt, type ReportContext } from "./reportPrompt";

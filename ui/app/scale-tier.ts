@@ -16,7 +16,7 @@
 //   - "exact"  — default. Queries are returned verbatim. Use for tenants
 //                up to 5,000 hosts. Ground-truth coverage values.
 //   - "large"  — for logs/spans/events/bizevents only, narrows the window
-//                to 30 minutes and applies a 200 GB scanLimitGBytes cap.
+//                to 30 minutes and applies a 50 GB scanLimitGBytes cap per query.
 //                Distinct-count accuracy preserved on typical workloads
 //                (every active host emits at least one record per 30 min).
 //   - "xlarge" — same shape as Large, but with a 5-minute window and 50 GB
@@ -94,11 +94,11 @@ export const TIER_CONFIG: Record<ScaleTier, TierConfig> = {
   },
   large: {
     windowMinutes: 30,
-    scanLimitGBytes: 200,
+    scanLimitGBytes: 50,
     sampled: true,
     label: 'Large',
     description:
-      '30-minute window with 200 GB scan cap. Suitable for tenants 5k–50k hosts. Coverage values may shift slightly for very sparse signals; otherwise indistinguishable from Exact.',
+      '30-minute window with a 50 GB scan cap per query. Suitable for tenants 5k–50k hosts. Coverage values may shift slightly for very sparse signals; otherwise indistinguishable from Exact.',
     minHosts: 5_000,
     maxHosts: 50_000,
   },
@@ -250,7 +250,7 @@ export function sampleableQueries(): Set<string> {
 }
 
 /** Window a non-sampleable hot query is narrowed to: short windows collapse
- *  to 15 minutes, long ones (the sparse gen_ai checks) are capped at 24h. */
+ *  to 15 minutes, long ones (the sparse gen_ai checks) are capped at 4h. */
 function plainWindow(minutes: number): number {
   return minutes <= 4 * 60
     ? Math.min(minutes, DISTINCT_WINDOW_MIN)

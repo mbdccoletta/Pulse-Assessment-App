@@ -1,24 +1,8 @@
-import { useState, useCallback } from "react";
+// Environment probes run before the first assessment: does the tenant have
+// Traces on Grail, and does it have the classic entity model? The answers pick
+// the catalog (Trace Proxy Mode, Smartscape) with no setup step.
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { isDevEnvironment } from "./useDevMode";
-
-export interface PreflightCheck {
-  id: string;
-  label: string;
-  scope: string;
-  status: "pending" | "running" | "ok" | "fail" | "not-entitled" | "no-classic-entities";
-  detail?: string;
-}
-
-const PROBE_QUERIES: { id: string; label: string; scope: string; query: string }[] = [
-  { id: "entities", label: "Entities (hosts, services, apps)", scope: "storage:entities:read", query: "fetch dt.entity.host | limit 1 | summarize count()" },
-  { id: "logs",     label: "Log data",                         scope: "storage:logs:read",     query: "fetch logs | limit 1 | summarize count()" },
-  { id: "metrics",  label: "Metrics (timeseries)",              scope: "storage:metrics:read",  query: "timeseries avg(dt.host.cpu.usage), by:{dt.entity.host} | limit 1 | summarize c = count()" },
-  { id: "events",   label: "Events & problems",                 scope: "storage:events:read",   query: "fetch events | limit 1 | summarize count()" },
-  { id: "spans",    label: "Distributed traces (spans)",         scope: "storage:spans:read",    query: "fetch spans | limit 1 | summarize count()" },
-  { id: "bizevents",label: "Business events",                    scope: "storage:bizevents:read",query: "fetch bizevents | limit 1 | summarize count()" },
-  { id: "buckets",  label: "Grail buckets",                      scope: "storage:buckets:read",  query: "fetch dt.system.buckets | limit 1 | summarize count()" },
-];
 
 /** Tenant-level entitlement failures (e.g. TRACE_QUERY_ENTITLEMENT_MISSING /
  *  exceptionType ENTITLEMENT-MISSING) are NOT scope problems — granting
@@ -125,9 +109,7 @@ async function probeQuery(query: string): Promise<{ ok: boolean; detail: string;
  *  answers false: the normal catalog runs and each criterion reports for itself. */
 export async function tracesNotEntitled(): Promise<boolean> {
   if (simulateNoTraces()) return true;
-  const spans = PROBE_QUERIES.find(q => q.id === "spans");
-  if (!spans) return false;
-  const r = await probeQuery(spans.query);
+  const r = await probeQuery("fetch spans | limit 1 | summarize count()");
   return !r.ok && r.entitlement;
 }
 
@@ -149,61 +131,4 @@ export async function classicEntitiesMissing(): Promise<boolean> {
   if (simulateNoClassicEntities()) return true;
   const r = await probeQuery("fetch dt.entity.host | limit 1 | summarize count()");
   return !r.ok && r.noClassicEntities;
-}
-
-export function usePreflight() {
-  const [checks, setChecks] = useState<PreflightCheck[]>(
-    PROBE_QUERIES.map(p => ({ id: p.id, label: p.label, scope: p.scope, status: "pending" as const }))
-  );
-  const [running, setRunning] = useState(false);
-  const [done, setDone] = useState(false);
-  const [validated, setValidated] = useState(false);
-
-  const runPreflight = useCallback(async () => {
-    if (validated) return;  // already passed — skip
-    setRunning(true);
-    setDone(false);
-    setChecks(PROBE_QUERIES.map(p => ({ id: p.id, label: p.label, scope: p.scope, status: "running" })));
-
-    for (const probe of PROBE_QUERIES) {
-      if (probe.id === "spans" && simulateNoTraces()) {
-        setChecks(prev => prev.map(c => c.id === probe.id
-          ? { ...c, status: "not-entitled", detail: "Simulated (dev): Query failed: TRACE_QUERY_ENTITLEMENT_MISSING" }
-          : c));
-        continue;
-      }
-      const result = await probeQuery(probe.query);
-      const status: PreflightCheck["status"] = result.ok
-        ? "ok"
-        : result.noClassicEntities
-          ? "no-classic-entities"
-          : probe.id === "spans" && result.entitlement
-            ? "not-entitled"
-            : "fail";
-      setChecks(prev => prev.map(c => c.id === probe.id ? { ...c, status, detail: result.detail } : c));
-    }
-    setRunning(false);
-    setDone(true);
-  }, [validated]);
-
-  const reset = useCallback(() => {
-    setChecks(PROBE_QUERIES.map(p => ({ id: p.id, label: p.label, scope: p.scope, status: "pending" })));
-    setDone(false);
-    setRunning(false);
-  }, []);
-
-  const allPassed = done && checks.every(c => c.status === "ok");
-  const hasFails = done && checks.some(c => c.status === "fail");
-  /** Every source is fine EXCEPT spans, which failed on the tenant-level
-   *  Traces on Grail entitlement → the app can offer Trace Proxy Mode. */
-  const spansNotEntitled = done && !hasFails && checks.some(c => c.id === "spans" && c.status === "not-entitled");
-  /** The tenant uses the Smartscape entity model, so every `dt.entity.*`
-   *  denominator in the catalog is unavailable. The assessment cannot run —
-   *  but the reason is the data model, not a missing permission. */
-  const noClassicEntities = done && checks.some(c => c.status === "no-classic-entities");
-
-  // Persist validated state so preflight is skipped on subsequent runs
-  const markValidated = useCallback(() => setValidated(true), []);
-
-  return { checks, running, done, allPassed, hasFails, spansNotEntitled, noClassicEntities, validated, runPreflight, reset, markValidated };
 }

@@ -5,6 +5,12 @@
 **Method:** Stress test on `<reference-tenant>` (54 hosts / 82 services / 737 processes) using a 27-query representative sample (out of 107 unique queries), then linear extrapolation to 80,000 hosts.
 **App version under test:** Pulse Assessment v2.4.2
 
+> **Historical document.** This report was measured on v2.4.2, with 9 capabilities
+> and 107 unique queries. Version 3.x has 11 capabilities and 138 criteria, reads
+> part of the log coverage from a free metric and caps every hot query; the
+> absolute volumes below no longer describe a current run. The extrapolation
+> method is still the one to use. Current cost controls are in the README.
+>
 > **Superseded in part (v2.5.5).** The scan volumes below predate Economy Mode.
 > They remain valid as the *unoptimized* baseline and for the extrapolation
 > method, but a current run scans roughly **9x less**: a full assessment was

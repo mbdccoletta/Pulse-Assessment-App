@@ -59,15 +59,15 @@ function utilizationOf(f: number, b: number, e: number): number {
 export function gainIfMet(cap: CapabilityResult, tier: "foundation" | "bestPractice" | "excellence"): number {
   const u = cap.utilization;
   const frac = (t: { passed: number; total: number }, add: number) => (t.total > 0 ? Math.min(1, (t.passed + add) / t.total) : 0);
-  const k = cap.consolidation / 100;
-  const utilNow = utilizationOf(frac(u.foundation, 0), frac(u.bestPractice, 0), frac(u.excellence, 0)) * k;
+  const utilNow = utilizationOf(frac(u.foundation, 0), frac(u.bestPractice, 0), frac(u.excellence, 0));
   const utilThen = utilizationOf(
     frac(u.foundation, tier === "foundation" ? 1 : 0),
     frac(u.bestPractice, tier === "bestPractice" ? 1 : 0),
     frac(u.excellence, tier === "excellence" ? 1 : 0),
-  ) * k;
-  const coverageGain = cap.assessedCount > 0 ? (100 / cap.assessedCount) * k : 0;
+  );
+  const coverageGain = cap.assessedCount > 0 ? 100 / cap.assessedCount : 0;
   const parts = PULSE_SCORE_PARTS === "coverage" ? 1 : cap.adoptionScore != null ? 3 : 2;
   const gain = PULSE_SCORE_PARTS === "coverage" ? coverageGain : (coverageGain + (utilThen - utilNow)) / parts;
-  return Math.max(0, Math.round(gain * 10) / 10);
+  // Floored to one decimal: a gain is never shown larger than it is.
+  return Math.max(0, Math.floor(gain * 10 + 1e-9) / 10);
 }

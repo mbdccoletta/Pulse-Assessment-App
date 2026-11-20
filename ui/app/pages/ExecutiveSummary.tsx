@@ -86,7 +86,7 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
   // Every unmet criterion, by what it adds to the OVERALL score.
   const todo = useMemo(() => capabilities.flatMap(c => c.criteriaResults
     .filter(r => isFail(r) && (!tier || r.tier === tier))
-    .map(r => ({ c, r, gain: Math.round((gainIfMet(c, r.tier) / capabilities.length) * 10) / 10 })))
+    .map(r => ({ c, r, gain: Math.floor((gainIfMet(c, r.tier) / capabilities.length) * 10 + 1e-9) / 10 })))
     .sort((a, b) => b.gain - a.gain), [capabilities, tier]);
   type Todo = (typeof todo)[number];
   const todoColumns = [
@@ -117,7 +117,7 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
   const topApps = adoption.apps.slice(0, 9);
 
   return (
-    <Flex flexDirection="column" gap={16} style={{ flex: 1, minWidth: 0, alignSelf: "flex-start", padding: "16px 20px 32px" }}>
+    <Flex flexDirection="column" gap={16} style={{ flex: 1, minWidth: 0, width: "100%", boxSizing: "border-box", alignSelf: "flex-start", padding: "16px 20px 32px" }}>
       <Flex alignItems="center" gap={12} flexWrap="wrap">
         <Heading level={2}>Overall score</Heading>
         <Text style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: band.token }}>{totalScore}%</Text>
@@ -144,10 +144,10 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
         <Panel title="Utilization tiers" right={<InformationOverlay aria-label="About utilization tiers"><InformationOverlay.Content>Criteria met in each tier, across all capabilities. Select a tier to filter the page.</InformationOverlay.Content></InformationOverlay>}>
           <Flex flexDirection="column" gap={12}>
             <Flex>
-            <ToggleButtonGroup value={tier ?? "all"} onChange={(v: string) => setTier(v === "all" ? null : (v as TierKey))}>
+            <Flex style={{ maxWidth: "100%", overflowX: "auto" }}><ToggleButtonGroup value={tier ?? "all"} onChange={(v: string) => setTier(v === "all" ? null : (v as TierKey))}>
               <ToggleButtonGroup.Item value="all">All</ToggleButtonGroup.Item>
               {TIERS.map(t => <ToggleButtonGroup.Item key={t.key} value={t.key}>{t.label}</ToggleButtonGroup.Item>)}
-            </ToggleButtonGroup>
+            </ToggleButtonGroup></Flex>
             </Flex>
             {TIERS.map(t => <TierMeter key={t.key} label={t.label} pct={tierAll(t.key)} />)}
           </Flex>
@@ -185,7 +185,7 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
 
       {todo.length > 0 && (
         <Panel title="What to do" right={<Flex alignItems="center" gap={12}>{clearTier}<Text textStyle="small" style={{ color: NEUTRAL }}>Highest gain on the overall score first</Text></Flex>}>
-          <DataTable data={todo} columns={todoColumns} fullWidth sortable variant={{ rowDensity: "condensed" }}>
+          <DataTable data={todo} columns={todoColumns} fullWidth sortable defaultLineWrap variant={{ rowDensity: "condensed" }}>
             <DataTable.Pagination defaultPageSize={10} />
           </DataTable>
         </Panel>

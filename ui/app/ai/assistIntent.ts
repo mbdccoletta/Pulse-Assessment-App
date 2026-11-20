@@ -107,24 +107,3 @@ export function openDynatraceAssist({ prompt, ctx, execute = false, extraContext
   }
 }
 
-/**
- * Availability gate per the guide: only show conversation starter triggers
- * to users who can follow through. null = still checking.
- */
-export function useConversationSkillAvailable(active: boolean): boolean | null {
-  const [available, setAvailable] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!active || available !== null) return;
-    let cancelled = false;
-    publicClient
-      .listAvailableSkills()
-      .then((response) => {
-        if (!cancelled) setAvailable(((response.skills ?? []) as string[]).some(k => k === "conversation" || k === "operator"));
-      })
-      .catch(() => {
-        if (!cancelled) setAvailable(false);
-      });
-    return () => { cancelled = true; };
-  }, [active, available]);
-  return available;
-}

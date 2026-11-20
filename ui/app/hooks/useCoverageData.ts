@@ -27,10 +27,9 @@ export interface UtilizationResult {
 export interface CapabilityResult {
   name: string;
   color: string;
-  /** Effective score (adjusted by consolidation when active, otherwise same as rawScore). */
+  /** The score every screen shows. Coverage as it leaves the run; coverage,
+   *  utilization and adoption combined once ../pulseScore.ts has applied. */
   score: number;
-  /** Original score from DQL queries (before consolidation adjustment). */
-  rawScore: number;
   details: string[];
   criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; notAssessed: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; proxied: boolean; /** Raw count for presence checks (denominator 1). */ count?: number; /** Numerator and denominator of a ratio check. */ num?: number; den?: number }[];
   /** Criteria that produced a verdict — the denominator of `score`. */
@@ -38,9 +37,7 @@ export interface CapabilityResult {
   /** Criteria that could not be measured. Reported, never counted as failures. */
   notAssessedCount: number;
   utilization: UtilizationResult;
-  /** Consolidation factor (0–100). 100 = all data in DT, 30 = only 30% of estate in DT. */
-  consolidation: number;
-  /** Effective utilization score (adjusted by consolidation when active). */
+  /** Utilization as the screens show it. */
   effectiveUtilizationScore: number;
   /** Share of criteria met. Set once `score` carries the combined score (see ../pulseScore.ts). */
   coverageScore?: number;
@@ -106,8 +103,6 @@ export interface CoverageData {
   entityCounts: EntityCounts | null;
   liveScannedBytes: number;
   liveScannedRecords: number;
-  consolidation: Record<string, number>;
-  setConsolidation: (factors: Record<string, number>) => void;
   start: (caps?: CapabilityDef[]) => void;
   refresh: () => void;
   reset: () => void;
@@ -555,7 +550,6 @@ export function useCoverageData(
   const [entityCounts, setEntityCounts] = useState<EntityCounts | null>(null);
   const [liveScannedBytes, setLiveScannedBytes] = useState(0);
   const [liveScannedRecords, setLiveScannedRecords] = useState(0);
-  const [consolidation, setConsolidation] = useState<Record<string, number>>({});
   const [runId, setRunId] = useState(0);
   const [perfEntries, setPerfEntries] = useState<InFlightPerfEntry[] | null>(null);
   const [lastRunMeta, setLastRunMeta] = useState<CoverageData['lastRunMeta']>(null);
@@ -878,7 +872,7 @@ export function useCoverageData(
         // denominator is the full catalog again — identical to v2.5.10.
         const capScore = assessedCount > 0 ? Math.floor((passedCount / assessedCount) * 100 + 1e-9) : 0;
 
-        return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, assessedCount, notAssessedCount, utilization, consolidation: 100, effectiveUtilizationScore: utilizationScore };
+        return { name: cap.name, color: cap.color, score: capScore, details, criteriaResults, assessedCount, notAssessedCount, utilization, effectiveUtilizationScore: utilizationScore };
       });
 
       // Log summary
@@ -960,28 +954,21 @@ export function useCoverageData(
     // runId tick then uses the new value.
   }, [tier]);
 
+  // A run starts on a runId tick and on nothing else. The callback changes
+  // identity when the tier does; with it in the dependencies, a host count that
+  // arrived after the run had started ran the whole assessment a second time.
+  const runRef = useRef(runAssessment);
+  runRef.current = runAssessment;
   useEffect(() => {
-    if (runId > 0) runAssessment();
-  }, [runAssessment, runId]);
+    if (runId > 0) runRef.current();
+  }, [runId]);
 
-  // Apply consolidation factors to produce adjusted scores
-  const adjustedCapabilities = useMemo(() => {
-    if (Object.keys(consolidation).length === 0) return capabilities;
-    return capabilities.map(cap => {
-      const factor = consolidation[cap.name] ?? 100;
-      if (factor === 100) return cap;
-      const adjScore = Math.floor(cap.rawScore * factor / 100 + 1e-9);
-      const adjMaturity = Math.floor(cap.utilization.utilizationScore * factor / 100 + 1e-9);
-      return { ...cap, consolidation: factor, score: adjScore, effectiveUtilizationScore: adjMaturity };
-    });
-  }, [capabilities, consolidation]);
-
-  const totalScore = adjustedCapabilities.length > 0
-    ? Math.floor(adjustedCapabilities.reduce((sum, c) => sum + c.score, 0) / adjustedCapabilities.length)
+  const totalScore = capabilities.length > 0
+    ? Math.floor(capabilities.reduce((sum, c) => sum + c.score, 0) / capabilities.length)
     : 0;
 
-  const overallUtilizationLevel = adjustedCapabilities.length > 0
-    ? Math.floor(adjustedCapabilities.reduce((sum, c) => sum + c.effectiveUtilizationScore, 0) / adjustedCapabilities.length)
+  const overallUtilizationLevel = capabilities.length > 0
+    ? Math.floor(capabilities.reduce((sum, c) => sum + c.effectiveUtilizationScore, 0) / capabilities.length)
     : 0;
 
   const tenant = (() => {
@@ -998,7 +985,7 @@ export function useCoverageData(
 
   const startFn = useCallback((caps?: CapabilityDef[]) => { capsRef.current = caps && caps.length > 0 ? caps : CAPABILITIES; setRunId((n) => n + 1); }, []);
   const refreshFn = useCallback(() => setRunId((n) => n + 1), []);
-  const resetFn = useCallback(() => { setIdle(true); setCapabilities([]); setStats(null); setEntityCounts(null); setError(null); setConsolidation({}); setPerfEntries(null); setLastRunMeta(null); }, []);
+  const resetFn = useCallback(() => { setIdle(true); setCapabilities([]); setStats(null); setEntityCounts(null); setError(null); setPerfEntries(null); setLastRunMeta(null); }, []);
   const goHomeFn = useCallback(() => { setIdle(true); }, []);
   const resumeFn = useCallback(() => {
     if (capabilities.length > 0) setIdle(false);
@@ -1006,16 +993,17 @@ export function useCoverageData(
 
   // Keep the capability cache in sync with the latest committed state. Used
   // by downloadPerfReport so the snapshot reflects whatever the user is
-  // currently looking at (post-consolidation adjustments included).
+  // currently looking at.
   useEffect(() => {
-    capsCacheRef.current = adjustedCapabilities;
-  }, [adjustedCapabilities]);
+    capsCacheRef.current = capabilities;
+  }, [capabilities]);
 
   // Built once per (perf state, scale meta, demo) tuple. Closes over the
   // current snapshot of run state so calling it during a subsequent run
   // would still emit the LAST completed run's data — by design: we don't
   // want a half-finished run leaking into a downloadable report.
-  // Force-refresh deletes the persistent cache document. Caller is expected
+  // Force-refresh empties the persistent cache document in place (it is never
+  // deleted: a deleted id stays reserved in the trash). Caller is expected
   // to call refresh()/start() next to actually trigger a fresh run. Kept
   // separate so the UI can offer "clear cache without re-running" if needed
   // (e.g., before navigating away).
@@ -1066,7 +1054,7 @@ export function useCoverageData(
   }, [perfEntries, lastRunMeta, tenant, tier, scaleMeta, entityCounts]);
 
   return {
-    capabilities: adjustedCapabilities,
+    capabilities,
     totalScore,
     overallUtilizationLevel,
     loading,
@@ -1077,8 +1065,6 @@ export function useCoverageData(
     entityCounts,
     liveScannedBytes,
     liveScannedRecords,
-    consolidation,
-    setConsolidation,
     tenant,
     // The local calendar day: in UTC an evening run would carry tomorrow's date.
     date: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })(),

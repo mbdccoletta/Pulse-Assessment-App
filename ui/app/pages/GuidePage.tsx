@@ -43,14 +43,14 @@ const TIERS = [
   { key: "excellence", label: "Excellence", weight: pct(EXCELLENCE_WEIGHT), what: "Is it used for automation and advanced analysis?" },
 ] as const;
 
-/** When each verdict applies, in the order the rules are checked. */
+/** When each verdict applies, in the order the rules are checked (../diagnosis.ts). */
 const VERDICT_WHEN: { id: DiagnosisId; when: string }[] = [
+  { id: "notAssessed", when: "None of the capability's criteria could be measured in this environment." },
   { id: "starved", when: `People open the apps (adoption at ${DEFAULT_CUTS.adoptionRate}% of active users or more), but coverage is below ${DEFAULT_CUTS.coverage}%.` },
   { id: "unwatched", when: `Coverage is at ${DEFAULT_CUTS.coverage}% or more, but fewer than ${DEFAULT_CUTS.adoptionRate}% of active users open the apps.` },
   { id: "skinDeep", when: `Coverage and adoption are both high, but utilization is below ${DEFAULT_CUTS.utilization}%.` },
   { id: "healthy", when: `Coverage, utilization and adoption are all high.` },
   { id: "dark", when: `Coverage is below ${DEFAULT_CUTS.coverage}% and few people open the apps.` },
-  { id: "notAssessed", when: "None of the capability's criteria could be measured in this environment." },
 ];
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -111,18 +111,20 @@ export const GuidePage: React.FC<{ coverageData: CoverageData }> = ({ coverageDa
         <Section title="How the score is built">
           <P>
             Every capability gets three readings. The capability score is the average of the three, and the overall
-            score is the average of the capabilities.
+            score is the average of the capabilities. Both are rounded down. When adoption cannot be read, the
+            capability score is the average of coverage and utilization.
           </P>
           <Flex flexDirection="column">
             <Def term={<><Dot color={PART.coverage} />Coverage</>}>
-              Is the data there? The share of the capability's criteria that are met. A criterion is met when its
+              Is the data there? The share of the capability's assessed criteria that are met. A criterion that cannot
+              be measured in this environment is not assessed and is left out. A criterion is met when its
               measured value reaches its target, for example "70% of hosts send CPU metrics".
             </Def>
             <Def term={<><Dot color={PART.utilization} />Utilization</>}>
               How deep is the setup? The same criteria, grouped in three tiers and weighted so that the basics count most (see below).
             </Def>
             <Def term={<><Dot color={PART.adoption} />Adoption</>}>
-              Do people use it? The share of active users who opened the capability's apps in the last 30 days.
+              Do people use it? The share of active users who opened the capability's most used app in the last 30 days.
               It counts as {num(100)} when {num(`${ADOPTION_FULL_RATE}%`)} of active users did; below that it scales in proportion.
             </Def>
           </Flex>
@@ -132,7 +134,7 @@ export const GuidePage: React.FC<{ coverageData: CoverageData }> = ({ coverageDa
           <P>
             Each criterion belongs to one tier. Utilization is the weighted share of criteria met in each tier. Best
             practice only counts once Foundation reaches {num("80%")}, and Excellence only once Best practice reaches {num("60%")}:
-            advanced use on top of a weak base is not counted.
+            advanced use on top of a weak base is not counted. A tier with no assessed criterion counts as {num("0%")}.
           </P>
           <Flex flexDirection="column">
             {TIERS.map(t => (
@@ -196,7 +198,7 @@ export const GuidePage: React.FC<{ coverageData: CoverageData }> = ({ coverageDa
           <P>
             The assessment runs when the app opens and is saved automatically, so Evolution builds its history without
             any extra step. Results are reused for 24 hours; "Refresh" on the Overview runs everything again. "Run
-            details" in the header shows how much data the run read.
+            details" on the Overview shows how much data the run read.
           </P>
         </Section>
 

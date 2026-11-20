@@ -21,8 +21,6 @@ export interface AssessmentSnapshot {
     /** Adoption as measured: share of active users (0–100) and people. */
     adoptionRate?: number;
     adoptionUsers?: number;
-    /** Consolidation factor (0–100). Defaults to 100 if absent (backwards compat). */
-    consolidation?: number;
     criteriaResults: {
       id: string;
       label: string;
@@ -275,7 +273,6 @@ export function useAssessmentHistory() {
         ...(c.adoptionScore != null ? { adoption: c.adoptionScore } : {}),
         ...(c.adoptionRate != null ? { adoptionRate: c.adoptionRate } : {}),
         utilization: c.effectiveUtilizationScore,
-        ...(c.consolidation < 100 ? { consolidation: c.consolidation } : {}),
         criteriaResults: c.criteriaResults.map((cr) => ({
           id: cr.id,
           label: cr.label,
@@ -300,10 +297,5 @@ export function useAssessmentHistory() {
     saveToDocStore(snap, remoteIdsRef.current);
   }, []);
 
-  const clearHistory = useCallback(() => {
-    setSnapshots([]);
-    localStorage.removeItem(STORAGE_KEY);
-  }, []);
-
-  return { snapshots, loading, saveSnapshot, clearHistory };
+  return { snapshots, loading, saveSnapshot };
 }

@@ -6,11 +6,9 @@
 //   - bestPractice:  Good practices for deeper adoption (~4-5 per capability)
 //   - excellence:    Advanced/mature usage patterns (~2-3 per capability)
 //
-// Utilization levels per capability:
-//   L0 (Not Adopted):  Foundation < 50%
-//   L1 (Foundation):   Foundation ≥ 50%
-//   L2 (Operational):  Foundation 100% + Best Practice ≥ 50%
-//   L3 (Optimized):    Foundation 100% + Best Practice 100% + Excellence ≥ 50%
+// Utilization weighs the tiers 60 / 25 / 15 and gates them: Best practice
+// counts once Foundation reaches 80%, Excellence once Best practice reaches 60%
+// (hooks/useCoverageData.ts).
 // ═══════════════════════════════════════════════════════════
 
 export type CriterionTier = "foundation" | "bestPractice" | "excellence";
@@ -156,9 +154,8 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   g10: "bestPractice",   // SLOs defined
   g11: "excellence",   // Custom anomaly detectors configured
   g12: "bestPractice",   // Adaptive or seasonal baselines in alerts
-  g13: "bestPractice",   // Problems lasting 5 minutes or more
   l18: "bestPractice",   // Custom log pipelines configured
-  s15: "bestPractice",   // Critical vulnerabilities without public exposure
+  s16: "bestPractice",   // Vulnerabilities with Davis assessment
   ai19: "bestPractice",   // Response model recorded
   // ── Platform Governance ──
   g2: "foundation",      // OneAgent version currency

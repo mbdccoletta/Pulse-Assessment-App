@@ -38,7 +38,8 @@ const GATE = { foundation: 80, bestPractice: 60 };
 const clean = (label: string) => label.replace(/\s*\(%\)\s*$/, "");
 const isFail = (r: Row) => !r.notAssessed && !r.error && r.points <= 0;
 const avg = (xs: number[]) => (xs.length ? Math.floor(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
-const r1 = (n: number) => Math.round(n * 10) / 10;
+/** One decimal, toward zero: a gain or a change is never stated larger than it is. */
+const r1 = (n: number) => Math.trunc(n * 10 + Math.sign(n) * 1e-9) / 10;
 const share = (t: { passed: number; total: number }) => (t.total > 0 ? Math.floor((t.passed / t.total) * 100) : 0);
 
 /** Current value and the value it passes from, as the pages show them. */
@@ -380,4 +381,45 @@ const METHOD_LIMITS =
 
 export function guideFacts(caps: CapabilityResult[], adoption?: UseAppAdoptionResult): string {
   return `Page facts (Guide).\n${RULES}\n${METHOD_LIMITS}` + (caps.length ? `\nVerdicts in this assessment:\n${verdictLines(caps, adoption)}` : "");
+}
+
+// ── Evolution with one saved run ────────────────────────────────────────────
+// There is nothing to compare yet, so the page reads the run as a baseline:
+// what holds each score where it is and what is closest to moving.
+
+/** Lens for Evolution while only one run exists. */
+export const LENS_BASELINE =
+  `Page lens: Evolution, first saved run. There is no earlier run: never describe a change, a trend, an improvement or a regression. ` +
+  `Read this run as the baseline: which part holds each capability back, which unmet criteria are closest to their target, and what a second run should be compared on. ` +
+  `All values, targets and gaps are in the page facts: quote them, never compute.`;
+
+export const QUESTIONS_BASELINE: PageQuestion[] = [
+  { label: "The baseline in short", ask: "What does this first run say about the environment? Which capabilities are strongest and weakest, and which part (coverage, utilization or adoption) holds the weakest ones back?" },
+  { label: "What should move first", ask: "Which unmet criteria in the closest-to-target list of the page facts need the smallest change to be met, in which capabilities, and what should be done for each?" },
+  { label: "What to compare next run", ask: "Which capabilities and criteria should be compared in the next run to know whether the work had an effect, and what would count as real progress for each?" },
+  { label: "Weakest part per capability", ask: "For each capability in the page facts, which of coverage, utilization and adoption is the lowest, and what kind of work does that part call for?" },
+  { label: "When to run again", ask: "Given that results are kept for 24 hours and one run is saved per day, when does it make sense to run the assessment again, and which changes take longest to show in adoption?" },
+];
+
+export interface BaselineRow { capability: string; label: string; value: number; target: number; gap: number }
+
+/** Facts for Evolution with one run: scores, the lowest part of each capability and the criteria nearest their target. */
+export function baselineFacts(run: AssessmentSnapshot, closest: BaselineRow[]): string {
+  const day = new Date(run.timestamp).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  const caps = [...run.capabilities].sort((a, b) => a.score - b.score).map(c => {
+    const parts = ([["coverage", c.coverage], ["utilization", c.utilization], ["adoption", c.adoption]] as [string, number | undefined][])
+      .filter((x): x is [string, number] => x[1] != null);
+    const low = parts.length ? parts.reduce((m, x) => (x[1] < m[1] ? x : m)) : null;
+    const unmet = c.criteriaResults.filter(r => stateOf(r) === "fail").length;
+    const na = c.criteriaResults.filter(r => stateOf(r) === "na").length;
+    return `- ${c.name}: ${c.score}% (${parts.map(x => `${x[0]} ${Math.floor(x[1])}%`).join(", ")})` +
+      `${low ? `; lowest part: ${low[0]}` : ""}; criteria not met: ${unmet}${na ? `; not assessed: ${na}` : ""}`;
+  });
+  return `Page facts (Evolution, first saved run of ${day}). This is the only run: there is no change to describe.\n` +
+    `Overall score ${run.totalScore}%.\n` +
+    `Adoption is measured from app usage in 30 days, so it reacts slowly: a change in who opens the apps takes weeks to show in full.\n` +
+    `Results are reused for 24 hours and one run per day is kept for 90 days.\n` +
+    `Capabilities, lowest score first:\n${caps.join("\n")}\n` +
+    `Unmet criteria closest to their target (value, target, gap in percentage points):\n` +
+    (closest.length ? closest.map(r => `- ${r.label} (${r.capability}): ${r.value}% of a ${r.target}% target, ${r.gap} pts short`).join("\n") : "- none");
 }

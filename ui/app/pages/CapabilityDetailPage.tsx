@@ -58,7 +58,7 @@ export const TIERS: { key: TierKey; label: string }[] = [
   { key: "excellence", label: "Excellence" },
 ];
 
-/** The lowest threshold is the one that decides a pass. */
+/** The value that decides a pass (../passLine.ts): the middle of the targets. */
 function passFloor(thresholds: string): number | null {
   const nums = (thresholds.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
   return passLine(nums);
@@ -158,17 +158,6 @@ export const Panel: React.FC<{ title: string; right?: React.ReactNode; children:
     {children}
   </Surface>
 );
-
-const Stat: React.FC<{ label: string; value: React.ReactNode; sub?: React.ReactNode; color?: string; tip?: string }> = ({ label, value, sub, color, tip }) => {
-  const body = (
-    <Flex flexDirection="column" gap={4} style={{ padding: "12px 16px", borderRadius: 10, border: `1px solid ${LINE}`, background: SURFACE, minWidth: 0 }}>
-      <Text textStyle="small" style={{ color: NEUTRAL }}>{label}</Text>
-      <Text style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums", fontSize: 26, fontWeight: 700, color: color ?? INK, lineHeight: 1.1 }}>{value}</Text>
-      {sub && <Text textStyle="small" style={{ color: NEUTRAL, fontFamily: MONO }}>{sub}</Text>}
-    </Flex>
-  );
-  return tip ? <Tooltip text={tip} containerStyle={{ display: "block", minWidth: 0 }}>{body}</Tooltip> : body;
-};
 
 export const pctFormat = (v: number) => `${Math.floor(v * 10) / 10}%`;
 
@@ -527,10 +516,10 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
           <Panel title="Utilization tiers" right={<InformationOverlay aria-label="About utilization tiers"><InformationOverlay.Content>Criteria met in each tier, weighted 60 / 25 / 15. Select a tier to filter the page.</InformationOverlay.Content></InformationOverlay>}>
             <Flex flexDirection="column" gap={12}>
               <Flex>
-              <ToggleButtonGroup value={tier ?? "all"} onChange={(v: string) => setTier(v === "all" ? null : v)}>
+              <Flex style={{ maxWidth: "100%", overflowX: "auto" }}><ToggleButtonGroup value={tier ?? "all"} onChange={(v: string) => setTier(v === "all" ? null : v)}>
                 <ToggleButtonGroup.Item value="all">All</ToggleButtonGroup.Item>
                 {TIERS.map(t => <ToggleButtonGroup.Item key={t.key} value={t.key}>{t.label}</ToggleButtonGroup.Item>)}
-              </ToggleButtonGroup>
+              </ToggleButtonGroup></Flex>
               </Flex>
               {TIERS.map(t => {
                 const tr = u[t.key];
@@ -544,22 +533,23 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
         <ActionList cap={cap} ctx={{ tenant: coverageData.tenant, date: coverageData.date, overallCoverage: coverageData.totalScore, overallUtilization: coverageData.overallUtilizationLevel, capabilities: [cap] }} tier={tier} />
 
         {/* Criteria and history */}
-        <Grid style={{ gridTemplateColumns: "minmax(0, 1.7fr) minmax(300px, 1fr)", gap: 16, alignItems: "start" }}>
-          <Panel title="Criteria" right={<Flex alignItems="center" gap={12}>{clearTier}<StateMark state="pass" label /><StateMark state="fail" label /><StateMark state="na" label /></Flex>}>
+        {/* Two panels that share the row and stack when it gets narrow. */}
+        <Flex style={{ flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+          <Panel title="Criteria" style={{ flex: "1.7 1 420px" }} right={<Flex alignItems="center" gap={12}>{clearTier}<StateMark state="pass" label /><StateMark state="fail" label /><StateMark state="na" label /></Flex>}>
             <CriteriaChart rows={rows} totalUsers={adoptionRan ? adoption.totalUsers : undefined} />
           </Panel>
 
-          <Flex flexDirection="column" gap={16} style={{ minWidth: 0 }}>
+          <Flex flexDirection="column" gap={16} style={{ flex: "1 1 300px", minWidth: 0 }}>
             <Panel title="Score over time">
               <TrendChart points={trend} name={cap.name} color={cap.color} />
             </Panel>
           </Flex>
-        </Grid>
+        </Flex>
 
         {/* Analytics table */}
         <Panel title="Analytics" right={<Flex alignItems="center" gap={8}>{clearTier}<Button size="condensed" onClick={() => setShowAnalytics(v => !v)}>{showAnalytics ? "Hide" : "Show"}</Button></Flex>}>
           {showAnalytics && (
-          <DataTable data={rows} columns={analyticsColumns} fullWidth sortable variant={{ rowDensity: "condensed" }}>
+          <DataTable data={rows} columns={analyticsColumns} fullWidth sortable defaultLineWrap variant={{ rowDensity: "condensed" }}>
             <DataTable.Toolbar><DataTable.DownloadData /></DataTable.Toolbar>
           </DataTable>
           )}

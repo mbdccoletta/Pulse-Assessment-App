@@ -9,17 +9,16 @@
     "uninstall": "npx dt-app uninstall"
   },
   "dependencies": {
-    "@dynatrace-sdk/client-classic-environment-v2": "^6.1.0",
+    "@dynatrace-sdk/app-environment": "^1.1.6",
     "@dynatrace-sdk/client-davis-copilot": "^1.0.0",
     "@dynatrace-sdk/client-document": "^1.30.0",
     "@dynatrace-sdk/client-query": "^1.17.0",
+    "@dynatrace-sdk/navigation": "^2.3.2",
     "@dynatrace/strato-components": "^3.18.0",
     "@dynatrace/strato-design-tokens": "^1.8.1",
     "@dynatrace/strato-icons": "^2.7.0",
-    "chart.js": "^4.5.1",
     "jspdf": "^4.2.1",
     "react": "^18.2.0",
-    "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0"
   },

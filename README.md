@@ -2,7 +2,7 @@
 
 > How well is this environment actually using Dynatrace? One run answers it from the tenant's own data.
 
-Pulse Assessment is a native **Dynatrace App** that scores an environment's observability posture across **11 capabilities** and **138 criteria**, read with DQL against Grail and with the platform's settings and SLO services. Every capability gets one score built from three parts — **coverage**, **utilization** and **adoption** — plus a verdict, the criteria that fail, the action that fixes each one, and how the score moved since the last run.
+Pulse Assessment is a native **Dynatrace App** that scores an environment's observability posture across **11 capabilities** and **137 criteria**, read with DQL against Grail and with the platform's settings and SLO services. Every capability gets one score built from three parts — **coverage**, **utilization** and **adoption** — plus a verdict, the criteria that fail, the action that fixes each one, and how the score moved since the last run.
 
 ---
 
@@ -13,12 +13,50 @@ Pulse Assessment is a native **Dynatrace App** that scores an environment's obse
 - **Verdict per capability** — a named diagnosis (for example data nobody opens, or usage ahead of coverage) instead of a bare number
 - **Four pages** — Overview (radar and capabilities), Overall score, Evolution and Guide, plus a detail page per capability
 - **Guided remediation** — the action and the documentation link for every unmet criterion, with the points the score gains
-- **Evolution** — every completed run is saved (one per day kept for 90 days); the page compares the latest run with a baseline and traces each change to its part and its criteria. The first run shows by itself
+- **Evolution** — every completed run is saved (one per day kept for 90 days); the page compares the latest run with a baseline and traces each change to its part and its criteria. On the first run the page reads that run as the baseline: what holds each score and which criteria are closest to passing
 - **Dynatrace Intelligence on every page** — page-specific questions answered by Davis CoPilot from the numbers on screen; one answer costs 3 AI Units and nothing is asked until you click
-- **Reports** — Overall, Action plan and Criteria PDFs in English, Portuguese and Spanish, a FinOps report, a Smart Report written by Davis CoPilot, and raw data as JSON or CSV
+- **Reports** — Overall, Action plan and Criteria PDFs in English, Portuguese and Spanish (criterion names, descriptions and actions are translated; capability names stay as Dynatrace writes them), a FinOps report, a Smart Report written by Davis CoPilot, and raw data as JSON or CSV
 - **Works on any licensing model** — without Traces on Grail it switches to Trace Proxy Mode (metric and topology equivalents for span checks; checks with no honest proxy leave the score). Without the classic entity model it reads Smartscape
 - **Not assessed is not failed** — a criterion that cannot be measured in the environment is left out of the score and named as such
 - **Dark/Light theme** — Dynatrace Strato components and design tokens throughout
+
+## Screenshots
+
+**Overview** — the overall score and, per capability, coverage, utilization and adoption on one radar.
+
+![Overview](docs/screenshots/screenshot.jpg)
+
+**Dynatrace Intelligence** — page-specific questions answered from the numbers on screen.
+
+![Dynatrace Intelligence](docs/screenshots/screenshot-intelligence.jpg)
+
+**Overall score** — what makes the score, the utilization tiers, every capability with its verdict, and the criteria to act on.
+
+![Overall score](docs/screenshots/screenshot-overall.jpg)
+
+**Capability detail** — the three parts, the actions with the points each one adds, and every criterion by tier.
+
+![Capability detail](docs/screenshots/screenshot-capability.jpg)
+
+**Evolution** — the latest run against a baseline, with each change traced to its part and its criteria.
+
+![Evolution](docs/screenshots/screenshot-evolution.jpg)
+
+**Evolution on the first run** — the baseline: what holds each score and which criteria are closest to passing.
+
+![Evolution, first run](docs/screenshots/screenshot-evolution-first-run.jpg)
+
+**Guide** — how the score is built, in the app itself.
+
+![Guide](docs/screenshots/screenshot-guide.jpg)
+
+**Reports** — PDFs in three languages, FinOps, raw data and the Smart Report.
+
+![Reports](docs/screenshots/screenshot-reports.jpg)
+
+**Narrow screens** — the capabilities as a list.
+
+<img src="docs/screenshots/screenshot-mobile.jpg" alt="Narrow screen" width="320">
 
 ## 11 capabilities assessed
 
@@ -33,9 +71,9 @@ Pulse Assessment is a native **Dynatrace App** that scores an environment's obse
 | AI/LLM Observability | 16 | 3 / 5 / 8 |
 | Business Observability | 10 | 3 / 4 / 3 |
 | Software Delivery | 6 | 1 / 2 / 3 |
-| Platform Governance | 13 | 1 / 10 / 2 |
+| Platform Governance | 12 | 1 / 9 / 2 |
 | FinOps & Sustainability | 10 | 3 / 4 / 3 |
-| **Total** | **138** | **25 / 67 / 46** |
+| **Total** | **137** | **25 / 66 / 46** |
 
 ## Scoring model
 
@@ -48,8 +86,6 @@ Pulse Assessment is a native **Dynatrace App** that scores an environment's obse
 | Adoption | Distinct users opening the Dynatrace apps behind the capability, as a share of the platform's active users. 20% of active users is a full score |
 
 A share criterion is met at the middle of its three thresholds. When adoption cannot be read, the score uses the parts that can.
-
-Two pass lines have no official Dynatrace rule behind them and are provisional: "Problems lasting 5 minutes or more" (met at 80%) and "Critical vulnerabilities without public exposure" (met at 90%).
 
 ## Prerequisites
 
@@ -126,7 +162,7 @@ npm run deploy
 
 ## Required Scopes
 
-The app requests 18 scopes (configured in `app.config.json`):
+The app requests 17 scopes (configured in `app.config.json`):
 
 | Scope | Purpose |
 |---|---|
@@ -140,8 +176,7 @@ The app requests 18 scopes (configured in `app.config.json`):
 | `storage:bizevents:read` | Business Observability events |
 | `storage:buckets:read` | Grail bucket access for DQL |
 | `storage:system:read` | System tables (usage and adoption) |
-| `storage:filter-segments:read` | Platform Segments |
-| `settings:objects:read` | Configuration counts (ownership teams, anomaly detectors, log pipelines) |
+| `settings:objects:read` | Configuration counts (custom anomaly detectors, log pipelines, classic SLOs) |
 | `slo:slos:read` | Count of SLOs in the Service-Level Objectives app |
 | `app-engine:apps:run` | Installed app names for the adoption reading |
 | `davis-copilot:conversations:execute` | Dynatrace Intelligence answers and the Smart Report |
@@ -158,7 +193,7 @@ The app requests 18 scopes (configured in `app.config.json`):
 │   └── app/
 │       ├── App.tsx               # Routes, the single score, run history save
 │       ├── appVersion.ts         # Must match app.config.json
-│       ├── queries.ts            # The 138 criteria
+│       ├── queries.ts            # The 137 criteria
 │       ├── pulseScore.ts         # Coverage + utilization + adoption
 │       ├── diagnosis.ts          # Verdict per capability
 │       ├── remediationActions.ts # Action and link per criterion
@@ -169,10 +204,11 @@ The app requests 18 scopes (configured in `app.config.json`):
 │       ├── reports/              # PDF, JSON and CSV reports
 │       ├── perf/                 # 24h query cache
 │       ├── components/ data/ hooks/ pages/ utils/
-└── docs/                         # Architecture, criteria, scoring, data sources
+├── tools/gen-criteria-summary.mjs # Regenerates docs/CRITERIA-SUMMARY.md from the catalog
+└── docs/                         # Architecture, criteria, scoring, design system, data sources
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the architecture and data flow.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the architecture and data flow, [docs/SCORING-CALCULATIONS.md](docs/SCORING-CALCULATIONS.md) for the scoring rules with worked examples, and [docs/CRITERIA-SUMMARY.md](docs/CRITERIA-SUMMARY.md) for every criterion and its pass line.
 
 ## Tech Stack
 
@@ -196,7 +232,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the architecture and data f
 - **Deduplication** — identical query strings execute once, however many criteria share them.
 - **Aggregates only** — every query returns a count-shaped result, never raw records.
 
-Reference measurement, read from `dt.system.events` (free to query): on an environment ingesting about 18 million log records a minute, a full fresh run scanned about 137 GiB before the last two reductions shipped in 3.0.0; a reopen inside 24 hours scanned 0. Smaller environments scan proportionally less. Measure your own with:
+Reference measurement, read from `dt.system.events` (free to query): on an environment ingesting about 18 million log records a minute, a full fresh run of 3.0.3 scanned 44 GiB and took about 15 seconds (logs 14.8, spans 13.6, security events 6.1, bizevents 5.6, events 3.8); a reopen inside 24 hours scanned 0. The same run scanned 137 GiB before the reductions of 3.0.0. Smaller environments scan proportionally less. Measure your own with:
 
 ```
 fetch dt.system.events

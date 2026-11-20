@@ -4,8 +4,8 @@
 //
 // The assessment measures whether the DATA is there. This map is the other
 // half of the story: whether PEOPLE actually open the app that consumes
-// that data. Adoption is reported alongside coverage — it never changes a
-// score (see useAppAdoption.ts).
+// that data. Adoption is the third part of a capability score, beside coverage
+// and utilization (see useAppAdoption.ts and pulseScore.ts).
 //
 // Two layers, deliberately:
 //   1. EXPLICIT — verified app ids observed on real tenants. Authoritative.
