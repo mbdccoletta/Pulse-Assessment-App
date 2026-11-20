@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.8] — 2026-11-20
+
+### Added
+- Dynatrace Intelligence questions that explain why the area matters, on the two capabilities whose value is least obvious from their criteria. Platform Governance: "Why governance matters" and "Data protection posture". FinOps & Sustainability: "Why FinOps matters".
+
 ## [3.0.7] — 2026-11-20
 
 ### Added

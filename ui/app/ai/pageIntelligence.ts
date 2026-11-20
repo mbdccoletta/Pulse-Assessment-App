@@ -176,8 +176,21 @@ export const QUESTIONS: Record<Exclude<PageId, "capability">, PageQuestion[]> = 
 };
 
 /** Questions about one capability. */
+/** Capabilities whose value is not obvious from their criteria: the first
+ *  questions explain why the area matters before going into the score. */
+const WHY_IT_MATTERS: Record<string, PageQuestion[]> = {
+  "Platform Governance": [
+    { label: "Why governance matters", ask: "Why does the Platform Governance capability matter in Dynatrace, and what do ownership, security context on logs, workflow approval, data masking, bucket retention and consulting the audit events protect? Which unmet criteria in the page facts leave the largest exposure, considering that audit events are always recorded and that criterion only measures whether anyone consults them?" },
+    { label: "Data protection posture", ask: "Which criteria about masking in logs, spans, RUM and Session Replay, about bucket retention and about consulting the audit events are met and which are not met in the page facts? What does each one protect, and which should be done first?" },
+  ],
+  "FinOps & Sustainability": [
+    { label: "Why FinOps matters", ask: "Why does the FinOps & Sustainability capability matter in Dynatrace, and which decisions about cost and carbon do its criteria in the page facts make possible? Which unmet criteria hide the most cost or energy, and what does Dynatrace need to measure them?" },
+  ],
+};
+
 export function capabilityQuestions(name: string): PageQuestion[] {
   return [
+    ...(WHY_IT_MATTERS[name] ?? []),
     { label: "Why this score", ask: `Why does ${name} have this score and this verdict? Which of its three parts holds it back, and which unmet criteria are behind that part?` },
     { label: "Order of the work", ask: `For ${name}, in what order should the unmet criteria be done, considering closed tier gates first and then the gain of each one in the page facts? What does each one need in Dynatrace?` },
     { label: "Closest to passing", ask: `Which unmet criteria in ${name} have the fewest percentage points short of passing, according to the page facts, and what would close that distance for each? Which ones are far from passing and should not be called close?` },
