@@ -1,6 +1,6 @@
 # Pulse Assessment design system
 
-Describes the UI as the code under `ui/app/` builds it in version 3.0.8 (`ui/app/appVersion.ts`). Every statement here was read from the code; when the code and this file disagree, the code is right.
+Describes the UI as the code under `ui/app/` builds it in version 3.0.9 (`ui/app/appVersion.ts`). Every statement here was read from the code; when the code and this file disagree, the code is right.
 
 Stack: React 18, `react-router-dom` 6, `@dynatrace/strato-components` ^3.18, `@dynatrace/strato-design-tokens`, `@dynatrace/strato-icons`. There is no CSS, SCSS or style file under `ui/`: all styling is Strato component props plus inline `style` objects that read Strato tokens. The only CSS rules are in a `<style>` element inside the radar SVG (entry animation and focus outline).
 
@@ -82,7 +82,7 @@ Same frame as the Overview (IntelligenceBar, banners), then:
 - Title row: `Heading level={2}`, the score in the code font, the band label.
 - Three `Panel`s in an auto-fit grid: "Score" (`GaugeChart` with `GaugeChart.ThresholdIndicator` at each band), "What makes the score" (three `TierMeter`s) and "Utilization tiers" (`ToggleButtonGroup` All / Foundation / Best practice / Excellence, plus one `TierMeter` per tier).
 - "Capabilities": one `MeterBarChart` per capability, lowest first, the name as a `Link` to the detail page, the three parts in a mono line and a `VerdictChip`.
-- "What to do": `DataTable` (sortable, condensed, 10 rows per page) with State, Criterion, Capability, Value and target, Gain (pts).
+- "What to do": `DataTable` (sortable, condensed, 10 rows per page) with State, Criterion, Capability, Value and target, Gain (an `ArrowUpIcon`, no number).
 - "Score over time" (`TrendChart`) and "Most used apps" (`MeterBarChart` per app).
 
 Selecting a tier filters Capabilities and What to do; a `Chip` with `Chip.DeleteButton` shows and clears the filter.
@@ -103,7 +103,7 @@ Selecting a tier filters Capabilities and What to do; a `Chip` with `Chip.Delete
 
 Compares the latest saved run with a baseline chosen by a `ToggleButtonGroup`: Last change, 30 days, 90 days, First run.
 
-- Title row: heading, score, the change (`ArrowUpIcon` / `ArrowDownIcon` plus points), the two run dates in mono, the toggle group.
+- Title row: heading, score, the change as an icon (`ArrowUpIcon` gain, `ArrowDownIcon` loss, `MinusIcon` no change), the two run dates in mono, the toggle group.
 - "What changed in the score": four meters (Overall score, Coverage, Utilization, Adoption), each with "from → to" and the change.
 - "Score over time": `TrendChart`, overall or for the selected capability.
 - "What caused the change": `Accordion multiple`, one section per capability that moved, with the three parts and the criteria that changed as `Chip`s. A `MessageContainer variant="primary"` appears when the app version or the set of capabilities differs between the two runs.
@@ -268,7 +268,7 @@ Labels, names, headings, chips, buttons and table cells stay in the text font. S
 | Verdicts | Healthy, Starved, Unwatched, Skin-deep, Dark, Not assessed |
 | Criterion change (table) | Gained, Lost |
 | Criterion change (causes) | Lost, Gained, New criterion, Removed criterion, No longer assessed, Now assessed |
-| Score change | "N pts" with an arrow, or "No change" |
+| Score change | `ArrowUpIcon` (gain), `ArrowDownIcon` (loss) or `MinusIcon` (no change), beside the before and after percentages |
 | Comparison period | Last change, 30 days, 90 days, First run |
 | Overview lead | "Needs attention", "All capabilities at 60% or above" |
 | Missing value | "—" |
@@ -277,6 +277,7 @@ Labels, names, headings, chips, buttons and table cells stay in the text font. S
 
 ## 7. UI rules
 
+0. **No points anywhere.** The screens, the Dynatrace Intelligence answers and the reports never state a number of points or a point difference. A change is an icon (gain, loss, no change) beside the before and after percentages; actions are ordered by their effect on the score and marked with the gain icon.
 1. **Percentages are floored, never rounded up.** Scores are computed with `Math.floor`; `pctFormat` floors to one decimal; meters receive `Math.floor(value)`; shares of users are `Math.floor(x * 1000) / 10`.
 2. **No internal criterion ids on screen.** Ids are used as React keys and lookup keys only. A trailing "(%)" is stripped from criterion labels.
 3. **Counts go in tooltips.** Queries run, records scanned, bytes and cache hits are in the "Run details" tooltip; people behind an adoption share are in the meter tooltip.

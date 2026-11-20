@@ -34,7 +34,7 @@ import { ADOPTION_FULL_RATE, gainIfMet } from "../pulseScore";
 import { openDynatraceAssist } from "../ai/assistIntent";
 import type { ReportContext } from "../ai/reportPrompt";
 import { sendIntent } from "@dynatrace-sdk/navigation";
-import { ChevronLeftIcon, ChevronRightIcon, DynatraceIntelligenceSignetIcon } from "@dynatrace/strato-icons";
+import { ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, DynatraceIntelligenceSignetIcon, MinusIcon } from "@dynatrace/strato-icons";
 import { gapFor, runGap } from "../data/criterionGaps";
 import { scoreBand, SCORE_BANDS } from "../utils/colors";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
@@ -292,11 +292,13 @@ const ActionList: React.FC<{ cap: CapabilityResult; ctx: ReportContext; tier?: s
           return (
             <Accordion.Section key={r.id} id={r.id}>
               <Accordion.SectionLabel>
-                <Grid gridTemplateColumns="16px minmax(0, 1.4fr) minmax(0, 1fr) 84px" gap={12} alignItems="center" width="100%">
+                <Grid gridTemplateColumns="16px minmax(0, 1.4fr) minmax(0, 1fr) 24px" gap={12} alignItems="center" width="100%">
                   <StateMark state="fail" />
                   <Text textStyle="base-emphasized">{name}</Text>
                   <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{gap} → {fmtFloor(r)}</Text>
-                  <Text textStyle="small-emphasized" style={{ fontFamily: MONO, color: PASS, textAlign: "right" }}>{gain > 0 ? `+${gain} pts` : "—"}</Text>
+                  <Flex justifyContent="flex-end" role="img" aria-label={gain > 0 ? "Raises the score" : "No effect on the score"} title={gain > 0 ? "Raises the score" : "No effect on the score"} style={{ color: gain > 0 ? PASS : NEUTRAL }}>
+                    {gain > 0 ? <ArrowUpIcon size="small" /> : <MinusIcon size="small" />}
+                  </Flex>
                 </Grid>
               </Accordion.SectionLabel>
               <Accordion.SectionContent>

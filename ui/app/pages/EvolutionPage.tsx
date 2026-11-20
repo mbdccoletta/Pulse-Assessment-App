@@ -21,7 +21,7 @@ import { Flex, Grid } from "@dynatrace/strato-components/layouts";
 import { ToggleButtonGroup } from "@dynatrace/strato-components/forms";
 import { MeterBarChart } from "@dynatrace/strato-components/charts";
 import type { AssessmentSnapshot } from "../hooks/useAssessmentHistory";
-import { ArrowDownIcon, ArrowUpIcon } from "@dynatrace/strato-icons";
+import { ArrowDownIcon, ArrowUpIcon, MinusIcon } from "@dynatrace/strato-icons";
 import { Tooltip } from "../components/Tooltip";
 import { scoreBand } from "../utils/colors";
 import { CAPABILITIES } from "../queries";
@@ -69,15 +69,16 @@ function part(s: AssessmentSnapshot, k: "coverage" | "utilization" | "adoption")
   return xs.length ? avg(xs) : null;
 }
 
-/** A change in points: ▲ green, ▼ red, nothing drawn for zero. */
-const Delta: React.FC<{ d: number | null; size?: number }> = ({ d, size = 12 }) => {
+/** The direction of a change, as a Strato icon: up is a gain, down a loss,
+ *  a dash no change. No number: the readings beside it carry the values. */
+const Delta: React.FC<{ d: number | null; size?: number }> = ({ d }) => {
   if (d == null) return null;
   const r = Math.round(d);
   const color = r > 0 ? PASS : r < 0 ? FAIL : NEUTRAL;
+  const label = r > 0 ? "Gain" : r < 0 ? "Loss" : "No change";
   return (
-    <Flex alignItems="center" gap={2} style={{ color, whiteSpace: "nowrap" }}>
-      {r > 0 ? <ArrowUpIcon size="small" /> : r < 0 ? <ArrowDownIcon size="small" /> : null}
-      <Text style={{ fontFamily: MONO, fontSize: size, fontWeight: 700, color }}>{r === 0 ? "No change" : `${Math.abs(r)} pts`}</Text>
+    <Flex alignItems="center" role="img" aria-label={label} title={label} style={{ color, flexShrink: 0 }}>
+      {r > 0 ? <ArrowUpIcon size="small" /> : r < 0 ? <ArrowDownIcon size="small" /> : <MinusIcon size="small" />}
     </Flex>
   );
 };
@@ -113,7 +114,6 @@ const CAUSE_CHIP: Record<CauseKind, { label: string; color: "neutral" | "primary
   assessed: { label: "Now assessed", color: "primary" },
 };
 const PART_LABEL = { coverage: "Coverage", utilization: "Utilization", adoption: "Adoption" } as const;
-const signed = (n: number) => `${n > 0 ? "+" : ""}${Math.trunc(n * 10 + Math.sign(n) * 1e-9) / 10}`;
 
 interface Props {
   snapshots: AssessmentSnapshot[];
@@ -237,7 +237,6 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
     ) },
     { id: "value", header: "Value", width: 100, alignment: "right" as const, accessor: (c: Near) => `${c.value}%` },
     { id: "target", header: "Target", width: 100, alignment: "right" as const, accessor: (c: Near) => `${c.target}%` },
-    { id: "gap", header: "Gap (pts)", width: 110, alignment: "right" as const, accessor: (c: Near) => c.gap },
   ];
   /** Per capability: its parts, the lowest one, and the criteria that are not met. */
   const baseline = useMemo(() => {
@@ -438,16 +437,19 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
                     </Accordion.SectionLabel>
                     <Accordion.SectionContent>
                       <Flex flexDirection="column" gap={12}>
-                        {/* 1. Which part moved, and how many points of the score that is */}
+                        {/* 1. Which part moved, and whether it raised or lowered the score */}
                         {!c.isNew && (
                           <Grid gridTemplateColumns="repeat(auto-fit, minmax(220px, 1fr))" gap={12}>
                             {c.parts.map(p => (
                               <Flex key={p.key} flexDirection="column" gap={2}>
                                 <Text textStyle="small" style={{ color: NEUTRAL }}>{PART_LABEL[p.key]}</Text>
                                 <Text textStyle="base-emphasized" style={{ fontFamily: MONO }}>{p.from == null ? "—" : `${Math.floor(p.from)}%`} → {p.to == null ? "—" : `${Math.floor(p.to)}%`}</Text>
-                                <Text textStyle="small" style={{ fontFamily: MONO, color: p.points == null || Math.abs(p.points) < 0.05 ? NEUTRAL : p.points > 0 ? PASS : FAIL }}>
-                                  {p.points == null ? "Not comparable" : Math.abs(p.points) < 0.05 ? "No effect on the score" : `${signed(p.points)} pts on the score`}
-                                </Text>
+                                <Flex alignItems="center" gap={4} style={{ color: p.points == null || Math.abs(p.points) < 0.05 ? NEUTRAL : p.points > 0 ? PASS : FAIL }}>
+                                  {p.points == null ? null : Math.abs(p.points) < 0.05 ? <MinusIcon size="small" /> : p.points > 0 ? <ArrowUpIcon size="small" /> : <ArrowDownIcon size="small" />}
+                                  <Text textStyle="small" style={{ color: "inherit" }}>
+                                    {p.points == null ? "Not comparable" : Math.abs(p.points) < 0.05 ? "No effect on the score" : p.points > 0 ? "Raised the score" : "Lowered the score"}
+                                  </Text>
+                                </Flex>
                                 {p.key === "adoption" && c.adoptionRate[0] != null && c.adoptionRate[1] != null && c.adoptionRate[0] !== c.adoptionRate[1] && (
                                   <Text textStyle="small" style={{ color: NEUTRAL }}>{c.adoptionRate[0]}% → {c.adoptionRate[1]}% of active users</Text>
                                 )}

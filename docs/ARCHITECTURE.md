@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes Pulse Assessment 3.0.8 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
+This document describes Pulse Assessment 3.0.9 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
 
 ## Overview
 
@@ -158,11 +158,11 @@ utilization = floor(f × 60 + effB × 25 + effE × 15)
 
 **Bands** (`utils/colors.ts`): N/A 0–19, Low 20–39, Moderate 40–59, Good 60–79, Excellent 80–100.
 
-**Gain.** `gainIfMet()` recomputes coverage and utilization with one more criterion met in a tier and returns the points the capability score gains. Pages, AI facts and reports rank unmet criteria by it.
+**Gain.** `gainIfMet()` recomputes coverage and utilization with one more criterion met in a tier and returns how much the capability score would rise. The figure is used only to order actions and to choose the gain icon: no screen, AI answer or report shows it. Pages, AI facts and reports rank unmet criteria by it.
 
 ### Verdict
 
-`diagnose()` in `diagnosis.ts` reads the three parts and never changes a score. A part is high at 60 points; for adoption that is 12% of active users. The first matching rule wins:
+`diagnose()` in `diagnosis.ts` reads the three parts and never changes a score. A part is high at 60%; for adoption that is 12% of active users. The first matching rule wins:
 
 | Verdict | Rule |
 |---|---|

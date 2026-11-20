@@ -10,6 +10,7 @@ import { ToggleButtonGroup } from "@dynatrace/strato-components/forms";
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Colors from "@dynatrace/strato-design-tokens/colors";
+import { ArrowUpIcon, MinusIcon } from "@dynatrace/strato-icons";
 import Typography from "@dynatrace/strato-design-tokens/typography";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { Heading, Link, Text } from "@dynatrace/strato-components/typography";
@@ -98,7 +99,14 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
       <DataTable.DefaultCell><Link onClick={() => open(rowData.c)}>{rowData.c.name}</Link></DataTable.DefaultCell>
     ) },
     { id: "reading", header: "Value and target", width: 170, accessor: (t: Todo) => reading(t.r) },
-    { id: "gain", header: "Gain (pts)", width: 110, alignment: "right" as const, accessor: (t: Todo) => t.gain },
+    { id: "gain", header: "Gain", width: 80, alignment: "right" as const, disableSorting: true, accessor: (t: Todo) => (t.gain > 0 ? "Raises the score" : "No effect on the score"), cell: ({ rowData }: { rowData: Todo }) => (
+      <DataTable.DefaultCell>
+        <Flex justifyContent="flex-end" role="img" aria-label={rowData.gain > 0 ? "Raises the score" : "No effect on the score"} title={rowData.gain > 0 ? "Raises the score" : "No effect on the score"}
+          style={{ color: rowData.gain > 0 ? Colors.Charts.Status.Ideal.Default : Colors.Text.Neutral.Subdued }}>
+          {rowData.gain > 0 ? <ArrowUpIcon size="small" /> : <MinusIcon size="small" />}
+        </Flex>
+      </DataTable.DefaultCell>
+    ) },
   ];
 
   // Only runs saved with the three-part score are comparable with today's.

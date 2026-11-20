@@ -176,8 +176,8 @@ export const GuidePage: React.FC<{ coverageData: CoverageData }> = ({ coverageDa
               sector to read its numbers in the centre; click it to open the capability. Click the legend to hide or show a part.
             </Def>
             <Def term="Capability detail">
-              Everything about one capability: the score and its parts, what to do (ordered by how many points each
-              action adds), every criterion with its value, the score over time and the apps people use. Click a
+              Everything about one capability: the score and its parts, what to do (ordered by how much each
+              action raises the score), every criterion with its value, the score over time and the apps people use. Click a
               utilization tier to filter the page by it.
             </Def>
             <Def term="Overall score">

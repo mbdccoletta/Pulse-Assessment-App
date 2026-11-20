@@ -417,13 +417,13 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
           <Flex style={{ flex: 1, flexDirection: isMobile ? "column" : "row", minHeight: 0, overflow: "auto" }}>
           {viewMode === "coverage" ? (<>
             {/* Left: chart + scale */}
-            <Flex flexDirection="column" alignItems="center" justifyContent={isMobile ? "flex-start" : "center"} style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "visible", position: "relative" }}>
+            <Flex flexDirection="column" alignItems="center" justifyContent="flex-start" style={{ flex: 1, minWidth: 0, position: "relative" }}>
               {!isMobile && <ExpandChartButton onClick={() => setExpandedPolar(true)} style={{ position: "absolute", top: 4, right: 8, zIndex: 10 }} />}
               {/* Lead: where to look first. The three lowest capabilities below "Good", each one click from its detail. */}
               {(() => {
                 const low = capabilities.map((c, i) => ({ c, i })).filter(x => x.c.score < 60).sort((a, b) => a.c.score - b.c.score).slice(0, 3);
                 return (
-                  <Flex alignItems="center" gap={8} flexWrap="wrap" style={isMobile ? { alignSelf: "stretch", padding: "12px 16px 0" } : { position: "absolute", top: 8, left: 16, right: 48, zIndex: 10 }}>
+                  <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ alignSelf: "stretch", flexShrink: 0, padding: isMobile ? "12px 16px 0" : "8px 48px 0 16px" }}>
                     <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>{low.length > 0 ? "Needs attention" : "All capabilities at 60% or above"}</Text>
                     {low.map(({ c, i }) => (
                       <Chip key={c.name} color={c.score < 40 ? "critical" : "warning"} onClick={(e: React.MouseEvent) => { e.stopPropagation(); openCapability(i); }}>
@@ -450,7 +450,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                   ))}
                 </Flex>
               ) : (
-                <Flex alignItems="center" justifyContent="center" style={{ width: "100%", flex: 1, minHeight: 0, paddingTop: 44 }}>
+                <Flex alignItems="center" justifyContent="center" style={{ width: "100%", flex: "1 0 auto", paddingTop: 8 }}>
                   <PulseRadar capabilities={capabilities} totalScore={totalScore} size={chartSize} onOpen={openCapability} onOpenOverall={() => navigate("/summary")} />
                 </Flex>
               )}

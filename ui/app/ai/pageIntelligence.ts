@@ -59,7 +59,7 @@ function shortfall(r: Row): string {
   const floor = nums.length ? passLine(nums) : null;
   if (floor == null) return "";
   const gap = Math.round((floor - Math.floor(r.value * 10) / 10) * 10) / 10;
-  return gap > 0 ? `, ${gap} percentage points short` : "";
+  return gap > 0 ? `, ${gap}% below its target` : "";
 }
 
 function verdictOf(c: CapabilityResult, adoption?: UseAppAdoptionResult) {
@@ -110,17 +110,18 @@ const RULES =
   `Scoring rules: a capability score is the average of coverage (share of criteria met), utilization (Foundation, Best practice, Excellence ` +
   `weighted 60/25/15; Best practice counts once Foundation reaches ${GATE.foundation}%, Excellence once Best practice reaches ${GATE.bestPractice}%) ` +
   `and adoption (share of active users opening its apps in 30 days; ${ADOPTION_FULL_RATE}% of active users counts as 100). ` +
-  `The overall score is the average of the capabilities. A part is high from ${DEFAULT_CUTS.coverage} points, which for adoption means ${DEFAULT_CUTS.adoptionRate}% of active users. ` +
+  `The overall score is the average of the capabilities. A part is high from ${DEFAULT_CUTS.coverage}%, which for adoption means ${DEFAULT_CUTS.adoptionRate}% of active users. ` +
   `Verdicts: Healthy (all three high), Skin-deep (coverage and adoption high, utilization low), Unwatched (coverage high, adoption low), ` +
   `Starved (adoption high, coverage low), Dark (coverage and adoption low). ` +
-  `Bands: ${SCORE_BANDS.map(b => `${b.label} ${b.min}-${b.max === 100 ? 100 : b.max - 1}`).join(", ")}.`;
+  `Bands: ${SCORE_BANDS.map(b => `${b.label} ${b.min}-${b.max === 100 ? 100 : b.max - 1}`).join(", ")}. ` +
+  `Never state a number of points or a point difference: give percentages, and say that something raises the score, lowers it or leaves it unchanged.`;
 
 // ── Lenses ───────────────────────────────────────────────────────────────────
 
 export const LENS: Record<PageId, string> = {
   overview:
     `Page lens: Overview, all capabilities side by side. Reason ACROSS capabilities: compare, rank, find the common cause. ` +
-    `Use "Verdicts" and "Highest gain" from the page facts; gains are points on the overall score, already computed: quote them, never recompute or add your own. ` +
+    `Use "Verdicts" and "Highest gain" from the page facts; that list is ordered from the largest effect on the overall score to the smallest: use the order, never a number of points. ` +
     `Lead with the conclusion, then the evidence. A tier gate is the share of a tier's criteria that are met; a criterion value is something else: never state one as the other.`,
   overall:
     `Page lens: Overall score, one number and what builds it. Explain the score through its three parts, the tier gates and the gains listed in the page facts. ` +
@@ -128,13 +129,13 @@ export const LENS: Record<PageId, string> = {
     `Separate what is a data gap (coverage), a depth gap (utilization) and a people gap (adoption). A tier gate is the share of a tier's criteria that are met; a criterion value is something else: never state one as the other.`,
   capability:
     `Page lens: one capability in depth. Stay inside this capability. Explain its verdict from the three parts, then go criterion by criterion using ` +
-    `"Unmet criteria" from the page facts: each has its value, the value it passes from, its tier and its gain in capability points, already computed. ` +
+    `"Unmet criteria" from the page facts: each has its value, the value it passes from and its tier, and the list is ordered from the largest effect on the score to the smallest. ` +
     `A closed tier gate comes before anything behind it. Name the app or data involved. A tier gate is the share of a tier's criteria that are met; a criterion value is something else: never state one as the other.`,
   evolution:
-    `Page lens: Evolution, two runs compared. Explain CAUSES, not just differences: which part moved, by how many points, and which criteria changed state. ` +
+    `Page lens: Evolution, two runs compared. Explain CAUSES, not just differences: which part moved and in which direction, and which criteria changed state. ` +
     `Keep apart a real change in the environment from a change in what is measured (criteria or capabilities added or removed, app version). ` +
     `Adoption comes from who opens the apps, never from criteria: do not explain an adoption change by a criterion. ` +
-    `All deltas, point contributions and the like-for-like score are in the page facts: quote them, never compute.`,
+    `Every before and after value is in the page facts: quote them as percentages, never compute a difference.`,
   guide:
     `Page lens: Guide, how the assessment works. Teach the method with the scoring rules in the page facts, exactly as stated: never invent a rule, weight or cut. ` +
     `When an assessment exists, use one real capability from the context as the worked example and quote its numbers. ` +
@@ -145,7 +146,7 @@ export const LENS: Record<PageId, string> = {
 
 export const QUESTIONS: Record<Exclude<PageId, "capability">, PageQuestion[]> = {
   overview: [
-    { label: "Where to act first", ask: "Which three unmet criteria in the \"Highest gain\" list add the most points to the overall score, which of them open a closed tier gate in their capability, and in what order should they be done? What is the gain and the current value of each?" },
+    { label: "Where to act first", ask: "Which three unmet criteria in the \"Highest gain\" list raise the overall score the most, which of them open a closed tier gate in their capability, and in what order should they be done? What is the gain and the current value of each?" },
     { label: "Pattern behind the gaps", ask: "Across all capabilities, is the score held back mainly by coverage, by utilization or by adoption? Which capabilities share the same verdict, and what single cause would explain them together?" },
     { label: "Data nobody opens", ask: "Which capabilities have data arriving but few people opening their apps (Unwatched), and which have an audience but little coverage (Starved)? What does each case call for, and which one pays back first?" },
     { label: "Blind spots", ask: "Which capabilities sit in the lowest bands or have criteria that could not be assessed, and what would the customer fail to see during an incident in each of those areas today?" },
@@ -193,7 +194,7 @@ export function capabilityQuestions(name: string): PageQuestion[] {
     ...(WHY_IT_MATTERS[name] ?? []),
     { label: "Why this score", ask: `Why does ${name} have this score and this verdict? Which of its three parts holds it back, and which unmet criteria are behind that part?` },
     { label: "Order of the work", ask: `For ${name}, in what order should the unmet criteria be done, considering closed tier gates first and then the gain of each one in the page facts? What does each one need in Dynatrace?` },
-    { label: "Closest to passing", ask: `Which unmet criteria in ${name} have the fewest percentage points short of passing, according to the page facts, and what would close that distance for each? Which ones are far from passing and should not be called close?` },
+    { label: "Closest to passing", ask: `Which unmet criteria in ${name} have the smallest distance to their target, according to the page facts, and what would close that distance for each? Which ones are far from passing and should not be called close?` },
     { label: "Who uses it", ask: `Which apps of ${name} are opened and by how many people, according to the page facts? Which installed apps are not opened, and what would bring this data to more people?` },
     { label: "Risk if nothing changes", ask: `What can the customer not see or detect in ${name} today because of each unmet criterion, and how would an incident in this area be noticed?` },
   ];
@@ -211,7 +212,7 @@ function verdictLines(caps: CapabilityResult[], adoption?: UseAppAdoptionResult)
 
 function gainLines(caps: CapabilityResult[], n: number): string {
   return gains(caps).slice(0, n).map(g =>
-    `- "${clean(g.r.label)}" (${g.c.name}, ${TIER_LABEL[g.r.tier as Tier]}): +${g.gain} pts overall; ${reading(g.r)}`).join("\n");
+    `- "${clean(g.r.label)}" (${g.c.name}, ${TIER_LABEL[g.r.tier as Tier]}): ${reading(g.r)}`).join("\n");
 }
 
 function gateLines(caps: CapabilityResult[]): string {
@@ -248,7 +249,7 @@ function automationFacts(caps: CapabilityResult[]): string {
 export function overviewFacts(caps: CapabilityResult[], adoption?: UseAppAdoptionResult): string {
   if (caps.length === 0) return "";
   return `Page facts (Overview).\nVerdicts:\n${verdictLines(caps, adoption)}\n` +
-    `Highest gain (unmet criteria by points added to the overall score):\n${gainLines(caps, 6)}\n` +
+    `Highest gain (unmet criteria, ordered from the largest effect on the overall score to the smallest):\n${gainLines(caps, 6)}\n` +
     `Closed tier gates (a gate is a share of criteria met in a tier, never a criterion value):\n${gateLines(caps)}\n` +
     `${adoptionSplit(caps)}\n` +
     `Criteria that measure AI assistance and automation (these ARE measured):\n${automationFacts(caps)}`;
@@ -270,9 +271,9 @@ export function overallFacts(caps: CapabilityResult[], totalScore: number, adopt
     let sum = 0, k = 0;
     while (k < listed.length && sum < nb.away) { sum += listed[k].gain; k++; }
     const all = r1(ranked.reduce((t, g) => t + g.gain, 0));
-    path = `Next band: ${nb.label} from ${nb.at}%, ${nb.away} pts away. ` + (sum >= nb.away
-      ? `The first ${k} criteria of the "Highest gain" list add about ${r1(sum)} pts together (each gain is computed alone, so the sum is approximate), enough to reach it.`
-      : `The ${listed.length} criteria of the "Highest gain" list add about ${r1(sum)} pts together and every unmet criterion about ${all} pts (each gain is computed alone, so sums are approximate)${all < nb.away ? ": not enough alone, adoption has to rise too" : ""}.`);
+    path = `Next band: ${nb.label} from ${nb.at}% (the score is ${totalScore}% now). ` + (sum >= nb.away
+      ? `The first ${k} criteria of the "Highest gain" list are together about enough to reach it (each effect is computed alone, so this is an estimate).`
+      : `The ${listed.length} criteria of the "Highest gain" list are not enough together to reach it${all < nb.away ? ", and neither are all the unmet criteria: adoption has to rise too" : "; more of the unmet criteria are needed"} (an estimate).`);
   } else path = "The score is already in the highest band.";
   const ran = !!adoption && !adoption.unavailable && !adoption.loading;
   const apps = ran && adoption
@@ -284,7 +285,7 @@ export function overallFacts(caps: CapabilityResult[], totalScore: number, adopt
   };
   return `Page facts (Overall score).\nOverall ${totalScore}% (${scoreBand(totalScore).label}). Parts, averaged over capabilities: ${parts}.\n${path}\n` +
     `Criteria met by tier: Foundation ${tier("foundation")}%, Best practice ${tier("bestPractice")}%, Excellence ${tier("excellence")}%.\n` +
-    `Highest gain (points added to the overall score):\n${gainLines(caps, LISTED)}\n` +
+    `Highest gain (unmet criteria, ordered from the largest effect on the overall score to the smallest):\n${gainLines(caps, LISTED)}\n` +
     `Closed tier gates (a gate is a share of criteria met in a tier, never a criterion value):\n${gateLines(caps)}\n` +
     `Verdicts:\n${verdictLines(caps, adoption)}\n${adoptionSplit(caps)}\nMost used apps: ${apps}.`;
 }
@@ -294,9 +295,9 @@ export function capabilityFacts(cap: CapabilityResult, adoption?: UseAppAdoption
   const unmet = cap.criteriaResults.filter(isFail)
     .map(r => ({ r, gain: gainIfMet(cap, r.tier as Tier) }))
     .sort((a, b) => b.gain - a.gain)
-    .map(({ r, gain }) => {
+    .map(({ r }) => {
       const act = CRITERION_ACTIONS[r.id]?.action;
-      return `- "${clean(r.label)}" (${TIER_LABEL[r.tier as Tier]}): ${reading(r)}${shortfall(r)}; +${gain} pts on this capability${act ? `; suggested: ${act.length > 110 ? act.slice(0, 109) + "…" : act}` : ""}`;
+      return `- "${clean(r.label)}" (${TIER_LABEL[r.tier as Tier]}): ${reading(r)}${shortfall(r)}${act ? `; suggested: ${act.length > 110 ? act.slice(0, 109) + "…" : act}` : ""}`;
     });
   const na = cap.criteriaResults.filter(r => r.notAssessed || r.error).map(r => `"${clean(r.label)}"`);
   const gates = closedGates(cap);
@@ -306,8 +307,8 @@ export function capabilityFacts(cap: CapabilityResult, adoption?: UseAppAdoption
   return `Page facts (${cap.name}).\nVerdict: ${dx.label}. ${dx.meaning}\n` +
     `Tiers met: Foundation ${share(cap.utilization.foundation)}%, Best practice ${share(cap.utilization.bestPractice)}%, Excellence ${share(cap.utilization.excellence)}%.\n` +
     `Closed tier gates: ${gates.length ? gates.join("; ") : "none"}.\n` +
-    (nb ? `Next band: ${nb.label} from ${nb.at}%, ${nb.away} pts away.\n` : "") +
-    `Unmet criteria (highest gain first):\n${unmet.length ? unmet.join("\n") : "- none"}\n` +
+    (nb ? `Next band: ${nb.label} from ${nb.at}% (the score is ${cap.score}% now).\n` : "") +
+    `Unmet criteria (ordered from the largest effect on the score to the smallest):\n${unmet.length ? unmet.join("\n") : "- none"}\n` +
     (na.length ? `Not assessed in this environment: ${na.join(", ")}.\n` : "") +
     `Apps opened: ${used || "none measured"}.` + (unused ? ` Installed and not opened: ${unused}.` : "");
 }
@@ -315,7 +316,6 @@ export function capabilityFacts(cap: CapabilityResult, adoption?: UseAppAdoption
 type SnapCap = AssessmentSnapshot["capabilities"][number];
 type SnapRow = SnapCap["criteriaResults"][number];
 const stateOf = (r?: SnapRow) => (!r || r.notAssessed || r.error ? "na" : r.points > 0 ? "pass" : "fail");
-const signed = (n: number) => `${n > 0 ? "+" : ""}${r1(n)}`;
 
 export function evolutionFacts(from: AssessmentSnapshot, to: AssessmentSnapshot): string {
   const day = (iso: string) => new Date(iso).toISOString().slice(0, 16).replace("T", " ") + " UTC";
@@ -328,9 +328,8 @@ export function evolutionFacts(from: AssessmentSnapshot, to: AssessmentSnapshot)
     const p = from.capabilities.find(x => x.name === c.name);
     if (!p) return { abs: 100, line: `- ${c.name}: new capability, ${c.score}%` };
     const keys = ["coverage", "utilization", "adoption"] as const;
-    const counted = keys.filter(k => c[k] != null).length || 1;
     const parts = keys.filter(k => p[k] != null && c[k] != null && p[k] !== c[k])
-      .map(k => `${k} ${p[k]}→${c[k]} (${signed((c[k]! - p[k]!) / counted)} pts)`);
+      .map(k => `${k} ${p[k]}%→${c[k]}%`);
     const prev = new Map(p.criteriaResults.map(r => [r.id, r]));
     const now = new Set(c.criteriaResults.map(r => r.id));
     const pick = (f: (r: SnapRow, b?: SnapRow) => boolean) => c.criteriaResults.filter(r => f(r, prev.get(r.id))).map(r => `"${clean(r.label)}"`);
@@ -351,10 +350,10 @@ export function evolutionFacts(from: AssessmentSnapshot, to: AssessmentSnapshot)
     ].filter(Boolean);
     const d = c.score - p.score;
     totals.lost.push(...lost); totals.gained.push(...gained);
-    if (d > 0) totals.rose.push(`${c.name} ${signed(d)} pts`);
-    if (d < 0) totals.fell.push(`${c.name} ${signed(d)} pts`);
+    if (d > 0) totals.rose.push(`${c.name} ${p.score}%→${c.score}%`);
+    if (d < 0) totals.fell.push(`${c.name} ${p.score}%→${c.score}%`);
     if (d === 0 && bits.length === 0) return null;
-    return { abs: Math.abs(d), line: `- ${c.name}: ${p.score}%→${c.score}% (${signed(d)} pts)${bits.length ? "; " + bits.join("; ") : ""}` };
+    return { abs: Math.abs(d), line: `- ${c.name}: ${p.score}%→${c.score}% (${d > 0 ? "rose" : d < 0 ? "fell" : "unchanged"})${bits.length ? "; " + bits.join("; ") : ""}` };
   }).filter((x): x is { abs: number; line: string } => !!x).sort((a, b) => b.abs - a.abs);
   const measured = [
     from.appVersion && to.appVersion && from.appVersion !== to.appVersion ? `app version ${from.appVersion} to ${to.appVersion}` : "",
@@ -365,10 +364,10 @@ export function evolutionFacts(from: AssessmentSnapshot, to: AssessmentSnapshot)
   const common = to.capabilities.filter(c => fromNames.has(c.name)).map(c => c.name);
   const mean = (snap: AssessmentSnapshot) => avg(snap.capabilities.filter(c => common.includes(c.name)).map(c => c.score));
   const likeForLike = (added.length || removed.length) && common.length
-    ? `Like for like (only the ${common.length} capabilities present in both runs): ${mean(from)}%→${mean(to)}% (${signed(mean(to) - mean(from))} pts).\n`
+    ? `Like for like (only the ${common.length} capabilities present in both runs): ${mean(from)}%→${mean(to)}%.\n`
     : "";
   return `Page facts (Evolution). Comparing the run of ${day(from.timestamp)} with the run of ${day(to.timestamp)}.\n` +
-    `Overall score ${from.totalScore}%→${to.totalScore}% (${signed(to.totalScore - from.totalScore)} pts).\n` +
+    `Overall score ${from.totalScore}%→${to.totalScore}%.\n` +
     likeForLike +
     `Adoption is measured from app usage in 30 days, not from criteria; an adoption change means fewer or more people opened the capability's apps, or the apps counted for it changed.\n` +
     `Changes in what is measured: ${measured || "none recorded"}. New or removed criteria and capabilities are measurement changes, not environment changes.\n` +
@@ -376,7 +375,7 @@ export function evolutionFacts(from: AssessmentSnapshot, to: AssessmentSnapshot)
     `Criteria that went from not met to met (improvements): ${totals.gained.length ? totals.gained.join(", ") : "none"}.\n` +
     `Capabilities whose score rose: ${totals.rose.length ? totals.rose.join("; ") : "none"}. Capabilities whose score fell: ${totals.fell.length ? totals.fell.join("; ") : "none"}.\n` +
     `When a list above says "none", say so plainly: do not present a drop as an improvement or a measurement change as a regression.\n` +
-    `Capabilities that changed (largest first; points in brackets are the effect of that part on the capability score):\n` +
+    `Capabilities that changed (largest change first, with the parts that moved):\n` +
     (caps.length ? caps.map(c => c.line).join("\n") : "- nothing changed");
 }
 
@@ -433,6 +432,6 @@ export function baselineFacts(run: AssessmentSnapshot, closest: BaselineRow[]): 
     `Adoption is measured from app usage in 30 days, so it reacts slowly: a change in who opens the apps takes weeks to show in full.\n` +
     `Results are reused for 24 hours and one run per day is kept for 90 days.\n` +
     `Capabilities, lowest score first:\n${caps.join("\n")}\n` +
-    `Unmet criteria closest to their target (value, target, gap in percentage points):\n` +
-    (closest.length ? closest.map(r => `- ${r.label} (${r.capability}): ${r.value}% of a ${r.target}% target, ${r.gap} pts short`).join("\n") : "- none");
+    `Unmet criteria closest to their target (nearest first; value and target):\n` +
+    (closest.length ? closest.map(r => `- ${r.label} (${r.capability}): ${r.value}% of a ${r.target}% target`).join("\n") : "- none");
 }

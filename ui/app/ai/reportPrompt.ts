@@ -178,7 +178,8 @@ export function buildInstruction(ctx: Pick<ReportContext, "lens">): string {
     `- Every number you write must appear in the context. NEVER invent monetary ` +
     `amounts, savings, expected scores, targets, baselines, durations or ROI, not ` +
     `even as an illustration.\n` +
-    `- Do not promise an outcome: say what a change makes visible or possible.\n\n` +
+    `- Do not promise an outcome: say what a change makes visible or possible.\n` +
+    `- Never state a number of points or a point difference: give percentages and say that something raises the score, lowers it or leaves it unchanged.\n\n` +
     `Recommendations:\n` +
     `- Tie each one to a check that is not met, quoting its name and current value.\n` +
     `- Name the capability, app or data field involved. Give a menu path only when ` +
