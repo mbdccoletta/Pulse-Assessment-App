@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes Pulse Assessment 3.0.4 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
+This document describes Pulse Assessment 3.0.5 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
 
 ## Overview
 
@@ -44,7 +44,7 @@ ui/
     ├── data/                  criterionTiers, criterionImportance, criterionGaps, appCapabilityMap
     ├── components/            IntelligenceBar, PulseRadar, SmartReportModal, ScaleTierBanner,
     │                          TraceProxyBanner, DpsCostBadge, ExpandableChartModal,
-    │                          CopyableQuery, Tooltip, ErrorBoundary
+    │                          Tooltip, ErrorBoundary
     ├── pages/                 CoverageAssessment, ExecutiveSummary, EvolutionPage,
     │                          GuidePage, CapabilityDetailPage
     └── utils/colors.ts        Score bands and their colors

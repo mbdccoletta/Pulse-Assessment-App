@@ -10,7 +10,6 @@
 import { ToggleButtonGroup } from "@dynatrace/strato-components/forms";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import Typography from "@dynatrace/strato-design-tokens/typography";
 import { Button } from "@dynatrace/strato-components/buttons";
@@ -18,7 +17,6 @@ import { ExternalLink, Heading, Text } from "@dynatrace/strato-components/typogr
 import { Flex, Surface, Grid } from "@dynatrace/strato-components/layouts";
 import { Chip, EmptyState, HealthIndicator, InformationOverlay, SkeletonText, Accordion } from "@dynatrace/strato-components/content";
 import { Breadcrumbs } from "@dynatrace/strato-components/navigation";
-import { DataTable } from "@dynatrace/strato-components/tables";
 import { GaugeChart, MeterBarChart, MultiMeterBarChart, TimeseriesChart } from "@dynatrace/strato-components/charts";
 import type { CoverageData, CapabilityResult } from "../hooks/useCoverageData";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
@@ -26,7 +24,6 @@ import { NO_ADOPTION } from "../hooks/useAppAdoption";
 import { IntelligenceBar } from "../components/IntelligenceBar";
 import { LENS, capabilityQuestions, capabilityFacts } from "../ai/pageIntelligence";
 import { Tooltip } from "../components/Tooltip";
-import { CopyBtn } from "../components/CopyableQuery";
 import { diagnose } from "../diagnosis";
 import { passLine } from "../passLine";
 import { useAppNames, useInstalledApps } from "../hooks/useAppNames";
@@ -107,30 +104,6 @@ function fmtFloor(r: Row): string {
   if (isPresence(r)) return "≥1";
   const f = passFloor(r.thresholds);
   return f == null ? "—" : r.isRatio ? `${f}%` : String(f);
-}
-
-/** Source of one DQL statement. */
-function sourceOfOne(query: string): { label: string; cost: string } {
-  const q = query.toLowerCase();
-  if (/^\s*(settings:count|slos:count)\b/.test(q)) return { label: "Settings", cost: "No query charge" };
-  if (/^\s*fieldssnapshot\b/.test(q)) return { label: "Field snapshot", cost: "No query charge" };
-  if (/^\s*timeseries\b/.test(q)) return { label: "Metrics", cost: "No query charge" };
-  if (/\bfetch\s+dt\.davis\.problems\b/.test(q)) return { label: "Davis problems", cost: "Included" };
-  if (/\bfetch\s+dt\.system\.events\b/.test(q)) return { label: "System events", cost: "—" };
-  if (/\bfetch\s+dt\.entity\./.test(q)) return { label: "Entities", cost: "—" };
-  if (/\bfetch\s+logs\b/.test(q)) return { label: "Logs", cost: "Billed per GiB" };
-  if (/\bfetch\s+spans\b/.test(q)) return { label: "Spans", cost: "Billed per GiB" };
-  if (/\bfetch\s+bizevents\b/.test(q)) return { label: "Business events", cost: "Billed per GiB" };
-  if (/\bfetch\s+(security\.)?events\b/.test(q)) return { label: "Events", cost: "Billed per GiB" };
-  return { label: "Other", cost: "—" };
-}
-
-/** A ratio criterion reads two sources: the numerator names it, and it is
- *  billed when either side is. */
-function sourceOf(query: string): { label: string; cost: string } {
-  const sides = query.split("\n÷ ").map(sourceOfOne);
-  const billed = sides.find(x => x.cost === "Billed per GiB");
-  return { label: sides[0].label, cost: billed ? billed.cost : sides[0].cost };
 }
 
 /** Ratio criteria carry "A\n÷ B"; copy both as runnable DQL. */
@@ -298,7 +271,7 @@ const ActionList: React.FC<{ cap: CapabilityResult; ctx: ReportContext; tier?: s
   };
   const openQuery = (r: Row) => {
     try { sendIntent({ "dt.query": dqlForCopy(r.query) }); setNote(null); }
-    catch { setNote("Opening a notebook needs the app running inside Dynatrace. Use Copy DQL in Analytics instead."); }
+    catch { setNote("Opening a notebook needs the app running inside Dynatrace."); }
   };
 
   return (
@@ -373,9 +346,7 @@ interface Props {
 export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history }) => {
   const { name = "" } = useParams();
   const navigate = useNavigate();
-  const dk = useCurrentTheme() === "dark";
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  /** Tier picked in "Utilization tiers": narrows What to do, Criteria and Analytics. */
+  /** Tier picked in "Utilization tiers": narrows What to do and Criteria. */
   const [tier, setTier] = useState<string | null>(null);
   useEffect(() => { setTier(null); }, [name]);
   const appName = useAppNames();
@@ -429,23 +400,6 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
     notAssessedCount: cap.notAssessedCount,
     totalCount: cap.criteriaResults.length,
   });
-  const analyticsColumns = [
-    { id: "state", header: "State", width: 110, accessor: (r: Row) => STATE_META[rowState(r)].word, cell: ({ rowData }: { rowData: Row }) => <DataTable.DefaultCell><StateMark state={rowState(rowData)} label /></DataTable.DefaultCell> },
-    { id: "criterion", header: "Criterion", minWidth: 160, autoWidth: true, accessor: (r: Row) => `${r.label.replace(/\s*\(%\)\s*$/, "")}${r.proxied ? " ≈" : ""}` },
-    { id: "tier", header: "Tier", width: 120, accessor: (r: Row) => TIERS.find(t => t.key === r.tier)?.label ?? "" },
-    { id: "value", header: "Value", width: 100, alignment: "right" as const, accessor: (r: Row) => fmtValue(r) },
-    { id: "target", header: "Pass from", width: 100, alignment: "right" as const, accessor: (r: Row) => fmtFloor(r) },
-    { id: "source", header: "Source", width: 140, accessor: (r: Row) => sourceOf(r.query).label },
-    { id: "cost", header: "Query cost", width: 140, accessor: (r: Row) => sourceOf(r.query).cost },
-    { id: "dql", header: "DQL", width: 170, disableSorting: true, accessor: (r: Row) => dqlForCopy(r.query), cell: ({ rowData }: { rowData: Row }) => (
-      <DataTable.DefaultCell>
-        <Flex gap={6} alignItems="center">
-          <CopyBtn text={dqlForCopy(rowData.query)} dk={dk} small label="Copy DQL" />
-          {CRITERION_ACTIONS[rowData.id]?.docUrl && <ExternalLink href={CRITERION_ACTIONS[rowData.id].docUrl}>Docs</ExternalLink>}
-        </Flex>
-      </DataTable.DefaultCell>
-    ) },
-  ];
   const prev = caps[(idx - 1 + caps.length) % caps.length];
   const next = caps[(idx + 1) % caps.length];
   const go = (c: CapabilityResult) => navigate(`/capability/${encodeURIComponent(c.name.replace(/\//g, "~"))}`);
@@ -587,15 +541,6 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
                 </Grid>
               </Flex>
             )}
-        </Panel>
-
-        {/* Analytics table */}
-        <Panel title="Analytics" right={<Flex alignItems="center" gap={8}>{clearTier}<Button size="condensed" onClick={() => setShowAnalytics(v => !v)}>{showAnalytics ? "Hide" : "Show"}</Button></Flex>}>
-          {showAnalytics && (
-          <DataTable data={rows} columns={analyticsColumns} fullWidth sortable defaultLineWrap variant={{ rowDensity: "condensed" }}>
-            <DataTable.Toolbar><DataTable.DownloadData /></DataTable.Toolbar>
-          </DataTable>
-          )}
         </Panel>
 
 
