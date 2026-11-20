@@ -546,15 +546,6 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
           </Flex>
         </Flex>
 
-        {/* Analytics table */}
-        <Panel title="Analytics" right={<Flex alignItems="center" gap={8}>{clearTier}<Button size="condensed" onClick={() => setShowAnalytics(v => !v)}>{showAnalytics ? "Hide" : "Show"}</Button></Flex>}>
-          {showAnalytics && (
-          <DataTable data={rows} columns={analyticsColumns} fullWidth sortable defaultLineWrap variant={{ rowDensity: "condensed" }}>
-            <DataTable.Toolbar><DataTable.DownloadData /></DataTable.Toolbar>
-          </DataTable>
-          )}
-        </Panel>
-
         {/* Full width: a spanning item inside the auto-fit grid above kept empty tracks open */}
         <Panel title="Related apps" right={adoptionRan ? <Text textStyle="small" style={{ color: NEUTRAL }}>Share of active users · {adoption.windowDays} days</Text> : undefined}>
           {adoption.loading ? <SkeletonText lines={3} />
@@ -597,6 +588,16 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
               </Flex>
             )}
         </Panel>
+
+        {/* Analytics table */}
+        <Panel title="Analytics" right={<Flex alignItems="center" gap={8}>{clearTier}<Button size="condensed" onClick={() => setShowAnalytics(v => !v)}>{showAnalytics ? "Hide" : "Show"}</Button></Flex>}>
+          {showAnalytics && (
+          <DataTable data={rows} columns={analyticsColumns} fullWidth sortable defaultLineWrap variant={{ rowDensity: "condensed" }}>
+            <DataTable.Toolbar><DataTable.DownloadData /></DataTable.Toolbar>
+          </DataTable>
+          )}
+        </Panel>
+
 
       </Flex>
     </Flex>
