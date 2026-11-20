@@ -398,6 +398,68 @@ function scoreBlock(k: Kit, T: Words, label: string, score: number, parts: { cov
 }
 
 /** How the run was measured, when it was not a plain exact run. */
+/** The Overview radar, drawn in the page: one sector per capability with its
+ *  three parts as radial bars, the capability colour on the outer arc, and the
+ *  name and score outside. Vector, so it prints sharp at any size. */
+function radarBlock(k: Kit, T: Words, caps: CapabilityResult[], total: number) {
+  const { pdf, W, M } = k;
+  const R = 36, hole = 12.5, H = 2 * R + 34;
+  k.ensure(H + 4);
+  const cx = W / 2, cy = k.y + R + 15;
+  const rad = (deg: number) => ((deg - 90) * Math.PI) / 180;
+  const at = (r: number, deg: number): [number, number] => [cx + Math.cos(rad(deg)) * r, cy + Math.sin(rad(deg)) * r];
+  /** Annular sector as a filled polygon, arcs sampled every 2 degrees. */
+  const sector = (r0: number, r1: number, a0: number, a1: number, c: RGB) => {
+    const n = Math.max(2, Math.ceil((a1 - a0) / 2));
+    const pts: [number, number][] = [];
+    for (let i = 0; i <= n; i++) pts.push(at(r1, a0 + ((a1 - a0) * i) / n));
+    for (let i = n; i >= 0; i--) pts.push(at(r0, a0 + ((a1 - a0) * i) / n));
+    k.fill(c);
+    pdf.lines(pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], "F", true);
+  };
+  const TRACK: RGB = [236, 238, 243];
+  const keys = ["coverage", "utilization", "adoption"] as const;
+
+  // legend
+  keys.forEach((p, i) => {
+    k.dot(M + 1.2, k.y + 3 + i * 5, PART_RGB[p]);
+    k.font(8); k.color(INK); k.text(T[p], M + 4.5, k.y + 4 + i * 5);
+  });
+
+  // scale rings: 25 / 50 / 75 / 100
+  pdf.setDrawColor(RULE[0], RULE[1], RULE[2]); pdf.setLineWidth(0.15);
+  for (const q of [0.25, 0.5, 0.75, 1]) pdf.circle(cx, cy, hole + (R - hole) * q, "S");
+
+  const step = 360 / caps.length, gap = Math.min(5, step * 0.12);
+  caps.forEach((c, i) => {
+    const a0 = i * step + gap / 2, a1 = (i + 1) * step - gap / 2, mid = (a0 + a1) / 2;
+    const values = [c.coverageScore ?? c.score, c.effectiveUtilizationScore, c.adoptionScore ?? null];
+    const w = (a1 - a0) / 3;
+    keys.forEach((p, j) => {
+      const b0 = a0 + j * w + 0.5, b1 = a0 + (j + 1) * w - 0.5;
+      sector(hole, R, b0, b1, TRACK);
+      const v = values[j];
+      if (v != null) sector(hole, hole + (R - hole) * Math.max(0.02, Math.min(100, v) / 100), b0, b1, PART_RGB[p]);
+    });
+    sector(R + 1.2, R + 2.4, a0, a1, hex(c.color));
+    // name and score outside, on the sector's side of the chart
+    const [ex, ey] = at(R + 5.5, mid);
+    const side = Math.abs(ex - cx) < R * 0.25 ? 0 : ex > cx ? 1 : -1;
+    const align = side === 0 ? "center" : side > 0 ? "left" : "right";
+    const lx = ex + side * 1.5;
+    const ly = side !== 0 ? ey : ey < cy ? ey - 4 : ey + 3.5;
+    k.font(7.5, true); k.color(INK); k.text(c.name, lx, ly, { align });
+    const band = scoreBand(c.score);
+    k.font(7.5, true); k.color(bandRgb(c.score)); k.text(`${c.score}%  ${T.bands[band.label] ?? band.label}`, lx, ly + 3.4, { align });
+  });
+
+  // centre: the overall score
+  k.fill([255, 255, 255]); pdf.circle(cx, cy, hole - 0.6, "F");
+  k.font(15, true); k.color(bandRgb(total)); k.text(`${total}%`, cx, cy + 1.2, { align: "center" });
+  k.font(6); k.color(DIM); k.text(T.overall.toUpperCase(), cx, cy + 5, { align: "center" });
+  k.y += H;
+}
+
 function runNotes(k: Kit, T: Words, input: ReportInput) {
   const r = input.run;
   if (!r) return;
@@ -571,6 +633,7 @@ export function buildReport(kind: ReportKind, input: ReportInput, lang: ReportLa
 
   if (kind === "overall") {
     k.h2(T.capabilities);
+    radarBlock(k, T, caps, input.totalScore);
     capabilityTable(k, T, ranked, input);
     k.h2(T.actFirst);
     const top = caps.flatMap(c => unmet(c, caps.length)).sort((a, b) => b.gain - a.gain).slice(0, 8);

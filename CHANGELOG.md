@@ -4,6 +4,12 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.6] — 2026-11-20
+
+### Added
+- The Overall score report now carries the Overview radar: every capability with its coverage, utilization and adoption, drawn as vectors in the PDF.
+- The FinOps & Sustainability page offers the FinOps report directly, in English, Portuguese and Spanish: cost by host and cluster, idle hosts, energy and carbon emissions.
+
 ## [3.0.5] — 2026-11-20
 
 ### Removed
