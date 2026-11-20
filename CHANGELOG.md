@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.5] — 2026-11-20
+
+### Removed
+- The Analytics panel of the capability page. It repeated the criteria above it as a table; the same data, with the DQL of each criterion, stays in the Criteria detail report and in the raw data export.
+
 ## [3.0.4] — 2026-11-20
 
 ### Changed

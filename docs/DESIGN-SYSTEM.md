@@ -1,6 +1,6 @@
 # Pulse Assessment design system
 
-Describes the UI as the code under `ui/app/` builds it in version 3.0.4 (`ui/app/appVersion.ts`). Every statement here was read from the code; when the code and this file disagree, the code is right.
+Describes the UI as the code under `ui/app/` builds it in version 3.0.5 (`ui/app/appVersion.ts`). Every statement here was read from the code; when the code and this file disagree, the code is right.
 
 Stack: React 18, `react-router-dom` 6, `@dynatrace/strato-components` ^3.18, `@dynatrace/strato-design-tokens`, `@dynatrace/strato-icons`. There is no CSS, SCSS or style file under `ui/`: all styling is Strato component props plus inline `style` objects that read Strato tokens. The only CSS rules are in a `<style>` element inside the radar SVG (entry animation and focus outline).
 
@@ -63,7 +63,6 @@ Components in `ui/app/components/`:
 | `DpsCostBadge.tsx` | The "Run details" text with a dotted underline; all run numbers are in its tooltip |
 | `ScaleTierBanner.tsx` | Warning banner for sampled runs with three tier buttons; renders nothing on the Exact tier |
 | `TraceProxyBanner.tsx` | Warning banner shown when trace criteria are read from metrics and topology |
-| `CopyableQuery.tsx` | Only `CopyBtn` is used (the "Copy DQL" button in the Analytics table) |
 | `ErrorBoundary.tsx` | Full-page fallback for an uncaught render error |
 
 ### Overview (`/`, `CoverageAssessment.tsx`)
@@ -98,7 +97,6 @@ Selecting a tier filters Capabilities and What to do; a `Chip` with `Chip.Delete
 - "Criteria": grouped by tier. Ratio criteria are a `MeterBarChart` each with the full name above the bar; presence criteria are rows of mark, name and reading. The panel header carries the three `StateMark`s as a legend.
 - "Score over time": `TrendChart` in the capability colour.
 - "Related apps": a `MultiMeterBarChart` "Queries by app" with a legend, then one `MeterBarChart` per app with people and queries in a mono line.
-- "Analytics": hidden until "Show"; a `DataTable` with State, Criterion, Tier, Value, Pass from, Source, Query cost, DQL (`CopyBtn` and a Docs link), and `DataTable.DownloadData` in the toolbar.
 
 ### Evolution (`/compare`, `EvolutionPage.tsx`)
 
@@ -125,7 +123,7 @@ A reading page: one centred column, 960px wide at most, paragraphs capped at 760
 | Single value bar | `MeterBarChart` (`charts`) | Parts, tiers, capabilities, criteria, apps |
 | Split of a total | `MultiMeterBarChart` (`charts`) | Queries by app |
 | Score history | `TimeseriesChart` with `.Line`, `.Band`, `.YAxis` (`charts`) | `TrendChart` |
-| Tables | `DataTable` with `.Pagination`, `.Toolbar`, `.DownloadData`, `.DefaultCell` (`tables`) | What to do, Analytics, Criteria that changed |
+| Tables | `DataTable` with `.Pagination`, `.Toolbar`, `.DownloadData`, `.DefaultCell` (`tables`) | What to do, Criteria that changed, Closest to passing |
 | Labels and filters | `Chip` with `.DeleteButton`, `.Prefix` (`content`) | Verdicts, filters, change kinds, band legend |
 | State | `HealthIndicator` (`content`) | `StateMark` |
 | Disclosure | `Accordion` (`content`) | What to do, What caused the change, What is measured |
@@ -275,7 +273,6 @@ Labels, names, headings, chips, buttons and table cells stay in the text font. S
 | Missing value | "—" |
 | Missing data | "Adoption not available", "No usage data", "No saved run yet", "None" |
 | Scale tier | Exact, Large, xLarge |
-| Proxied criterion | "≈" after the criterion name in the Analytics table |
 
 ## 7. UI rules
 
