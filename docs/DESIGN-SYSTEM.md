@@ -1,6 +1,6 @@
 # Pulse Assessment design system
 
-Describes the UI as the code under `ui/app/` builds it in version 3.0.3 (`ui/app/appVersion.ts`). Every statement here was read from the code; when the code and this file disagree, the code is right.
+Describes the UI as the code under `ui/app/` builds it in version 3.0.4 (`ui/app/appVersion.ts`). Every statement here was read from the code; when the code and this file disagree, the code is right.
 
 Stack: React 18, `react-router-dom` 6, `@dynatrace/strato-components` ^3.18, `@dynatrace/strato-design-tokens`, `@dynatrace/strato-icons`. There is no CSS, SCSS or style file under `ui/`: all styling is Strato component props plus inline `style` objects that read Strato tokens. The only CSS rules are in a `<style>` element inside the radar SVG (entry animation and focus outline).
 
@@ -97,8 +97,8 @@ Selecting a tier filters Capabilities and What to do; a `Chip` with `Chip.Delete
 - "What to do": Strato `Accordion`, one section per unmet criterion, highest score gain first, five shown until "Show all". The label row has `StateMark`, the name, value and target in mono and the gain. The content has a Measured / Why it matters / What to do grid, an optional "Show the …" button that loads names as neutral `Chip`s, "Ask Assist how to fix", "Open the query in a notebook" and an `ExternalLink` to documentation.
 - "Criteria": grouped by tier. Ratio criteria are a `MeterBarChart` each with the full name above the bar; presence criteria are rows of mark, name and reading. The panel header carries the three `StateMark`s as a legend.
 - "Score over time": `TrendChart` in the capability colour.
-- "Analytics": hidden until "Show"; a `DataTable` with State, Criterion, Tier, Value, Pass from, Source, Query cost, DQL (`CopyBtn` and a Docs link), and `DataTable.DownloadData` in the toolbar.
 - "Related apps": a `MultiMeterBarChart` "Queries by app" with a legend, then one `MeterBarChart` per app with people and queries in a mono line.
+- "Analytics": hidden until "Show"; a `DataTable` with State, Criterion, Tier, Value, Pass from, Source, Query cost, DQL (`CopyBtn` and a Docs link), and `DataTable.DownloadData` in the toolbar.
 
 ### Evolution (`/compare`, `EvolutionPage.tsx`)
 

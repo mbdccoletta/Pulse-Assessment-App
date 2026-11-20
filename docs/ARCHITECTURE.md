@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes Pulse Assessment 3.0.3 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
+This document describes Pulse Assessment 3.0.4 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
 
 ## Overview
 
