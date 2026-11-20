@@ -1,12 +1,12 @@
 # Pulse Assessment: scoring calculations
 
 How the app turns query results into scores, bands, verdicts and "gain if met" points.
-This document describes version 3.0.6 (`app.config.json`). The code is the source of truth;
+This document describes version 3.0.7 (`app.config.json`). The code is the source of truth;
 every section names the file it was checked against.
 
 Summary of the model:
 
-- 11 capabilities, 137 criteria (`ui/app/queries.ts`).
+- 11 capabilities, 143 criteria (`ui/app/queries.ts`).
 - Each criterion ends in one of three states: met, not met, not assessed.
 - Each capability has three parts on a 0–100 scale: coverage, utilization, adoption.
 - Capability score = floor of the average of the parts. Overall score = floor of the average of the capability scores.
@@ -36,7 +36,7 @@ Source: `ui/app/hooks/useCoverageData.ts` (`extractValue`, `executeDql`, the cri
 | `denominatorConstant = N` | 45 | `min(floor(A / N × 1000) / 10, 100)` |
 | Neither | 0 | `A` as returned |
 
-The value is a percentage with one decimal, floored and capped at 100. A constant of `1` (33 criteria)
+The value is a percentage with one decimal, floored and capped at 100. A constant of `1` (37 criteria)
 makes a presence check: any count of 1 or more reads 100. A constant of `100` (7 criteria) means the
 query already returns a percentage.
 
@@ -66,7 +66,7 @@ Each criterion lists one, two or three targets. One of them is the pass line; th
 |---|---|---|---|
 | 3 | 71 | The middle one | 80 / 50 / 1 → 50 |
 | 2 | 8 | The higher one | 60 / 30 → 60 |
-| 1 | 58 | That one | 100 → 100 |
+| 1 | 64 | That one | 100 → 100 |
 
 A criterion is met when `value >= passLine`. The default mode is `"middle"` (`PASS_LINE_DEFAULT`).
 
@@ -92,7 +92,7 @@ Source: `ui/app/hooks/useCoverageData.ts` (`tierCounts`, `FOUNDATION_WEIGHT`, `B
 Every criterion belongs to one tier (`CRITERION_TIERS`; an id missing from the map falls back to Foundation).
 Not assessed criteria are left out of the tier totals as well.
 
-In the 3.0.6 catalog every capability has criteria in all three tiers. Application Security, Threat Observability,
+In the 3.0.7 catalog every capability has criteria in all three tiers. Application Security, Threat Observability,
 Software Delivery and Platform Governance have a single Foundation criterion, so their Foundation share is 0 or 1.
 
 ### 3.2 Formula
@@ -126,7 +126,7 @@ A tier with nothing assessed has a share of 0. Its weight is not redistributed.
 | Best practice | `effB = 0`, the Excellence gate stays closed | 60 |
 | Excellence | Its 15 points cannot be earned | 85 |
 
-With the 3.0.6 catalog a tier is empty only when all of its criteria are not assessed. Where Foundation
+With the 3.0.7 catalog a tier is empty only when all of its criteria are not assessed. Where Foundation
 has a single criterion and it is not assessed, utilization is 0.
 
 ## 4. Adoption

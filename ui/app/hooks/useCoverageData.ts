@@ -205,16 +205,49 @@ const POLL_INTERVAL_MS = 3000;
 const QUERY_TIMEOUT_MS = 30000;
 const DEFAULT_TIMEFRAME_HOURS = 2;
 
-/** A criterion that reads configuration, not data: "settings:count <schemaId>"
- *  answers with the number of settings objects of that schema. No Grail scan. */
-const SETTINGS_COUNT = /^settings:count\s+(\S+)$/;
-async function countSettings(schemaId: string): Promise<DqlResult> {
+/** A criterion that reads configuration, not data. No Grail scan.
+ *    "settings:count <schemaId>"              number of settings objects of that schema
+ *    "settings:count <schemaId> <predicate>"  only the objects the named predicate accepts
+ *  Counting every object is wrong for schemas that ship with built-in entries
+ *  switched off, or that carry one object per application plus an environment
+ *  default: the predicate reads the object itself. */
+const SETTINGS_COUNT = /^settings:count\s+(\S+)(?:\s+(\S+))?$/;
+type SettingsObject = { scope?: string; value?: Record<string, any> };
+const perApp = (o: SettingsObject) => /^APPLICATION/.test(o.scope ?? "");
+const SETTINGS_PREDICATES: Record<string, (o: SettingsObject) => boolean> = {
+  /** The rule is switched on. */
+  enabled: o => o.value?.enabled === true,
+  /** An application-level object (the environment default is not an application). */
+  application: perApp,
+  /** RUM masks personal data in URLs or the names of user actions for this application. */
+  rumMasking: o => perApp(o) && (o.value?.masking?.personalDataUriMaskingEnabled === true || o.value?.masking?.userActionMaskingEnabled === true),
+  /** Session Replay records this application with a masking preset, not with everything visible. */
+  replayMasked: o => perApp(o) && !!o.value?.maskingPresets?.recordingMaskingPreset && o.value.maskingPresets.recordingMaskingPreset !== "ALLOW_ALL",
+};
+async function countSettings(schemaId: string, predicate?: string): Promise<DqlResult> {
   const none = { scannedBytes: 0, scannedRecords: 0, scannedDataPoints: 0 };
+  const base = "/platform/classic/environment-api/v2/settings/objects";
   try {
-    const r = await fetch(`/platform/classic/environment-api/v2/settings/objects?schemaIds=${encodeURIComponent(schemaId)}&pageSize=1&fields=objectId`);
-    if (!r.ok) { warn(`✗ settings ${schemaId} → HTTP ${r.status}`); return { value: -1, ...none }; }
-    const j = await r.json();
-    return { value: typeof j?.totalCount === "number" ? j.totalCount : -1, ...none };
+    if (!predicate) {
+      const r = await fetch(`${base}?schemaIds=${encodeURIComponent(schemaId)}&pageSize=1&fields=objectId`);
+      if (!r.ok) { warn(`✗ settings ${schemaId} → HTTP ${r.status}`); return { value: -1, ...none }; }
+      const j = await r.json();
+      return { value: typeof j?.totalCount === "number" ? j.totalCount : -1, ...none };
+    }
+    const accept = SETTINGS_PREDICATES[predicate];
+    if (!accept) { warn(`✗ settings ${schemaId} → unknown predicate ${predicate}`); return { value: -1, ...none }; }
+    // Read the objects themselves, page by page. Bounded: a schema with more
+    // objects than this is counted on what was read.
+    let count = 0, url = `${base}?schemaIds=${encodeURIComponent(schemaId)}&pageSize=500&fields=scope,value`;
+    for (let page = 0; page < 10; page++) {
+      const r = await fetch(url);
+      if (!r.ok) { warn(`✗ settings ${schemaId} → HTTP ${r.status}`); return { value: -1, ...none }; }
+      const j = await r.json();
+      for (const o of (j?.items ?? []) as SettingsObject[]) if (accept(o)) count++;
+      if (!j?.nextPageKey) break;
+      url = `${base}?nextPageKey=${encodeURIComponent(j.nextPageKey)}`;
+    }
+    return { value: count, ...none };
   } catch (e) {
     warn(`✗ settings ${schemaId} →`, e);
     return { value: -1, ...none };
@@ -242,7 +275,7 @@ async function countSlos(): Promise<DqlResult> {
 async function executeDql(query: string): Promise<DqlResult> {
   if (query.trim() === "slos:count") return countSlos();
   const settings = SETTINGS_COUNT.exec(query.trim());
-  if (settings) return countSettings(settings[1]);
+  if (settings) return countSettings(settings[1], settings[2]);
   try {
     const response = await queryExecutionClient.queryExecute({
       body: {

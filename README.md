@@ -2,7 +2,7 @@
 
 > How well is this environment actually using Dynatrace? One run answers it from the tenant's own data.
 
-Pulse Assessment is a native **Dynatrace App** that scores an environment's observability posture across **11 capabilities** and **137 criteria**, read with DQL against Grail and with the platform's settings and SLO services. Every capability gets one score built from three parts — **coverage**, **utilization** and **adoption** — plus a verdict, the criteria that fail, the action that fixes each one, and how the score moved since the last run.
+Pulse Assessment is a native **Dynatrace App** that scores an environment's observability posture across **11 capabilities** and **143 criteria**, read with DQL against Grail and with the platform's settings and SLO services. Every capability gets one score built from three parts — **coverage**, **utilization** and **adoption** — plus a verdict, the criteria that fail, the action that fixes each one, and how the score moved since the last run.
 
 ---
 
@@ -75,9 +75,9 @@ Pulse Assessment is a native **Dynatrace App** that scores an environment's obse
 | AI/LLM Observability | 16 | 3 / 5 / 8 |
 | Business Observability | 10 | 3 / 4 / 3 |
 | Software Delivery | 6 | 1 / 2 / 3 |
-| Platform Governance | 12 | 1 / 9 / 2 |
+| Platform Governance | 18 | 1 / 13 / 4 |
 | FinOps & Sustainability | 10 | 3 / 4 / 3 |
-| **Total** | **137** | **25 / 66 / 46** |
+| **Total** | **143** | **25 / 70 / 48** |
 
 ## Scoring model
 
@@ -180,7 +180,7 @@ The app requests 17 scopes (configured in `app.config.json`):
 | `storage:bizevents:read` | Business Observability events |
 | `storage:buckets:read` | Grail bucket access for DQL |
 | `storage:system:read` | System tables (usage and adoption) |
-| `settings:objects:read` | Configuration counts (custom anomaly detectors, log pipelines, classic SLOs) |
+| `settings:objects:read` | Configuration reads (anomaly detectors, log pipelines, classic SLOs, masking and privacy settings) |
 | `slo:slos:read` | Count of SLOs in the Service-Level Objectives app |
 | `app-engine:apps:run` | Installed app names for the adoption reading |
 | `davis-copilot:conversations:execute` | Dynatrace Intelligence answers and the Smart Report |
@@ -197,7 +197,7 @@ The app requests 17 scopes (configured in `app.config.json`):
 │   └── app/
 │       ├── App.tsx               # Routes, the single score, run history save
 │       ├── appVersion.ts         # Must match app.config.json
-│       ├── queries.ts            # The 137 criteria
+│       ├── queries.ts            # The 143 criteria
 │       ├── pulseScore.ts         # Coverage + utilization + adoption
 │       ├── diagnosis.ts          # Verdict per capability
 │       ├── remediationActions.ts # Action and link per criterion

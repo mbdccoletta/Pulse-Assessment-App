@@ -1,6 +1,6 @@
 # Criteria summary
 
-Every criterion the assessment reads: 137 criteria across 11 capabilities. This file is generated from the catalog (`ui/app/queries.ts`, `ui/app/data/criterionTiers.ts`, `ui/app/passLine.ts`); regenerate it when the catalog changes rather than editing it by hand.
+Every criterion the assessment reads: 143 criteria across 11 capabilities. This file is generated from the catalog (`ui/app/queries.ts`, `ui/app/data/criterionTiers.ts`, `ui/app/passLine.ts`); regenerate it when the catalog changes rather than editing it by hand.
 
 ## How to read the tables
 
@@ -12,7 +12,7 @@ Every criterion the assessment reads: 137 criteria across 11 capabilities. This 
 
 A criterion that cannot be measured in the environment is not assessed: it leaves the score and is never counted as not met.
 
-Readings by kind: 104 shares, 30 presence checks, 3 configuration counts.
+Readings by kind: 106 shares, 32 presence checks, 5 configuration counts.
 
 ## Capabilities
 
@@ -27,9 +27,9 @@ Readings by kind: 104 shares, 30 presence checks, 3 configuration counts.
 | AI/LLM Observability | 16 | 3 | 5 | 8 |
 | Business Observability | 10 | 3 | 4 | 3 |
 | Software Delivery | 6 | 1 | 2 | 3 |
-| Platform Governance | 12 | 1 | 9 | 2 |
+| Platform Governance | 18 | 1 | 13 | 4 |
 | FinOps & Sustainability | 10 | 3 | 4 | 3 |
-| **Total** | **137** | **25** | **66** | **46** |
+| **Total** | **143** | **25** | **70** | **48** |
 
 ## Infrastructure Observability
 
@@ -205,8 +205,14 @@ Readings by kind: 104 shares, 30 presence checks, 3 configuration counts.
 | Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read platform usage, audit and billing events through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
 | SLOs defined | Best practice | Configuration count | At least 1 | Service-level objectives configured in the environment, classic and from the Service-Level Objectives app. Read from configuration, which scans no data. |
 | Adaptive or seasonal baselines in alerts | Best practice | Presence | At least 1 | Alerts evaluated in the last 7 days with an auto-adaptive or seasonal baseline instead of a fixed threshold. |
+| Sensitive data masking in logs | Best practice | Configuration count | At least 1 | Log masking rules that are switched on. The rules that ship with the platform come switched off, so only active ones count. Read from settings, which scans no data. |
+| Span attribute masking | Best practice | Configuration count | At least 1 | Attribute masking rules that are switched on for traces. Read from settings, which scans no data. |
+| RUM privacy masking | Best practice | Share | 50% | Share of web applications where RUM masks personal data in URLs or the names of user actions. Read from settings, which scans no data. |
+| Custom buckets with their own retention | Best practice | Presence | At least 1 | Grail buckets the team created, each with the retention it chose, instead of keeping everything in the default buckets. Read from the bucket list, which scans no data. |
 | Human approval in workflows | Excellence | Presence | At least 1 | Workflows that ran an approval task in the last 7 days, so a person confirms before a consequential action. |
 | Custom anomaly detectors configured | Excellence | Configuration count | At least 1 | Anomaly detectors the team created on its own metrics and queries. Read from settings, which scans no data. |
+| Session Replay recorded with masking | Excellence | Share | 50% | Share of web applications whose Session Replay recording uses a masking preset instead of recording everything visible. Read from settings, which scans no data. |
+| Audit trail consulted | Excellence | Presence | At least 1 | People who queried the platform's audit events in the last 30 days. Audit events are always recorded; this counts whether anyone looks at them. |
 
 ## FinOps & Sustainability
 

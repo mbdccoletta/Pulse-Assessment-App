@@ -5,7 +5,7 @@
     "name": "Pulse Assessment",
     "description": "Scores coverage, utilization and adoption across 11 Dynatrace capabilities.",
     "icon": "ui/assets/icon.svg",
-    "version": "3.0.6",
+    "version": "3.0.7",
     "scopes": [
       { "name": "storage:logs:read", "comment": "Log Analytics coverage" },
       { "name": "storage:events:read", "comment": "Security, Delivery, Problems" },
@@ -19,7 +19,7 @@
       { "name": "document:documents:write", "comment": "Save assessment snapshots" },
       { "name": "document:documents:delete", "comment": "Cleanup old snapshots" },
       { "name": "davis-copilot:conversations:execute", "comment": "Dynatrace Intelligence answers and the Smart Report" },
-      { "name": "settings:objects:read", "comment": "Count configuration objects: custom anomaly detectors, log pipelines, classic SLOs" },
+      { "name": "settings:objects:read", "comment": "Read configuration: anomaly detectors, log pipelines, classic SLOs, masking and privacy settings" },
       { "name": "slo:slos:read", "comment": "Count SLOs created in the Service-Level Objectives app (criterion SLOs defined)" },
       { "name": "storage:security.events:read", "comment": "Security findings (vulnerabilities, detections, compliance) live in security.events" },
       { "name": "app-engine:apps:run", "comment": "Read installed app names from the registry for the adoption view" },

@@ -154,6 +154,12 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   g10: "bestPractice",   // SLOs defined
   g11: "excellence",   // Custom anomaly detectors configured
   g12: "bestPractice",   // Adaptive or seasonal baselines in alerts
+  g14: "bestPractice",   // Sensitive data masking in logs
+  g15: "bestPractice",   // Span attribute masking
+  g16: "bestPractice",   // RUM privacy masking
+  g17: "excellence",   // Session Replay recorded with masking
+  g18: "bestPractice",   // Custom buckets with their own retention
+  g19: "excellence",   // Audit trail consulted
   l18: "bestPractice",   // Custom log pipelines configured
   s16: "bestPractice",   // Vulnerabilities with Davis assessment
   ai19: "bestPractice",   // Response model recorded

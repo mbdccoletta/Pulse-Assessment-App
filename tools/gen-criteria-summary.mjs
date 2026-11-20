@@ -16,7 +16,7 @@ for (const c of CAPABILITIES) {
   const t = { foundation: 0, bestPractice: 0, excellence: 0 };
   for (const k of rows) {
     total++; t[CRITERION_TIERS[k.id]]++;
-    const config = /^(settings:count|slos:count)/.test(k.query);
+    const config = /^(settings:count|slos:count)/.test(k.query) && !k.queryB;
     const presence = !k.queryB && (k.denominatorConstant == null || k.denominatorConstant === 1);
     const line = passLine(k.thresholds.map(x => x.min), "middle");
     let reading, target;

@@ -4,6 +4,12 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.7] — 2026-11-20
+
+### Added
+- Six criteria in Platform Governance on data protection and data governance, all read from configuration or system tables with no Grail scan: Sensitive data masking in logs, Span attribute masking, RUM privacy masking, Session Replay recorded with masking, Custom buckets with their own retention, and Audit trail consulted. The catalog has 143 criteria.
+- The configuration reader can count only the settings objects a named rule accepts (`settings:count <schema> <predicate>`): rules that are switched on, or one object per application. Counting every object was wrong for schemas that ship with built-in entries switched off.
+
 ## [3.0.6] — 2026-11-20
 
 ### Added
