@@ -1,12 +1,12 @@
 # Architecture
 
-This document describes Pulse Assessment 3.0.6 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
+This document describes Pulse Assessment 3.0.7 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
 
 ## Overview
 
 Pulse Assessment is a Dynatrace AppEngine app (`my.pulse.assessment`) written in React 18 and TypeScript with Strato components. It has no backend functions: everything runs in the browser and talks to platform services through the Dynatrace SDKs and platform REST endpoints.
 
-The app assesses 11 capabilities with 137 criteria (`queries.ts`). Each capability gets one score, the floored average of three parts (coverage, utilization, adoption), and a named verdict. The assessment starts by itself when the app opens; there is no start page and no capability selection.
+The app assesses 11 capabilities with 143 criteria (`queries.ts`). Each capability gets one score, the floored average of three parts (coverage, utilization, adoption), and a named verdict. The assessment starts by itself when the app opens; there is no start page and no capability selection.
 
 | Platform service | Used for | Client |
 |---|---|---|
@@ -26,7 +26,7 @@ ui/
 └── app/
     ├── App.tsx                Routes, header, the single score, run history save
     ├── appVersion.ts          APP_VERSION, stored in every snapshot
-    ├── queries.ts             CAPABILITIES: the 137 criteria
+    ├── queries.ts             CAPABILITIES: the 143 criteria
     ├── pulseScore.ts          Three-part score, gain per unmet criterion
     ├── diagnosis.ts           Verdict per capability
     ├── passLine.ts            The one target a criterion must reach
@@ -90,7 +90,7 @@ Refresh calls `forceRefresh()` (empties the cache), refreshes adoption and re-ru
 
 ### Query execution (`executeDql`)
 
-- `slos:count` and `settings:count <schemaId>` are intercepted before DQL. `settings:count` reads `totalCount` from the settings API with `pageSize=1`. `slos:count` adds the classic `builtin:monitoring.slo` settings count and the SLO service count; it fails only when neither can be read. The catalog uses `settings:count` for `builtin:openpipeline.logs.pipelines` and `builtin:davis.anomaly-detectors`. These reads scan nothing and are never cached.
+- `slos:count` and `settings:count <schemaId>` are intercepted before DQL. `settings:count` reads `totalCount` from the settings API with `pageSize=1`; with a predicate (`settings:count <schemaId> <predicate>`) it reads the objects page by page and counts the ones the named rule in `SETTINGS_PREDICATES` accepts (switched on, per application, masked). `slos:count` adds the classic `builtin:monitoring.slo` settings count and the SLO service count; it fails only when neither can be read. The catalog uses `settings:count` for `builtin:openpipeline.logs.pipelines` and `builtin:davis.anomaly-detectors`. These reads scan nothing and are never cached.
 - DQL runs with a 30 s request timeout and a default timeframe of 2 hours. A query still `RUNNING` is polled up to 10 times, 3 s apart.
 - A failed or cancelled query returns the sentinel `-1`, which scoring reads as "not assessed".
 - The first numeric field of the first record is the result; for `timeseries` arrays, the last numeric element.
@@ -142,7 +142,7 @@ Failed results are not cached. A document from another environment or schema ver
 
 **Coverage.** `floor(met / assessed × 100)`.
 
-**Utilization.** Each criterion belongs to a tier in `data/criterionTiers.ts` (25 Foundation, 66 Best practice, 46 Excellence). With `f`, `b`, `e` the share met in each tier:
+**Utilization.** Each criterion belongs to a tier in `data/criterionTiers.ts` (25 Foundation, 70 Best practice, 48 Excellence). With `f`, `b`, `e` the share met in each tier:
 
 ```
 effB = f >= 0.8 ? b : 0

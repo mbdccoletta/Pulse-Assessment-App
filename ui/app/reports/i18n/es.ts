@@ -636,6 +636,36 @@ export const ES: Record<string, CriterionText> = {
     description: "Alertas evaluadas en los últimos 7 días con un baseline autoadaptativo o estacional en lugar de un umbral fijo.",
     action: "Cambie las alertas sobre señales con patrones diarios o semanales de un umbral fijo a un baseline autoadaptativo o estacional.",
   },
+  g14: {
+    label: "Enmascaramiento de datos sensibles en logs",
+    description: "Reglas de enmascaramiento de logs que están activas. Las reglas que vienen con la plataforma llegan desactivadas, así que solo cuentan las activas. Leído de la configuración, sin escanear datos.",
+    action: "Active las reglas de enmascaramiento de logs que corresponden a los datos que escriben las aplicaciones (números de tarjeta, correos, credenciales) y cree reglas para sus propios identificadores.",
+  },
+  g15: {
+    label: "Enmascaramiento de atributos de spans",
+    description: "Reglas de enmascaramiento de atributos que están activas para traces. Leído de la configuración, sin escanear datos.",
+    action: "Enmascare los atributos de span que pueden llevar datos personales, como URL completas, query strings, identificadores de usuario y encabezados de solicitud.",
+  },
+  g16: {
+    label: "Enmascaramiento de privacidad en RUM",
+    description: "Porcentaje de aplicaciones web en las que RUM enmascara datos personales en las URL o en los nombres de las acciones de usuario. Leído de la configuración, sin escanear datos.",
+    action: "En la configuración de privacidad de datos de cada aplicación, active el enmascaramiento de datos personales en las URL y de los nombres de las acciones de usuario.",
+  },
+  g17: {
+    label: "Session Replay grabado con enmascaramiento",
+    description: "Porcentaje de aplicaciones web cuya grabación de Session Replay usa un preset de enmascaramiento en lugar de grabar todo visible. Leído de la configuración, sin escanear datos.",
+    action: "Mantenga un preset de enmascaramiento en la grabación de cada aplicación con Session Replay y permita elementos individuales solo donde el contenido sea inofensivo.",
+  },
+  g18: {
+    label: "Buckets propios con retención definida",
+    description: "Buckets de Grail creados por el equipo, cada uno con la retención elegida, en lugar de mantener todo en los buckets predeterminados. Leído de la lista de buckets, sin escanear datos.",
+    action: "Cree buckets para los datos con una necesidad propia de retención, como auditoría, seguridad o depuración de corta duración, y dirija los registros a ellos en OpenPipeline.",
+  },
+  g19: {
+    label: "Registro de auditoría consultado",
+    description: "Personas que consultaron los eventos de auditoría de la plataforma en los últimos 30 días. Los eventos de auditoría siempre se registran; aquí cuenta si alguien los revisa.",
+    action: "Dé un destino a los eventos de auditoría: un dashboard o una revisión programada de quién cambió configuraciones, tokens y accesos.",
+  },
   f1: {
     label: "Cálculo de costo y carbono en ejecución",
     description: "Workflows que ejecutaron el cálculo de Cost & Carbon Optimization en las últimas 24 h.",
