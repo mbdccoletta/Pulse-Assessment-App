@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes Pulse Assessment 3.0.9 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
+This document describes Pulse Assessment 3.0.10 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
 
 ## Overview
 
@@ -208,6 +208,7 @@ The Reports menu loads `reports/pulseReports.ts` (and jsPDF) on first use. Repor
 | Report | Builder | Notes |
 |---|---|---|
 | Overall score, Action plan, Criteria detail | `generateReport(kind, input, lang)` | PDF in English, Portuguese or Spanish, with criterion texts in the report's language. The Overall score report draws the Overview radar as vectors (`radarBlock`) |
+| Teams to involve | `teams.ts` | `loadOwnershipTeams()` reads `builtin:ownership.teams` once, when the first report is asked for; `teamsFor()` matches each team's responsibilities with `CAPABILITY_RESPONSIBILITIES`. Printed per capability in the three PDFs and exported as `teamsToInvolve` |
 | FinOps | `generateFinOpsReport()` | Also offered on the FinOps & Sustainability capability page. PDF from `loadFinOpsData()`: business events written by Cost & Carbon Optimization (cloud bill, energy and emissions per host and cluster). A toast is shown when no such data exists |
 | Raw data | `exportRawData("json" \| "csv")` | Capabilities, criteria with value, target, gain and DQL, app usage, comparable history |
 | Smart Report | `SmartReportModal` | Free-text request; "Generate PDF" renders the Davis CoPilot answer with `reports/aiNarrativePdf.ts`; "Open in Assist" sends the intent instead |

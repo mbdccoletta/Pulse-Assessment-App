@@ -27,6 +27,7 @@ import { passLine } from "../passLine";
 import { SCORE_BANDS, scoreBand } from "../utils/colors";
 import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
+import { teamsFor, type OwnershipTeam, type Responsibility } from "../teams";
 import { PT } from "./i18n/pt";
 import { ES } from "./i18n/es";
 import { APP_VERSION } from "../appVersion";
@@ -50,6 +51,8 @@ export interface ReportInput {
   history: AssessmentSnapshot[];
   /** App id → display name. */
   appName: (id: string) => string;
+  /** The environment's Ownership teams; null or absent when they could not be read. */
+  teams?: OwnershipTeam[] | null;
   /** How this run was measured, when it differs from a plain exact run. A
    *  report must say so: the screen does, and a number that is an
    *  approximation there cannot read as exact on paper. */
@@ -76,6 +79,7 @@ interface Words {
   titles: Record<ReportKind, string>;
   score: string; overall: string; coverage: string; utilization: string; adoption: string;
   capabilities: string; capability: string; verdict: string; nextStep: string;
+  teams: string; noTeams: string; andMore: string; responsibilities: Record<Responsibility, string>;
   actFirst: string; whatToDo: string; criterion: string; value: string; target: string; gain: string;
   tier: string; state: string; met: string; notMet: string; notAssessed: string;
   overTime: string; apps: string; people: string; queries: string; ofUsers: string;
@@ -127,6 +131,8 @@ const WORDS: Record<ReportLang, Words> = {
     titles: { overall: "Overall score", plan: "Action plan", criteria: "Criteria detail" },
     score: "Score", overall: "Overall score", coverage: "Coverage", utilization: "Utilization", adoption: "Adoption",
     capabilities: "Capabilities", capability: "Capability", verdict: "Verdict", nextStep: "Next step",
+    teams: "Teams to involve", noTeams: "no team with this responsibility is registered in Ownership", andMore: "and {n} more",
+    responsibilities: { development: "Development", security: "Security", operations: "Operations", infrastructure: "Infrastructure", lineOfBusiness: "Line of business" },
     actFirst: "Where to act first", whatToDo: "What to do", criterion: "Criterion", value: "Value", target: "Target", gain: "Gain",
     tier: "Tier", state: "State", met: "Met", notMet: "Not met", notAssessed: "Not assessed",
     overTime: "Score over time", apps: "Most used apps", people: "people", queries: "queries", ofUsers: "of active users",
@@ -149,6 +155,8 @@ const WORDS: Record<ReportLang, Words> = {
     titles: { overall: "Pontuação geral", plan: "Plano de ação", criteria: "Detalhe dos critérios" },
     score: "Pontuação", overall: "Pontuação geral", coverage: "Cobertura", utilization: "Utilização", adoption: "Adoção",
     capabilities: "Capacidades", capability: "Capacidade", verdict: "Veredito", nextStep: "Próximo passo",
+    teams: "Times a envolver", noTeams: "nenhum time com essa responsabilidade está cadastrado no Ownership", andMore: "e mais {n}",
+    responsibilities: { development: "Desenvolvimento", security: "Segurança", operations: "Operações", infrastructure: "Infraestrutura", lineOfBusiness: "Linha de negócio" },
     actFirst: "Onde agir primeiro", whatToDo: "O que fazer", criterion: "Critério", value: "Valor", target: "Meta", gain: "Ganho",
     tier: "Nível", state: "Estado", met: "Atendido", notMet: "Não atendido", notAssessed: "Não avaliado",
     overTime: "Pontuação ao longo do tempo", apps: "Apps mais usados", people: "pessoas", queries: "consultas", ofUsers: "dos usuários ativos",
@@ -178,6 +186,8 @@ const WORDS: Record<ReportLang, Words> = {
     titles: { overall: "Puntuación general", plan: "Plan de acción", criteria: "Detalle de criterios" },
     score: "Puntuación", overall: "Puntuación general", coverage: "Cobertura", utilization: "Utilización", adoption: "Adopción",
     capabilities: "Capacidades", capability: "Capacidad", verdict: "Veredicto", nextStep: "Próximo paso",
+    teams: "Equipos a involucrar", noTeams: "ningún equipo con esta responsabilidad está registrado en Ownership", andMore: "y {n} más",
+    responsibilities: { development: "Desarrollo", security: "Seguridad", operations: "Operaciones", infrastructure: "Infraestructura", lineOfBusiness: "Línea de negocio" },
     actFirst: "Dónde actuar primero", whatToDo: "Qué hacer", criterion: "Criterio", value: "Valor", target: "Meta", gain: "Ganancia",
     tier: "Nivel", state: "Estado", met: "Cumplido", notMet: "No cumplido", notAssessed: "No evaluado",
     overTime: "Puntuación en el tiempo", apps: "Apps más usadas", people: "personas", queries: "consultas", ofUsers: "de los usuarios activos",
@@ -600,6 +610,33 @@ function appsBlock(k: Kit, T: Words, input: ReportInput) {
 }
 
 /** Capability heading used by the plan and the criteria detail. */
+/** "Teams to involve (Operations, Development): A, B, C": the environment's
+ *  Ownership teams that hold a responsibility the capability calls for. */
+const TEAMS_SHOWN = 12;
+function teamsText(T: Words, capability: string, input: ReportInput): { head: string; body: string } {
+  const t = teamsFor(capability, input.teams);
+  const head = `${T.teams} (${t.responsibilities.map(r => T.responsibilities[r]).join(", ")})`;
+  if (t.teams.length === 0) return { head, body: T.noTeams };
+  const shown = t.teams.slice(0, TEAMS_SHOWN).join(", ");
+  return { head, body: t.teams.length > TEAMS_SHOWN ? `${shown} ${T.andMore.replace("{n}", String(t.teams.length - TEAMS_SHOWN))}` : shown };
+}
+const teamsLine = (T: Words, capability: string, input: ReportInput) => { const t = teamsText(T, capability, input); return `${t.head}: ${t.body}`; };
+
+/** One entry per capability: who to bring to the conversation. */
+function teamsBlock(k: Kit, T: Words, caps: CapabilityResult[], input: ReportInput) {
+  const { M, CW } = k;
+  k.h2(T.teams);
+  for (const c of caps) {
+    const t = teamsText(T, c.name, input);
+    k.ensure(12);
+    k.dot(M + 1.2, k.y - 1, hex(c.color));
+    k.font(9.5, true); k.color(INK); k.text(c.name, M + 5, k.y);
+    k.font(8); k.color(DIM); k.text(t.head.replace(`${T.teams} `, "").replace(/^\(|\)$/g, ""), M + CW, k.y, { align: "right" });
+    k.y += 4.2;
+    k.para(t.body, { size: 8.5, c: DIM, x: M + 5, w: CW - 5, gap: 3 });
+  }
+}
+
 function capabilityHead(k: Kit, T: Words, c: CapabilityResult, input: ReportInput) {
   const { M, CW } = k;
   k.ensure(34);
@@ -620,7 +657,8 @@ function capabilityHead(k: Kit, T: Words, c: CapabilityResult, input: ReportInpu
   k.y += 9;
   k.font(8.5, true); k.color(VERDICT_RGB[dx.id]); k.text(T.verdicts[dx.id].label.toUpperCase(), M, k.y);
   const lw = k.pdf.getTextWidth(safe(T.verdicts[dx.id].label.toUpperCase())) + 4;
-  k.para(`${T.nextStep}: ${T.verdicts[dx.id].action}`, { size: 8.5, c: DIM, x: M + lw, w: CW - lw, gap: 3 });
+  k.para(`${T.nextStep}: ${T.verdicts[dx.id].action}`, { size: 8.5, c: DIM, x: M + lw, w: CW - lw, gap: 1.5 });
+  k.para(teamsLine(T, c.name, input), { size: 8.5, c: DIM, gap: 3 });
 }
 
 // ── Reports ─────────────────────────────────────────────────────────────────
@@ -648,6 +686,7 @@ export function buildReport(kind: ReportKind, input: ReportInput, lang: ReportLa
     k.h2(T.actFirst);
     const top = caps.flatMap(c => unmet(c, caps.length)).sort((a, b) => b.gain - a.gain).slice(0, 8);
     if (top.length === 0) k.para(T.noActions, { c: DIM }); else actionRows(k, T, top, { showCap: true, detail: false });
+    teamsBlock(k, T, ranked, input);
     trendBlock(k, T, input);
     appsBlock(k, T, input);
     methodBlock(k, T);
@@ -925,6 +964,7 @@ export function buildRawData(input: ReportInput) {
         verdict: dx.label,
         verdictMeaning: dx.meaning,
         verdictNextStep: dx.action,
+        teamsToInvolve: teamsFor(c.name, input.teams),
         tiers: (["foundation", "bestPractice", "excellence"] as TierKey[]).map(t => ({ tier: t, met: c.utilization[t].passed, total: c.utilization[t].total })),
         criteria: c.criteriaResults.map(r => {
           const st = stateOf(r);

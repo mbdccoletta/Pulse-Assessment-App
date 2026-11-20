@@ -1,6 +1,6 @@
 # Pulse Assessment design system
 
-Describes the UI as the code under `ui/app/` builds it in version 3.0.9 (`ui/app/appVersion.ts`). Every statement here was read from the code; when the code and this file disagree, the code is right.
+Describes the UI as the code under `ui/app/` builds it in version 3.0.10 (`ui/app/appVersion.ts`). Every statement here was read from the code; when the code and this file disagree, the code is right.
 
 Stack: React 18, `react-router-dom` 6, `@dynatrace/strato-components` ^3.18, `@dynatrace/strato-design-tokens`, `@dynatrace/strato-icons`. There is no CSS, SCSS or style file under `ui/`: all styling is Strato component props plus inline `style` objects that read Strato tokens. The only CSS rules are in a `<style>` element inside the radar SVG (entry animation and focus outline).
 

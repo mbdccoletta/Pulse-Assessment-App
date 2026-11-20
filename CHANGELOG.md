@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.10] — 2026-11-20
+
+### Added
+- Reports name the teams to involve. Each capability in the Action plan and Criteria detail reports, and a section of the Overall score report, lists the environment's own Ownership teams that hold a responsibility the capability calls for (for example Operations and Development for Log Analytics, Operations and Line of business for FinOps & Sustainability). Read from the Ownership settings, with no Grail scan. When no team holds the responsibility, the report says so and names the responsibility. The raw export carries the same list as `teamsToInvolve`.
+
 ## [3.0.9] — 2026-11-20
 
 ### Changed
