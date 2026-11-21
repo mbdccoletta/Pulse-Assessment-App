@@ -1,9 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { documentsClient } from "@dynatrace-sdk/client-document";
 import type { CapabilityResult } from "./useCoverageData";
+import { getCurrentTelemetry, telemetryShares } from "../telemetry";
 import { APP_VERSION } from "../appVersion";
 
 export interface AssessmentSnapshot {
+  /** Telemetry strategy of the run, with the share of hosts on each side (3.0.12+). */
+  telemetry?: { source: "oneagent" | "otel" | "mixed"; oneAgentShare: number; otelOnlyShare: number };
   id: string;
   timestamp: string;
   totalScore: number;
@@ -248,7 +251,8 @@ export function useAssessmentHistory() {
     // saving it again only piled identical entries into the history.
     const last = snapshotsRef.current[0];
     const today = new Date().toISOString().slice(0, 10);
-    const same = last && last.timestamp.slice(0, 10) === today && last.tenant === tenant && last.appVersion === APP_VERSION
+    const tel = getCurrentTelemetry();
+    const same = last && last.timestamp.slice(0, 10) === today && (last.telemetry?.source ?? null) === (tel?.source ?? null) && last.tenant === tenant && last.appVersion === APP_VERSION
       && last.capabilities.length === capabilities.length
       && capabilities.every(c => {
         const p = last.capabilities.find(x => x.name === c.name);
@@ -264,6 +268,7 @@ export function useAssessmentHistory() {
       totalScore,
       tenant,
       appVersion: APP_VERSION,
+      ...(tel ? { telemetry: { source: tel.source, oneAgentShare: telemetryShares(tel).oneAgent, otelOnlyShare: telemetryShares(tel).otelOnly } } : {}),
       capabilities: capabilities.map((c) => ({
         name: c.name,
         color: c.color,

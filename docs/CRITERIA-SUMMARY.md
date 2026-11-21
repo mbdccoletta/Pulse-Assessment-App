@@ -42,11 +42,11 @@ Readings by kind: 106 shares, 32 presence checks, 5 configuration counts.
 | Host network coverage | Best practice | Share | 50% | Percentage of monitored hosts with network interface entities. |
 | Process CPU coverage | Best practice | Share | 30% | Percentage of process groups with active CPU usage metrics. |
 | Davis problem coverage | Best practice | Share | 10% | Percentage of hosts covered by Davis AI problem detection. |
-| Host-process topology | Best practice | Share | 60% | Percentage of hosts with detected process groups — validates entity relationship discovery. |
+| Host-process topology | Best practice | Share | 60% | Percentage of hosts with detected, monitored processes — validates host-to-process topology discovery. |
 | Cloud host log enrichment | Best practice | Share | 50% | Percentage of hosts with cloud provider context in log data — validates cloud integration feeding host-level metadata. |
 | Cloud log enrichment | Best practice | Share of 100 | 20% | Percentage of log records enriched with cloud provider metadata. |
 | Cloud account enrichment | Best practice | Share | 40% | Percentage of cloud-enriched logs with account ID metadata — validates multi-account cloud governance. |
-| K8s node monitoring depth | Best practice | Share | 50% | Ratio of K8s nodes to clusters — validates node-level cloud compute monitoring. |
+| K8s node monitoring depth | Best practice | Share | 50% | Share of Kubernetes nodes that report container resource metrics — validates node-level compute monitoring. |
 | Cloud namespace metric coverage | Best practice | Share | 50% | Percentage of K8s namespaces with active container metrics — validates cloud workload observability. |
 | Container restart monitoring | Best practice | Share | 50% | Percentage of K8s namespaces with container restart tracking — critical for detecting CrashLoopBackOff and OOM issues. |
 | Problems with root cause | Best practice | Share | 50% | Share of Davis problems on infrastructure entities (hosts, processes, Kubernetes, cloud, custom devices) in the last 72h where Davis identified a root-cause entity. |

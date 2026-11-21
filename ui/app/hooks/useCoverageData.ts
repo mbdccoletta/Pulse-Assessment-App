@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { passLine } from "../passLine";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { getEnvironmentUrl } from "@dynatrace-sdk/app-environment";
+import { getFidelity } from "../fidelity";
 import { CAPABILITIES, type CapabilityDef, type Threshold } from "../queries";
 import { CRITERION_TIERS, type CriterionTier } from "../data/criterionTiers";
 import { scaleQuery, TIER_CONFIG, type ScaleTier } from "../scale-tier";
@@ -31,7 +32,7 @@ export interface CapabilityResult {
    *  utilization and adoption combined once ../pulseScore.ts has applied. */
   score: number;
   details: string[];
-  criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; notAssessed: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; proxied: boolean; /** Raw count for presence checks (denominator 1). */ count?: number; /** Numerator and denominator of a ratio check. */ num?: number; den?: number }[];
+  criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; notAssessed: boolean; /** The read stopped at the scan ceiling: the value covers part of the window. */ partial?: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; proxied: boolean; /** Raw count for presence checks (denominator 1). */ count?: number; /** Numerator and denominator of a ratio check. */ num?: number; den?: number }[];
   /** Criteria that produced a verdict — the denominator of `score`. */
   assessedCount: number;
   /** Criteria that could not be measured. Reported, never counted as failures. */
@@ -192,7 +193,9 @@ function extractValue(result: any): number {
   }
 }
 
-interface DqlResult { value: number; scannedBytes: number; scannedRecords: number; scannedDataPoints: number; }
+interface DqlResult { value: number; scannedBytes: number; scannedRecords: number; scannedDataPoints: number;
+  /** The read stopped at the scan ceiling: the value covers part of the window only. */
+  partial?: boolean; }
 
 /** Debug logging — disabled in production to avoid noisy output.
  *  Enable via browser console: localStorage.setItem("CCA_DEBUG","1") then reload. */
@@ -203,6 +206,10 @@ const warn = (...args: unknown[]) => { if (DEBUG) console.warn("[CCA]", ...args)
 const MAX_POLL_ATTEMPTS = 10;
 const POLL_INTERVAL_MS = 3000;
 const QUERY_TIMEOUT_MS = 30000;
+/** Full fidelity reads whole windows unsampled: on a large estate one query can
+ *  run for minutes, so it waits up to 15 minutes before giving up. */
+const FULL_POLL_ATTEMPTS = 300;
+const FULL_QUERY_TIMEOUT_MS = 60000;
 const DEFAULT_TIMEFRAME_HOURS = 2;
 
 /** A criterion that reads configuration, not data. No Grail scan.
@@ -280,7 +287,7 @@ async function executeDql(query: string): Promise<DqlResult> {
     const response = await queryExecutionClient.queryExecute({
       body: {
         query,
-        requestTimeoutMilliseconds: QUERY_TIMEOUT_MS,
+        requestTimeoutMilliseconds: getFidelity() === "full" ? FULL_QUERY_TIMEOUT_MS : QUERY_TIMEOUT_MS,
         maxResultRecords: 1000,
         defaultTimeframeStart: new Date(Date.now() - DEFAULT_TIMEFRAME_HOURS * 60 * 60 * 1000).toISOString(),
         defaultTimeframeEnd: new Date().toISOString(),
@@ -295,7 +302,8 @@ async function executeDql(query: string): Promise<DqlResult> {
     // If query is still running, poll for result
     if (state === "RUNNING" && requestToken) {
       log(`⏳ Query still running, polling...`, query.substring(0, 60));
-      for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+      const attempts = getFidelity() === "full" ? FULL_POLL_ATTEMPTS : MAX_POLL_ATTEMPTS;
+      for (let attempt = 0; attempt < attempts; attempt++) {
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
         const poll = await queryExecutionClient.queryPoll({ requestToken });
         state = poll?.state;
@@ -320,6 +328,8 @@ async function executeDql(query: string): Promise<DqlResult> {
 
     // Log any warnings/notifications from the DQL engine
     const notifications = grail?.notifications ?? [];
+    // Grail says when a read stopped at the scan ceiling; the value is then partial.
+    const partial = notifications.some((n: any) => /SCAN_LIMIT|stopped after/i.test(`${n?.notificationType ?? ""} ${n?.message ?? ""}`));
     for (const n of notifications) {
       if (n.severity === "ERROR" || n.severity === "WARN") {
         warn(`⚠ DQL ${n.severity}: ${n.message} — query:`, query.substring(0, 60));
@@ -339,7 +349,7 @@ async function executeDql(query: string): Promise<DqlResult> {
       log(`⚠ query returned 0 (state=${state}). Raw record[0]:`, JSON.stringify(res.records?.[0] ?? null), `| records.length=${res.records?.length ?? "N/A"}`);
     }
     log(`✓ ${query.substring(0, 80)} → ${value}`);
-    return { value, scannedBytes, scannedRecords, scannedDataPoints };
+    return { value, scannedBytes, scannedRecords, scannedDataPoints, ...(partial ? { partial: true } : {}) };
   } catch (err: any) {
     warn(`✗ ${query.substring(0, 80)} → ERROR:`, err?.message || err);
     return { value: -1, scannedBytes: 0, scannedRecords: 0, scannedDataPoints: 0 };
@@ -399,6 +409,8 @@ export function threeStateScoringEnabled(): boolean {
 
 interface ExecutionResult {
   cache: Map<string, number>;
+  /** Queries whose read stopped at the scan ceiling (catalog strings). */
+  partial: Set<string>;
   totalScannedBytes: number;
   totalScannedRecords: number;
   totalScannedDataPoints: number;
@@ -427,6 +439,7 @@ async function executeAllUnique(
   // criteria results, snapshot persistence) looks up results by the original
   // string. Scaled execution is therefore transparent to all of them.
   const cache = new Map<string, number>();
+  const partial = new Set<string>();
   const unique = [...new Set(queries)];
   let idx = 0;
   let totalScannedBytes = 0;
@@ -453,6 +466,7 @@ async function executeAllUnique(
       const cached = isConfig ? undefined : persistentCache?.get(scaleQuery(originalQ, tier), tier);
       if (cached) {
         cache.set(originalQ, cached.v);
+        if (cached.p) partial.add(originalQ);
         cacheHits++;
         cachedBytesSaved += cached.bytes;
         const ageSec = Math.max(0, Math.floor((Date.now() - cached.ts) / 1000));
@@ -507,6 +521,7 @@ async function executeAllUnique(
       }
 
       cache.set(originalQ, result.value);
+      if (result.partial) partial.add(originalQ);
       cacheMisses++;
       totalScannedBytes += result.scannedBytes;
       totalScannedRecords += result.scannedRecords;
@@ -522,6 +537,7 @@ async function executeAllUnique(
           result.value,
           result.scannedBytes,
           result.scannedRecords,
+          !!result.partial,
         );
       }
       perfEntries.push({
@@ -545,7 +561,7 @@ async function executeAllUnique(
   }
 
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, unique.length) }, () => next()));
-  return { cache, totalScannedBytes, totalScannedRecords, totalScannedDataPoints, perfEntries, cacheHits, cacheMisses, cachedBytesSaved };
+  return { cache, partial, totalScannedBytes, totalScannedRecords, totalScannedDataPoints, perfEntries, cacheHits, cacheMisses, cachedBytesSaved };
 }
 
 /** Optional extra metadata fed in from useScaleTier so the perf report
@@ -747,6 +763,7 @@ export function useCoverageData(
         ...(phase1Result?.cache ?? []),
         ...phase2Result.cache,
       ]);
+      const partialQueries = new Set<string>([...(phase1Result?.partial ?? []), ...phase2Result.partial]);
       const totalScannedBytes = (phase1Result?.totalScannedBytes ?? 0) + phase2Result.totalScannedBytes;
       const totalScannedRecords = (phase1Result?.totalScannedRecords ?? 0) + phase2Result.totalScannedRecords;
       const totalScannedDataPoints = (phase1Result?.totalScannedDataPoints ?? 0) + phase2Result.totalScannedDataPoints;
@@ -844,6 +861,7 @@ export function useCoverageData(
             points: passed ? 1 : 0,
             error: isError,
             notAssessed,
+            ...(!isError && !notAssessed && (partialQueries.has(criterion.query) || (!!criterion.queryB && partialQueries.has(criterion.queryB))) ? { partial: true } : {}),
             query: criterion.queryB
               ? `${criterion.query}\n÷ ${criterion.queryB}`
               : criterion.denominatorConstant != null

@@ -44,6 +44,10 @@ const share = (t: { passed: number; total: number }) => (t.total > 0 ? Math.floo
 
 /** Current value and the value it passes from, as the pages show them. */
 function reading(r: Row): string {
+  return readingCore(r) + (r.partial ? " (partial reading: the scan stopped at the ceiling, so the value covers only part of the window; do not present it as exact)" : "");
+}
+
+function readingCore(r: Row): string {
   if (r.count != null) return `criterion value ${r.count.toLocaleString("en-US")} found, criterion passes from 1`;
   const nums = (r.thresholds.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
   const floor = nums.length ? passLine(nums) : null;
@@ -238,7 +242,7 @@ function automationFacts(caps: CapabilityResult[]): string {
     ["Problems with automated response", /^Problems with automated response/],
     ["Automation workflows", /workflows|Workflow execution success|Agentic|dtctl driven by AI agents/i],
   ];
-  const val = (r: Row) => (r.notAssessed || r.error ? "not assessed" : r.count != null ? `${r.count.toLocaleString("en-US")}` : `${Math.floor(r.value * 10) / 10}%`) + (r.notAssessed || r.error ? "" : r.points > 0 ? " met" : " not met");
+  const val = (r: Row) => (r.notAssessed || r.error ? "not assessed" : r.count != null ? `${r.count.toLocaleString("en-US")}` : `${Math.floor(r.value * 10) / 10}%`) + (r.notAssessed || r.error ? "" : r.points > 0 ? " met" : " not met") + (r.partial ? " (partial reading)" : "");
   const used = new Set<string>();
   return groups.map(([title, re]) => {
     const items = caps.flatMap(c => c.criteriaResults.filter(r => re.test(clean(r.label)) && !used.has(r.id)).map(r => { used.add(r.id); return title.startsWith("Automation") ? `"${clean(r.label)}" in ${c.name}: ${val(r)}` : `${c.name}: ${val(r)}`; }));
@@ -357,6 +361,7 @@ export function evolutionFacts(from: AssessmentSnapshot, to: AssessmentSnapshot)
   }).filter((x): x is { abs: number; line: string } => !!x).sort((a, b) => b.abs - a.abs);
   const measured = [
     from.appVersion && to.appVersion && from.appVersion !== to.appVersion ? `app version ${from.appVersion} to ${to.appVersion}` : "",
+    from.telemetry && to.telemetry && from.telemetry.source !== to.telemetry.source ? `telemetry strategy ${from.telemetry.source} to ${to.telemetry.source}` : "",
     added.length ? `capabilities added: ${added.join(", ")}` : "",
     removed.length ? `capabilities removed: ${removed.join(", ")}` : "",
   ].filter(Boolean).join("; ");

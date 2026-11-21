@@ -25,10 +25,15 @@ import { DEFAULT_CUTS, DIAGNOSIS_META, diagnose } from "../diagnosis";
 import type { DiagnosisId } from "../diagnosis";
 import { passLine } from "../passLine";
 import { SCORE_BANDS, scoreBand } from "../utils/colors";
-import { CRITERION_ACTIONS } from "../remediationActions";
+import { CRITERION_ACTIONS, defaultAction } from "../remediationActions";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
 import { teamsFor, type OwnershipTeam, type Responsibility } from "../teams";
+import { telemetryShares, type TelemetryProfile, type TelemetrySource } from "../telemetry";
 import { PT } from "./i18n/pt";
+import { OTEL_PT } from "./i18n/otel-pt";
+import { OTEL_ES } from "./i18n/otel-es";
+import { OTEL_SWAPS, MIXED_SWAPS } from "../otel-mode";
+import { CAPABILITIES } from "../queries";
 import { ES } from "./i18n/es";
 import { APP_VERSION } from "../appVersion";
 import { IDLE_CPU } from "../finopsData";
@@ -61,6 +66,14 @@ export interface ReportInput {
     traceProxy: boolean;
     /** Entity counts read from Smartscape. */
     smartscape: boolean;
+    /** Hosts and Kubernetes read from OpenTelemetry signals: no OneAgent reports. */
+    otel?: boolean;
+    /** OneAgent and OpenTelemetry both report; hosts and Kubernetes counted on both sides. */
+    mixed?: boolean;
+    /** The telemetry strategy detected on open, with the hosts on each side. */
+    telemetry?: TelemetryProfile;
+    /** Read at full fidelity (a Dynatrace user): whole windows, unsampled, no scan ceiling. */
+    fullFidelity?: boolean;
     /** Scale tier shortened the windows: values are estimates. */
     estimated: boolean;
     tier?: string;
@@ -85,7 +98,9 @@ interface Words {
   overTime: string; apps: string; people: string; queries: string; ofUsers: string;
   howToRead: string; method: string[];
   nothingAssessed: string; notAssessedNote: string;
-  runNotes: { traceProxy: string; smartscape: string; estimated: string };
+  runNotes: { traceProxy: string; smartscape: string; otel: string; mixed: string; estimated: string; full: string; partial: string };
+  otelSide: string; bothSides: string;
+  telemetry: string; strategies: Record<TelemetrySource, string>; telemetryShares: string;
   noActions: string; atLeastOne: string; orMore: string; none: string; page: string; days: string;
   tiers: Record<TierKey, string>;
   bands: Record<string, string>;
@@ -141,9 +156,15 @@ const WORDS: Record<ReportLang, Words> = {
     notAssessedNote: "Not assessed: the criterion could not be measured in this environment (for example, there is nothing of that kind to measure). It is left out of the score and never counts as not met.",
     runNotes: {
       traceProxy: "Trace criteria were read from metrics and topology because this environment has no trace queries: those readings are approximations.",
+      full: "Read at full fidelity: every criterion read its whole window, unsampled and without a scan ceiling.",
+      partial: "Values marked ~ are partial: the query stopped at the scan ceiling and covers part of its window.",
+      mixed: "Part of this environment is monitored by OneAgent and part only through OpenTelemetry; hosts, Kubernetes and logs were counted on both sides, and a host seen by both counts once.",
+      otel: "No OneAgent reports in this environment, so hosts, Kubernetes and their logs were read from the OpenTelemetry metrics and attributes; criteria that only exist with OneAgent were left out of the score.",
       smartscape: "Entity counts were read from Smartscape because this environment has no classic entity tables; criteria with no Smartscape equivalent were left out of the score.",
       estimated: "Log, span and event criteria were read from a shortened window, so their values are estimates.",
     },
+    telemetry: "Telemetry strategy", strategies: { oneagent: "Full OneAgent", mixed: "Mixed", otel: "Pure OpenTelemetry" }, telemetryShares: "OneAgent {oa}% of hosts, OpenTelemetry only {ot}%",
+    otelSide: "For hosts reported through OpenTelemetry", bothSides: "Counts hosts and Kubernetes monitored by OneAgent and those reported through OpenTelemetry.",
     noActions: "Every assessed criterion is met.", atLeastOne: "at least 1", orMore: "or more", none: "None", page: "Page", days: "days",
     tiers: { foundation: "Foundation", bestPractice: "Best practice", excellence: "Excellence" },
     bands: { "N/A": "N/A", Low: "Low", Moderate: "Moderate", Good: "Good", Excellent: "Excellent" },
@@ -165,9 +186,15 @@ const WORDS: Record<ReportLang, Words> = {
     notAssessedNote: "Não avaliado: o critério não pôde ser medido neste ambiente (por exemplo, não há nada desse tipo para medir). Fica fora da pontuação e nunca conta como não atendido.",
     runNotes: {
       traceProxy: "Os critérios de trace foram lidos de métricas e topologia porque este ambiente não tem consulta de traces: essas leituras são aproximações.",
+      full: "Leitura completa: cada critério leu toda a sua janela, sem amostragem e sem teto de varredura.",
+      partial: "Valores marcados com ~ são parciais: a consulta parou no teto de varredura e cobre parte da janela.",
+      mixed: "Parte deste ambiente é monitorada pelo OneAgent e parte só via OpenTelemetry; hosts, Kubernetes e logs foram contados dos dois lados, e um host visto pelos dois conta uma vez.",
+      otel: "Nenhum OneAgent reporta neste ambiente, então hosts, Kubernetes e seus logs foram lidos das métricas e atributos do OpenTelemetry; critérios que só existem com OneAgent ficaram fora da pontuação.",
       smartscape: "As contagens de entidades foram lidas do Smartscape porque este ambiente não tem as tabelas clássicas de entidades; critérios sem equivalente no Smartscape ficaram fora da pontuação.",
       estimated: "Os critérios de logs, spans e eventos foram lidos de uma janela reduzida, portanto seus valores são estimativas.",
     },
+    telemetry: "Estratégia de telemetria", strategies: { oneagent: "OneAgent completo", mixed: "Misto", otel: "OpenTelemetry puro" }, telemetryShares: "OneAgent {oa}% dos hosts, só OpenTelemetry {ot}%",
+    otelSide: "Para os hosts reportados via OpenTelemetry", bothSides: "Conta hosts e Kubernetes monitorados pelo OneAgent e os reportados via OpenTelemetry.",
     noActions: "Todos os critérios avaliados estão atendidos.", atLeastOne: "ao menos 1", orMore: "ou mais", none: "Nenhum", page: "Página", days: "dias",
     tiers: { foundation: "Foundation", bestPractice: "Best practice", excellence: "Excellence" },
     bands: { "N/A": "N/A", Low: "Baixo", Moderate: "Moderado", Good: "Bom", Excellent: "Excelente" },
@@ -196,9 +223,15 @@ const WORDS: Record<ReportLang, Words> = {
     notAssessedNote: "No evaluado: el criterio no pudo medirse en este entorno (por ejemplo, no hay nada de ese tipo que medir). Queda fuera de la puntuación y nunca cuenta como no cumplido.",
     runNotes: {
       traceProxy: "Los criterios de trazas se leyeron de métricas y topología porque este entorno no tiene consulta de trazas: esas lecturas son aproximaciones.",
+      full: "Lectura completa: cada criterio leyó toda su ventana, sin muestreo y sin techo de escaneo.",
+      partial: "Los valores marcados con ~ son parciales: la consulta se detuvo en el techo de escaneo y cubre parte de la ventana.",
+      mixed: "Parte de este entorno se monitorea con OneAgent y parte solo mediante OpenTelemetry; hosts, Kubernetes y logs se contaron en ambos lados, y un host visto por los dos cuenta una vez.",
+      otel: "Ningún OneAgent reporta en este entorno, por lo que hosts, Kubernetes y sus logs se leyeron de las métricas y atributos de OpenTelemetry; los criterios que solo existen con OneAgent quedaron fuera de la puntuación.",
       smartscape: "Los conteos de entidades se leyeron de Smartscape porque este entorno no tiene las tablas clásicas de entidades; los criterios sin equivalente en Smartscape quedaron fuera de la puntuación.",
       estimated: "Los criterios de logs, spans y eventos se leyeron de una ventana reducida, por lo que sus valores son estimaciones.",
     },
+    telemetry: "Estrategia de telemetría", strategies: { oneagent: "OneAgent completo", mixed: "Mixto", otel: "OpenTelemetry puro" }, telemetryShares: "OneAgent {oa}% de los hosts, solo OpenTelemetry {ot}%",
+    otelSide: "Para los hosts reportados mediante OpenTelemetry", bothSides: "Cuenta hosts y Kubernetes monitoreados por OneAgent y los reportados mediante OpenTelemetry.",
     noActions: "Todos los criterios evaluados se cumplen.", atLeastOne: "al menos 1", orMore: "o más", none: "Ninguno", page: "Página", days: "días",
     tiers: { foundation: "Foundation", bestPractice: "Best practice", excellence: "Excellence" },
     bands: { "N/A": "N/A", Low: "Bajo", Moderate: "Moderado", Good: "Bueno", Excellent: "Excelente" },
@@ -223,7 +256,31 @@ const cleanLabel = (r: Row) => r.label.replace(/\s*\(%\)\s*$/, "");
  *  back to English rather than print nothing. Capability names stay as
  *  Dynatrace writes them: they are product names. */
 const CRITERION_TEXT: Partial<Record<ReportLang, Record<string, { label: string; description: string; action: string }>>> = { pt: PT, es: ES };
+/** Set per report: the run read hosts and Kubernetes from OpenTelemetry, so the
+ *  swapped criteria take their OpenTelemetry texts in every language. */
+let otelRun = false;
+/** Set per report: OneAgent and OpenTelemetry both report. */
+let mixedRun = false;
+let mixedWords = { otelSide: "", bothSides: "" };
+/** The catalog's own descriptions and actions, before any environment override. */
+const DEFAULT_DESCRIPTION: Record<string, string> = Object.fromEntries(CAPABILITIES.flatMap(c => c.criteria.map(k => [k.id, k.description])));
+const OTEL_TEXT: Partial<Record<ReportLang, Record<string, { label?: string; description: string; action: string }>>> = { pt: OTEL_PT, es: OTEL_ES };
 function textOf(r: Row, lang: ReportLang): { label: string; description: string; action: string | undefined } {
+  if (mixedRun && MIXED_SWAPS[r.id]) {
+    // Both sides: the criterion's own text, plus what it counts and the OpenTelemetry action.
+    const t = CRITERION_TEXT[lang]?.[r.id];
+    const base = t?.action || defaultAction(r.id)?.action;
+    const otelAct = OTEL_TEXT[lang]?.[r.id]?.action ?? OTEL_SWAPS[r.id]?.action;
+    return {
+      label: t?.label || cleanLabel(r),
+      description: `${t?.description || DEFAULT_DESCRIPTION[r.id] || r.description} ${mixedWords.bothSides}`,
+      action: base && otelAct ? `${base} ${mixedWords.otelSide}: ${otelAct.charAt(0).toLowerCase()}${otelAct.slice(1)}` : base,
+    };
+  }
+  const o = otelRun && OTEL_SWAPS[r.id] ? OTEL_TEXT[lang]?.[r.id] : undefined;
+  if (o) return { label: o.label || CRITERION_TEXT[lang]?.[r.id]?.label || cleanLabel(r), description: o.description, action: o.action };
+  // English (and any language without an OpenTelemetry text) reads the swapped criterion itself.
+  if (otelRun && OTEL_SWAPS[r.id]) return { label: OTEL_SWAPS[r.id].label ? cleanLabel(r) : (CRITERION_TEXT[lang]?.[r.id]?.label || cleanLabel(r)), description: r.description, action: CRITERION_ACTIONS[r.id]?.action };
   const t = CRITERION_TEXT[lang]?.[r.id];
   return {
     label: t?.label || cleanLabel(r),
@@ -374,8 +431,10 @@ const fmtPct = (v: number | null) => (v == null ? "-" : `${Math.floor(v)}%`);
 function fmtValue(r: Row, T: Words): string {
   const v = valueOf(r);
   if (v == null) return T.notAssessed;
-  if (isPresence(r)) return v === 0 ? T.none : v.toLocaleString();
-  return r.isRatio ? `${v}%` : v.toLocaleString();
+  // "~" marks a partial read (stopped at the scan ceiling); the run notes explain it.
+  const p = r.partial ? "~" : "";
+  if (isPresence(r)) return v === 0 ? T.none : `${p}${v.toLocaleString()}`;
+  return r.isRatio ? `${p}${v}%` : `${p}${v.toLocaleString()}`;
 }
 function fmtTarget(r: Row, T: Words): string {
   const t = targetOf(r);
@@ -473,7 +532,13 @@ function radarBlock(k: Kit, T: Words, caps: CapabilityResult[], total: number) {
 function runNotes(k: Kit, T: Words, input: ReportInput) {
   const r = input.run;
   if (!r) return;
-  const lines = [r.traceProxy ? T.runNotes.traceProxy : "", r.smartscape ? T.runNotes.smartscape : "", r.estimated ? T.runNotes.estimated : ""].filter(Boolean);
+  if (r.telemetry) {
+    const sh = telemetryShares(r.telemetry);
+    const detail = r.telemetry.source === "mixed" ? ` (${T.telemetryShares.replace("{oa}", String(sh.oneAgent)).replace("{ot}", String(sh.otelOnly))})` : "";
+    k.font(9, true); k.color(INK); k.text(`${T.telemetry}: ${T.strategies[r.telemetry.source]}${detail}`, k.M, k.y); k.y += 5.5;
+  }
+  const anyPartial = input.capabilities.some(c => c.criteriaResults.some(x => x.partial));
+  const lines = [r.fullFidelity ? T.runNotes.full : "", anyPartial ? T.runNotes.partial : "", r.traceProxy ? T.runNotes.traceProxy : "", r.smartscape ? T.runNotes.smartscape : "", r.otel ? T.runNotes.otel : "", r.mixed ? T.runNotes.mixed : "", r.estimated ? T.runNotes.estimated : ""].filter(Boolean);
   for (const line of lines) k.para(line, { size: 8.5, c: DIM, gap: 1.5 });
   if (lines.length) k.y += 2;
 }
@@ -679,6 +744,9 @@ const unmet = (c: CapabilityResult, perCap: number) => c.criteriaResults
   .map(r => ({ c, r, gain: round1(gainIfMet(c, r.tier) / perCap) }));
 
 export function buildReport(kind: ReportKind, input: ReportInput, lang: ReportLang = "en"): jsPDF | null {
+  otelRun = !!input.run?.otel;
+  mixedRun = !!input.run?.mixed;
+  mixedWords = { otelSide: WORDS[lang].otelSide, bothSides: WORDS[lang].bothSides };
   const caps = input.capabilities;
   if (caps.length === 0) return null;
   const T = WORDS[lang];
@@ -942,6 +1010,10 @@ export function buildRawData(input: ReportInput) {
     run: {
       traceCriteriaReadFromMetricsAndTopology: input.run?.traceProxy ?? false,
       entityCountsReadFromSmartscape: input.run?.smartscape ?? false,
+      hostsAndKubernetesReadFromOpenTelemetry: input.run?.otel ?? false,
+      oneAgentAndOpenTelemetryCountedTogether: input.run?.mixed ?? false,
+      telemetryStrategy: input.run?.telemetry ?? null,
+      fullFidelity: input.run?.fullFidelity ?? false,
       valuesAreEstimates: input.run?.estimated ?? false,
       scaleTier: input.run?.tier ?? null,
     },
@@ -996,6 +1068,7 @@ export function buildRawData(input: ReportInput) {
             documentation: CRITERION_ACTIONS[r.id]?.docUrl ?? null,
             // Read from metrics or topology in place of the original signal.
             approximated: r.proxied,
+            partialRead: !!r.partial,
             // "dql" for a DQL query; "configuration" when the value is a count of
             // settings objects or SLOs, which is not something to run in a notebook.
             source: /^(settings:count|slos:count)/.test(r.query) ? "configuration" : "dql",

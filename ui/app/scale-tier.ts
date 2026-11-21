@@ -63,6 +63,8 @@
 
 import { CAPABILITIES } from './queries';
 
+import { getFidelity } from './fidelity';
+
 export type ScaleTier = 'exact' | 'large' | 'xlarge';
 
 export interface TierConfig {
@@ -146,13 +148,27 @@ function isHotSource(query: string): boolean {
  *  Optimization writes one cloud-bill import a day and one measurement an hour:
  *  narrowed to minutes, the import is simply not there and the criterion would
  *  read "none" on an environment that has it. They still get the scan ceiling. */
+/** A presence check ("did this happen at all in the window?") on a scanned
+ *  source. Its answer depends on the window: a deployment or a log-based event
+ *  that happened 10 hours ago is invisible in a 4-hour window, and the check
+ *  would read "none" for an environment that does use the feature. These keep
+ *  the window they were written with; only the scan ceiling applies. */
+function isPresenceCheck(query: string): boolean {
+  return isHotSource(query) && /\|\s*summarize\s+count\(\)\s*$/i.test(query.trim());
+}
 function isFixedWindow(query: string): boolean {
-  return /dynatrace\.biz\.carbon/.test(query);
+  return /dynatrace\.biz\.carbon/.test(query) || isPresenceCheck(query);
 }
 function capOnly(query: string): string {
-  return query.replace(
-    /\bfetch\s+bizevents\b(\s*,\s*from\s*:\s*now\(\)\s*-\s*\d+\s*[hmsd])?/i,
-    (m) => (/scanLimitGBytes/i.test(query) ? m : `${m}, scanLimitGBytes: ${COST_SCAN_LIMIT_GB}`),
+  // Move a pipeline time filter into the fetch, so the window is explicit.
+  const pipe = /\|\s*filter\s+timestamp\s*>\s*now\(\)\s*-\s*(\d+\s*[hmsd])\s*/i.exec(query);
+  let q = query;
+  if (pipe && !/\bfetch\s+(logs|spans|events|bizevents)\s*,\s*from\s*:/i.test(q)) {
+    q = q.replace(pipe[0], "| ").replace(/\|\s*\|/g, "| ").replace(/\bfetch\s+(logs|spans|events|bizevents)\b/i, (m) => `${m}, from: now()-${pipe[1].replace(/\s+/g, "")}`);
+  }
+  return q.replace(
+    /\bfetch\s+(logs|spans|events|bizevents)\b(\s*,\s*from\s*:\s*now\(\)\s*-\s*\d+\s*[hmsd])?/i,
+    (m) => (/scanLimitGBytes/i.test(q) ? m : `${m}, scanLimitGBytes: ${COST_SCAN_LIMIT_GB}`),
   );
 }
 
@@ -360,6 +376,8 @@ export function costOptimizeQuery(query: string, original = query): string {
  * bit-identical so the result column shape matches the original query.
  */
 export function scaleQuery(query: string, tier: ScaleTier): string {
+  // Full fidelity (a Dynatrace user, not billed): the query as written.
+  if (getFidelity() === "full") return query;
   if (isFixedWindow(query)) return capOnly(query);
   // Cost mode runs at every tier. On "exact" it is the only transform: the
   // question the criterion asks is unchanged, Grail just reads far less to

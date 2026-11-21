@@ -27,7 +27,12 @@ import { useAppNames } from "../hooks/useAppNames";
 // Report code (and jsPDF) is only needed after a click: load it on demand.
 const loadReports = () => import("../reports/pulseReports");
 import { SmartReportModal } from "../components/SmartReportModal";
-import { tracesNotEntitled, classicEntitiesMissing } from "../hooks/usePreflight";
+import { tracesNotEntitled, classicEntitiesMissing, detectTelemetry, simulatedOtelSkipsLogScans } from "../hooks/usePreflight";
+import { detectFidelity, setFidelity, type Fidelity } from "../fidelity";
+import { TELEMETRY_LABEL, telemetryShares, telemetrySummary, setCurrentTelemetry, type TelemetryProfile } from "../telemetry";
+import { Tooltip } from "../components/Tooltip";
+import { applyOtelMode, applyMixedMode, mixedActions, OTEL_ACTIONS, type OtelModeInfo, type TelemetrySource } from "../otel-mode";
+import { setActionOverrides, CRITERION_ACTIONS } from "../remediationActions";
 import { applySmartscapeModel, type SmartscapeModelInfo } from "../entity-model";
 import { loadFinOpsData, finopsNote, type FinOpsData } from "../finopsData";
 import { applyTraceProxyMode } from "../trace-proxy";
@@ -98,7 +103,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
   const [traceProxyMode, setTraceProxyMode] = useState(false);
 
   /** What the probes found in this environment; decides how the catalog is adapted. */
-  const envRef = useRef({ noEntities: false, logMetric: false });
+  const envRef = useRef<{ noEntities: boolean; logMetric: boolean; source: TelemetrySource }>({ noEntities: false, logMetric: false, source: "oneagent" });
   /** The catalog for this environment. Order matters: the trace proxy brings
    *  classic entity queries, so the Smartscape rewrite must come after it. */
   const prepareCaps = useCallback((proxy: boolean) => {
@@ -106,10 +111,21 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
     let caps = CAPABILITIES;
     // Log coverage from the per-entity log metric: no log scan. Only with the
     // classic entity model, whose ids the metric and the denominators share.
+    // Stays on in an OpenTelemetry-only environment: the criteria the OpenTelemetry mode
+    // does not swap (logs per service, error logs, severity) must keep their free reading.
     if (env.logMetric && !env.noEntities) caps = applyLogMetricMode(caps);
     if (proxy) caps = applyTraceProxyMode(caps).caps;
+    // No OneAgent: hosts and Kubernetes are read from the OpenTelemetry signals.
+    // Applied before the Smartscape rewrite, which only touches entity queries
+    // and so leaves these metric readings alone.
+    setActionOverrides(null);
+    const skipLogScans = simulatedOtelSkipsLogScans();
+    const otel = env.source === "otel" ? applyOtelMode(caps, { skipLogScans })
+      : env.source === "mixed" ? applyMixedMode(caps, { skipLogScans }) : null;
+    if (otel) caps = otel.caps;
+    setActionOverrides(env.source === "otel" ? OTEL_ACTIONS : env.source === "mixed" ? mixedActions(CRITERION_ACTIONS) : null);
     const model = env.noEntities ? applySmartscapeModel(caps) : null;
-    return { caps: model ? model.caps : caps, modelInfo: model ? model.info : null };
+    return { caps: model ? model.caps : caps, modelInfo: model ? model.info : null, otelInfo: otel ? otel.info : null };
   }, []);
 
   /** Refresh means new readings: drop the 24h result cache, then run. Opening
@@ -139,6 +155,13 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
   const [preparing, setPreparing] = useState(capabilities.length === 0);
   /** Set when the run reads Smartscape because the classic entity tables are absent. */
   const [entityModelInfo, setEntityModelInfo] = useState<SmartscapeModelInfo | null>(null);
+  /** Set when the run reads hosts and Kubernetes from OpenTelemetry because no OneAgent reports. */
+  const [otelInfo, setOtelInfo] = useState<OtelModeInfo | null>(null);
+  /** Where the telemetry comes from: OneAgent, OpenTelemetry or both. */
+  const [telemetry, setTelemetry] = useState<TelemetryProfile | null>(null);
+  /** Full fidelity for a Dynatrace user (not billed), cost mode for anyone else. */
+  const [fidelity] = useState<Fidelity>(() => { const f = detectFidelity(); setFidelity(f); return f; });
+  const telemetrySource: TelemetrySource = telemetry?.source ?? "oneagent";
   useEffect(() => {
     if (autoRanRef.current || loading || capabilities.length > 0) { if (capabilities.length > 0) setPreparing(false); return; }
     // Wait for the host count: it picks the scale tier, and a run started
@@ -151,10 +174,14 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
         classicEntitiesMissing().catch(() => false),
         logMetricAvailable().catch(() => false),
       ]);
-      envRef.current = { noEntities, logMetric };
+      const profile = await detectTelemetry(noEntities).catch((): TelemetryProfile => ({ source: "oneagent", oneAgentHosts: 0, otelOnlyHosts: 0, sharedHosts: 0 }));
+      envRef.current = { noEntities, logMetric, source: profile.source };
+      setTelemetry(profile);
+      setCurrentTelemetry(profile);
       if (noTraces) setTraceProxyMode(true);
       const prepared = prepareCaps(noTraces);
       if (prepared.modelInfo) setEntityModelInfo(prepared.modelInfo);
+      if (prepared.otelInfo) setOtelInfo(prepared.otelInfo);
       start(prepared.caps);
       setPreparing(false);
     })();
@@ -184,10 +211,14 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
     run: {
       traceProxy: traceProxyMode,
       smartscape: !!entityModelInfo,
-      estimated: !!scale && TIER_CONFIG[scale.tier].sampled,
+      otel: telemetrySource === "otel",
+      mixed: telemetrySource === "mixed",
+      telemetry: telemetry ?? undefined,
+      fullFidelity: fidelity === "full",
+      estimated: fidelity !== "full" && !!scale && TIER_CONFIG[scale.tier].sampled,
       tier: scale?.tier,
     },
-  }), [capabilities, totalScore, tenant, date, adoption, history.snapshots, appName, traceProxyMode, entityModelInfo, scale]);
+  }), [capabilities, totalScore, tenant, date, adoption, history.snapshots, appName, traceProxyMode, entityModelInfo, otelInfo, telemetry, telemetrySource, fidelity, scale]);
   const runExport = useCallback((job: (m: Awaited<ReturnType<typeof loadReports>>) => void) => {
     if (exporting || capabilities.length === 0) return;
     setExporting(true);
@@ -366,10 +397,11 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
             ctx={{
               tenant, date, overallCoverage: totalScore, overallUtilization: overallUtilizationLevel, capabilities,
               lens: viewMode === "recommendations" ? LENS.overall : LENS.overview,
-              pageNote: viewMode === "recommendations" ? overallFacts(capabilities, totalScore, adoption, appName) : overviewFacts(capabilities, adoption),
+              pageNote: `${telemetry ? `Telemetry strategy: ${telemetrySummary(telemetry)}. ${TELEMETRY_FACT[telemetry.source]}\n` : ""}${viewMode === "recommendations" ? overallFacts(capabilities, totalScore, adoption, appName) : overviewFacts(capabilities, adoption)}`,
             }}
             actions={
           <Flex alignItems="center" gap={8}>
+            {telemetry && <TelemetryChip profile={telemetry} />}
             <Text style={{ fontSize: 12, color: textSec }}>
               <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
               {stats && stats.failed > 0 && (
@@ -378,8 +410,12 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                 </Text>
               )}
               <DpsCostBadge
-                note={COST_MODE_TEXT}
+                note={fidelity === "full"
+                  ? "Full fidelity: you are signed in as a Dynatrace user, so every criterion reads its whole window, unsampled and without a scan ceiling. Queries by Dynatrace users are not billed to the customer."
+                  : COST_MODE_TEXT}
                 stats={stats}
+                billed={fidelity !== "full"}
+                partialCount={capabilities.reduce((n, c) => n + c.criteriaResults.filter(r => r.partial).length, 0)}
                 liveScannedBytes={coverageData.liveScannedBytes}
                 lastRunMeta={coverageData.lastRunMeta}
                 loading={loading}
@@ -396,7 +432,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
               tenants, so this insertion is zero-impact for the existing UX. */}
           {scale && (
             <Flex style={{ padding: "0 16px", marginTop: 8, flexShrink: 0 }}>
-              <ScaleTierBanner scale={scale} />
+              {fidelity !== "full" && <ScaleTierBanner scale={scale} />}
             </Flex>
           )}
           {/* Trace Proxy Mode banner — renders only after the user continued
@@ -529,5 +565,34 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
       )}
 
     </Flex>
+  );
+};
+
+/** What each strategy means for the reading, for the AI facts. */
+const TELEMETRY_FACT: Record<TelemetrySource, string> = {
+  oneagent: "Every criterion reads OneAgent data.",
+  mixed: "Hosts, Kubernetes, processes and logs are counted on both sides, a host seen by both once; criteria that only exist with OneAgent measure the OneAgent part.",
+  otel: "Hosts, Kubernetes and logs are read from OpenTelemetry metrics and attributes; criteria that only exist with OneAgent are left out of the score.",
+};
+
+/** The telemetry strategy, as a neutral chip: a fact about the estate, not a judgement.
+ *  Shares on screen; counts and what the strategy changes in the tooltip. */
+const TelemetryChip: React.FC<{ profile: TelemetryProfile }> = ({ profile }) => {
+  const s = telemetryShares(profile);
+  const label = profile.source === "mixed"
+    ? `${TELEMETRY_LABEL.mixed} · OneAgent ${s.oneAgent}% · OpenTelemetry ${s.otelOnly}%`
+    : TELEMETRY_LABEL[profile.source];
+  const tip = [
+    `Telemetry strategy: ${TELEMETRY_LABEL[profile.source]}.`,
+    profile.oneAgentHosts + profile.otelOnlyHosts > 0
+      ? `${profile.oneAgentHosts.toLocaleString()} hosts monitored by OneAgent (${profile.sharedHosts.toLocaleString()} of them also report OpenTelemetry); ${profile.otelOnlyHosts.toLocaleString()} hosts and Kubernetes nodes reported only through OpenTelemetry.`
+      : "",
+    TELEMETRY_FACT[profile.source],
+  ].filter(Boolean).join("\n");
+  return (
+    <Tooltip text={tip}>
+      {/* The Chip caps its width at 250px and cuts the text; the label must show in full. */}
+      <Chip size="condensed" color="neutral" style={{ maxWidth: "none" }}>{label}</Chip>
+    </Tooltip>
   );
 };

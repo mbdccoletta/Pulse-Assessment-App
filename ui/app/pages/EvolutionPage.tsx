@@ -30,6 +30,7 @@ import { Panel, StateMark, TrendChart, pctFormat } from "./CapabilityDetailPage"
 import { IntelligenceBar } from "../components/IntelligenceBar";
 import { LENS, LENS_BASELINE, QUESTIONS, QUESTIONS_BASELINE, baselineFacts, evolutionFacts } from "../ai/pageIntelligence";
 import { passLine } from "../passLine";
+import { TELEMETRY_LABEL } from "../telemetry";
 
 const MONO = Typography.Code.Small.Default.Family;
 const PASS = Colors.Charts.Status.Ideal.Default;
@@ -162,7 +163,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
   // Why each score moved: the parts, the criteria behind them, and anything
   // that changed in what was measured (criteria or capabilities added or removed).
   const causes = useMemo(() => {
-    if (!to || !from) return { caps: [], added: [] as string[], removed: [] as string[], versions: null as null | [string, string] };
+    if (!to || !from) return { caps: [], added: [] as string[], removed: [] as string[], versions: null as null | [string, string], telemetry: null as null | [string, string] };
     const list = to.capabilities.map(c => {
       const p = from.capabilities.find(x => x.name === c.name);
       const prevById = new Map((p?.criteriaResults ?? []).map(r => [r.id, r]));
@@ -196,6 +197,8 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
       added: to.capabilities.filter(c => !fromNames.has(c.name)).map(c => c.name),
       removed: from.capabilities.filter(c => !toNames.has(c.name)).map(c => c.name),
       versions: from.appVersion && to.appVersion && from.appVersion !== to.appVersion ? [from.appVersion, to.appVersion] as [string, string] : null,
+      telemetry: from.telemetry && to.telemetry && from.telemetry.source !== to.telemetry.source
+        ? [TELEMETRY_LABEL[from.telemetry.source], TELEMETRY_LABEL[to.telemetry.source]] as [string, string] : null,
     };
   }, [to, from]);
 
@@ -407,13 +410,14 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
             <Text textStyle="small" style={{ color: NEUTRAL }}>Nothing changed between these two runs</Text>
           ) : (
             <Flex flexDirection="column" gap={12}>
-              {(causes.versions || causes.added.length > 0 || causes.removed.length > 0) && (
+              {(causes.versions || causes.telemetry || causes.added.length > 0 || causes.removed.length > 0) && (
                 <MessageContainer variant="primary">
                   <MessageContainer.Prefix />
                   <MessageContainer.Title>What is measured changed between these runs</MessageContainer.Title>
                   <MessageContainer.Description>
                     {[
                       causes.versions ? `App version ${causes.versions[0]} to ${causes.versions[1]}.` : "",
+                      causes.telemetry ? `Telemetry strategy ${causes.telemetry[0]} to ${causes.telemetry[1]}.` : "",
                       causes.added.length ? `Capabilities added: ${causes.added.join(", ")}.` : "",
                       causes.removed.length ? `Capabilities removed: ${causes.removed.join(", ")}.` : "",
                       "Part of the difference comes from the measurement itself, not from the environment.",

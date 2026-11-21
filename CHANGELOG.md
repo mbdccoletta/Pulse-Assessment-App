@@ -4,6 +4,22 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.12] — 2026-11-21
+
+### Added
+- Full fidelity for Dynatrace users. When the signed-in user has a Dynatrace account, queries run on their authored windows with no scan ceiling and no sampling, and with longer timeouts; the scale-tier banner is hidden and the run details say the read was complete. Customer users keep the cost controls.
+- Partial readings are marked. When Grail stops a read at the scan ceiling, the value shows with "≈" on screen (the tooltip says why), with "~" in reports, is flagged in the raw export (`partialRead`) and in the Dynatrace Intelligence facts, and the run details count how many readings were partial.
+- Every assessment classifies the customer's telemetry strategy: Full OneAgent, Mixed or Pure OpenTelemetry. A neutral chip next to the environment name shows it, with the share of hosts on each side for a mixed estate (counts and what the strategy changes in its tooltip). The strategy heads every report, is part of the raw export and of the Dynatrace Intelligence facts, is saved with each run, and Evolution names a change of strategy between two runs. The Guide explains the three. The banners that explained the OpenTelemetry modes on screen are replaced by the chip.
+- The app identifies where the telemetry comes from and picks the matching catalog on open: OneAgent only, OpenTelemetry only, or both. One free probe compares the hosts OneAgent reports with the hosts and Kubernetes nodes OpenTelemetry reports, matched by short host name so a host seen by both counts once. The source is shown on screen and stated in the reports.
+- Mixed environments (OneAgent and OpenTelemetry side by side) are counted as one estate: 14 host, Kubernetes, process and log criteria count both sides in the numerator and in the population, instead of measuring the OneAgent part alone. Criteria that only exist with OneAgent keep measuring the OneAgent part. Actions name the OneAgent step and the OpenTelemetry step.
+- OpenTelemetry-only environments are assessed in full. When no OneAgent reports, the app reads hosts, Kubernetes and their logs from the OpenTelemetry signals (hostmetrics, kubeletstats and k8s_cluster metrics, service.name and host attributes) instead of OneAgent entities and metrics. 20 criteria switch to these readings with the same tier and pass line; 10 that only exist with OneAgent (process topology, Runtime Vulnerability Analytics, Runtime Application Protection, per-host carbon) leave the score instead of counting as failed. The OneAgent version criterion becomes "Collector health telemetry". Remediation actions speak OpenTelemetry (Collector receivers and processors, SDK settings) in all three report languages. Detected on open by one free probe; disclosed on screen and in the reports. Every reading except the host log criteria is a metric query, with no Grail scan.
+
+### Fixed
+- Presence checks on sparse events read "none" when the event happened outside a shortened window. To save scan, every log, span and event reading was cut to 15 minutes or 4 hours; a check such as "CI/CD deployment events" then missed deployments made earlier in its 24 hours (measured: 9 deployments in 24h, 0 in 4h, so the check read "None"). Presence checks (CI/CD deployment events, Log-based events, Agent tool-call tracing, Release validation) now keep the window they were written with, under the same 50 GB scan ceiling.
+- "Host-process topology" could not run on very large estates: expanding every process group instance timed out (180,000 instances) and left the check unassessed. It now reads the host dimension of the process CPU metric, which is free and returns the same count (4,709 hosts on the estate where it failed).
+- "K8s node monitoring depth" divided the nodes that report container metrics by the number of clusters, so any cluster with two or more nodes passed at 100%. It now divides by the Kubernetes nodes (entity list, or Smartscape where there are no classic entities). Measured on a production estate: 89% instead of 100%.
+- In mixed environments the populations of clusters and namespaces include the entity lists, so a namespace or cluster that sends no metric still counts as a gap instead of dropping out of the total.
+
 ## [3.0.11] — 2026-11-20
 
 ### Changed

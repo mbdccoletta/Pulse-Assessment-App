@@ -43,6 +43,8 @@ const STATEMENTS: Record<string, string> = {
     "smartscapeNodes PROCESS | summarize count()",
   "fetch dt.entity.kubernetes_cluster | summarize count()":
     "smartscapeNodes K8S_CLUSTER | summarize count()",
+  "fetch dt.entity.kubernetes_node | summarize count()":
+    "smartscapeNodes K8S_NODE | summarize count()",
   "fetch dt.entity.disk | fieldsAdd belongs_to = belongs_to[dt.entity.host] | expand belongs_to | summarize count = countDistinct(belongs_to)":
     "smartscapeNodes DISK | traverse belongs_to, HOST | summarize count = countDistinct(id)",
   "fetch dt.entity.cloud_application | fieldsAdd ns = belongs_to[dt.entity.cloud_application_namespace] | expand ns | summarize count = countDistinct(ns)":

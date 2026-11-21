@@ -93,7 +93,7 @@ export const ES: Record<string, CriterionText> = {
   },
   i19: {
     label: "Profundidad de monitoreo de nodos K8s",
-    description: "Relación entre nodos y clusters de K8s — valida el monitoreo del cómputo de nube a nivel de nodo.",
+    description: "Porcentaje de nodos de Kubernetes que reportan métricas de recursos de contenedor — valida el monitoreo del cómputo a nivel de nodo.",
     action: "Asegúrese de que Dynatrace Operator esté recopilando métricas a nivel de nodo de los clusters de K8s.",
   },
   i20: {

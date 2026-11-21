@@ -1,6 +1,6 @@
 # Architecture diagrams
 
-Mermaid diagrams for Pulse Assessment 3.0.11. Each one follows the code under `ui/app/`; the text reference is [ARCHITECTURE.md](ARCHITECTURE.md). GitHub and the VS Code Markdown preview (with a Mermaid extension) render them directly.
+Mermaid diagrams for Pulse Assessment 3.0.12. Each one follows the code under `ui/app/`; the text reference is [ARCHITECTURE.md](ARCHITECTURE.md). GitHub and the VS Code Markdown preview (with a Mermaid extension) render them directly.
 
 ## 1. Module map
 

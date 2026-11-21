@@ -55,6 +55,8 @@ interface CacheEntry {
   bytes: number;
   /** Scanned records at write time. Same purpose as bytes. */
   records: number;
+  /** The read stopped at the scan ceiling: the value covers part of the window. */
+  p?: boolean;
 }
 
 /** Layout of the persisted cache document. The schemaVersion guards us
@@ -204,13 +206,14 @@ export class QueryCache {
    * Stores a value. Replaces any prior entry for the same (query, tier).
    * The change is only persisted on the next flush().
    */
-  set(query: string, tier: ScaleTier, value: number, bytes: number, records: number): void {
+  set(query: string, tier: ScaleTier, value: number, bytes: number, records: number, partial = false): void {
     if (!this.loaded) return;
     this.entries.set(makeKey(query, tier), {
       v: value,
       ts: Date.now(),
       bytes,
       records,
+      ...(partial ? { p: true } : {}),
     });
   }
 

@@ -51,6 +51,11 @@ interface DpsCostBadgeProps {
   textSecColor: string;
   /** Extra disclosure appended to the tooltip (economy mode). */
   note?: string;
+  /** False when the run is not billed to the customer (Dynatrace user): the
+   *  dollar estimates and projections are left out, scan volume stays. */
+  billed?: boolean;
+  /** Criteria whose read stopped at the scan ceiling on this run. */
+  partialCount?: number;
 }
 
 /** Upper-bound DPS pricing in USD per GiB scanned. Matches what Dynatrace
@@ -86,6 +91,8 @@ export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
   textColor,
   textSecColor,
   note,
+  billed = true,
+  partialCount = 0,
 }) => {
   // Mid-run: surface the live counter so the badge climbs as the assessment
   // progresses. Post-run: use the canonical totals from `stats`.
@@ -119,7 +126,7 @@ export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
 
   // Tooltip text — multi-line via newlines, Strato Text renders it as-is in
   // the title attribute.
-  const tooltip = [
+  const tooltip = (billed ? [
     `Current run scanned ${fmtBytes(scannedBytes)} of Grail data.`,
     `Cost estimate at standard DPS pricing: ${fmtUsd(usdLow)}–${fmtUsd(usdHigh)} per run.`,
     '',
@@ -133,7 +140,12 @@ export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
     `  • Daily (without cache):  ${fmtUsd(dailyYearNoCache)} / year`,
     '',
     'Estimates at the public list price of US$ 0.0035 per GiB scanned. Contracts may differ.',
-  ].join('\n');
+  ] : [
+    `Current run scanned ${fmtBytes(scannedBytes)} of Grail data.`,
+    cacheTotal > 0
+      ? `Cache: ${cacheHits}/${cacheTotal} queries served from the 24h Document Store cache.`
+      : 'Cache: not active on this run (first run of the day or force-refresh).',
+  ]).join('\n');
 
   // Loading state: we deliberately keep the badge visible so the operator
   // can watch the cost climb during a long xLarge run.
@@ -143,6 +155,9 @@ export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
     ? [
         `${stats.succeeded} of ${stats.total} queries ran.${stats.failed > 0 ? ` ${stats.failed} failed.` : ''}`,
         `${stats.scannedRecords.toLocaleString()} records scanned.`,
+        partialCount > 0
+          ? `${partialCount} ${partialCount === 1 ? 'reading' : 'readings'} stopped at the scan ceiling and show with ≈.`
+          : 'Every reading is complete.',
         '',
       ]
     : [];

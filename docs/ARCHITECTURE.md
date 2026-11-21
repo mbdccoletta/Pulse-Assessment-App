@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes Pulse Assessment 3.0.11 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
+This document describes Pulse Assessment 3.0.12 as the code under `ui/app/` implements it. Diagrams are in [ARCHITECTURE-DIAGRAM.md](ARCHITECTURE-DIAGRAM.md).
 
 ## Overview
 
@@ -102,6 +102,8 @@ The catalog is rewritten before the run, from what the probes found. No setting 
 | Probe result | Transform | Effect |
 |---|---|---|
 | Log metric `dt.log.status_per_entity_count` exists with host and service dimensions, and the classic entity model exists | `applyLogMetricMode` | Criteria l1, l2, l7, l8, l9 and l6 read the metric with `timeseries` instead of scanning logs. l9 counts 3 status classes; l6 is marked as a proxy |
+| OneAgent and OpenTelemetry hosts both present (`detectTelemetrySource`) | `applyMixedMode` (`otel-mode.ts`) | 14 host, Kubernetes, process and log criteria count both sides, hosts matched by short name; actions name both steps |
+| No host reports `dt.host.cpu.usage` (OpenTelemetry only) | `applyOtelMode` (`otel-mode.ts`) | 20 host, Kubernetes and log criteria read OpenTelemetry metrics and attributes; 10 OneAgent-only criteria leave the run; actions switch to OpenTelemetry wording |
 | Span query fails with an entitlement error | `applyTraceProxyMode` | Span criteria with an entry in `PROXIES` (in the current catalog: a1, a3, a4, a8, a9, a10, a13) run metric or topology queries and are marked `proxied`. The other span criteria are removed from the catalog (i18 and 13 of the 16 AI/LLM Observability criteria). A capability left with no criteria would be removed; none is in the current catalog |
 | `fetch dt.entity.host` fails with `UNKNOWN_DATA_OBJECT` | `applySmartscapeModel` | Whole statements listed in `STATEMENTS` become `smartscapeNodes` queries; `dt.entity.*` dimensions on signals become `dt.smartscape.*`. Criteria with no equivalent (a2, a12, sd10, l16, and any other `fetch dt.entity.*` without a mapping) are removed. Davis problem queries and Cost & Carbon queries are left unchanged |
 

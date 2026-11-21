@@ -200,6 +200,30 @@ export const GuidePage: React.FC<{ coverageData: CoverageData }> = ({ coverageDa
             any extra step. Results are reused for 24 hours; "Refresh" on the Overview runs everything again. "Run
             details" on the Overview shows how much data the run read.
           </P>
+          <P>
+            When the signed-in user has a Dynatrace account, every query reads its full window with no scan ceiling. For
+            other users the app keeps the cost controls; a value read only in part, because Grail stopped at the scan
+            ceiling, shows with "≈" and its tooltip says so.
+          </P>
+        </Section>
+
+        <Section title="Telemetry strategy">
+          <P>
+            On open the app classifies how the environment collects telemetry, and reads each criterion accordingly. The
+            classification is shown next to the environment name and in every report.
+          </P>
+          <Flex flexDirection="column">
+            <Def term="Full OneAgent">Every host is monitored by OneAgent. Every criterion reads OneAgent data.</Def>
+            <Def term="Mixed">
+              Part of the hosts run OneAgent, part are reported only through OpenTelemetry. Hosts, Kubernetes, processes
+              and logs are counted on both sides, and a host seen by both counts once. The chip shows the share of hosts on
+              each side.
+            </Def>
+            <Def term="Pure OpenTelemetry">
+              No host runs OneAgent. Hosts, Kubernetes and logs are read from OpenTelemetry metrics and attributes, and the
+              criteria that only exist with OneAgent are left out of the score instead of counting as not met.
+            </Def>
+          </Flex>
         </Section>
 
         <Section title="What is measured">

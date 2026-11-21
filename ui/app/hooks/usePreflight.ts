@@ -3,6 +3,7 @@
 // the catalog (Trace Proxy Mode, Smartscape) with no setup step.
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { isDevEnvironment } from "./useDevMode";
+import type { TelemetryProfile, TelemetrySource } from "../telemetry";
 
 /** Tenant-level entitlement failures (e.g. TRACE_QUERY_ENTITLEMENT_MISSING /
  *  exceptionType ENTITLEMENT-MISSING) are NOT scope problems — granting
@@ -131,4 +132,90 @@ export async function classicEntitiesMissing(): Promise<boolean> {
   if (simulateNoClassicEntities()) return true;
   const r = await probeQuery("fetch dt.entity.host | limit 1 | summarize count()");
   return !r.ok && r.noClassicEntities;
+}
+
+/** Dev-only simulation of an environment fed only by OpenTelemetry. */
+function simulatePureOtel(): boolean {
+  if (!isDevEnvironment()) return false;
+  try {
+    if (typeof window === "undefined") return false;
+    const p = new URLSearchParams(window.location.search).get("pureOtel") ?? window.localStorage.getItem("cca.pureOtel");
+    return p === "1" || p === "true" || p === "metrics";
+  } catch {
+    return false;
+  }
+}
+
+/** Where the telemetry comes from: OneAgent only, OpenTelemetry only, or both.
+ *  One free probe (metric series only). Hosts are matched by their short
+ *  lower-case name, so a host that both OneAgent and OpenTelemetry report is
+ *  counted once, on the OneAgent side. A failed probe answers "oneagent": the
+ *  default catalog runs. With `noEntities` (no classic entity model) a mixed
+ *  estate is read as OneAgent, because the mixed readings need host entity names. */
+export async function detectTelemetry(noEntities = false): Promise<TelemetryProfile> {
+  const none = (source: TelemetrySource): TelemetryProfile => ({ source, oneAgentHosts: 0, otelOnlyHosts: 0, sharedHosts: 0 });
+  const forced = simulatedSource();
+  if (forced) return none(forced);
+  const short = (x: string) => `splitString(lower(${x}), ".")[0]`;
+  const otel = (m: string) => `timeseries v = avg(${m}), by:{host.name, k8s.node.name, dt.entity.host} | filter isNull(dt.entity.host) | fields k = ${short("coalesce(k8s.node.name, host.name)")}, src = "otel"`;
+  const query = [
+    `timeseries v = avg(dt.host.cpu.usage), by:{dt.entity.host} | fields k = ${noEntities ? "toString(dt.entity.host)" : short("entityName(dt.entity.host)")}, src = "oa"`,
+    ...["system.cpu.time", "system.cpu.utilization", "system.memory.utilization"].map(m => ` | append [${otel(m)}]`),
+    ` | append [timeseries v = avg(k8s.node.cpu.usage), by:{k8s.node.name} | fields k = ${short("k8s.node.name")}, src = "otel"]`,
+    ' | filter isNotNull(k) | summarize s = collectDistinct(src), by:{k}',
+    ' | summarize oneAgent = countIf(in("oa", s)), otelOnly = countIf(not(in("oa", s))), shared = countIf(in("oa", s) and in("otel", s))',
+  ].join("");
+  try {
+    const response = await queryExecutionClient.queryExecute({ body: { query, requestTimeoutMilliseconds: 20000, maxResultRecords: 1 } });
+    if (response?.state !== "SUCCEEDED") return none("oneagent");
+    const rec = (response.result as { records?: Record<string, unknown>[] } | undefined)?.records?.[0] ?? {};
+    const oa = Number(rec.oneAgent ?? 0), ot = Number(rec.otelOnly ?? 0), sh = Number(rec.shared ?? 0);
+    const source: TelemetrySource = oa === 0 && ot > 0 ? "otel" : oa > 0 && ot > 0 && !noEntities ? "mixed" : "oneagent";
+    return { source, oneAgentHosts: oa, otelOnlyHosts: ot, sharedHosts: sh };
+  } catch {
+    return none("oneagent");
+  }
+}
+
+/** Dev-only: force the source ("?telemetry=otel|mixed|oneagent"), as the older "pureOtel" switch did for "otel". */
+function simulatedSource(): TelemetrySource | null {
+  if (!isDevEnvironment()) return null;
+  try {
+    const t = new URLSearchParams(window.location.search).get("telemetry") ?? window.localStorage.getItem("cca.telemetry");
+    if (t === "otel" || t === "mixed" || t === "oneagent") return t;
+    return simulatePureOtel() ? "otel" : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One free probe: is this environment fed without OneAgent? True when no host
+ *  reports the OneAgent host metric in the last two hours. Then the run reads
+ *  hosts and Kubernetes from the OpenTelemetry signals (../otel-mode.ts).
+ *  A failed probe answers false: the default catalog runs. */
+/** True when the simulation asked to leave out the criteria that scan logs ("pureOtel=metrics"). */
+export function simulatedOtelSkipsLogScans(): boolean {
+  if (!isDevEnvironment()) return false;
+  try {
+    return (new URLSearchParams(window.location.search).get("pureOtel") ?? window.localStorage.getItem("cca.pureOtel")) === "metrics"
+      || window.localStorage.getItem("cca.skipLogScans") === "1";
+  } catch {
+    return false;
+  }
+}
+
+export async function oneAgentAbsent(): Promise<boolean> {
+  if (simulatePureOtel()) return true;
+  try {
+    const response = await queryExecutionClient.queryExecute({
+      body: { query: "timeseries v = avg(dt.host.cpu.usage), by:{dt.entity.host} | summarize c = count()", requestTimeoutMilliseconds: 15000, maxResultRecords: 1 },
+    });
+    if (response?.state !== "SUCCEEDED") return false;
+    const rec = (response.result as { records?: Record<string, unknown>[] } | undefined)?.records?.[0];
+    if (!rec) return true;
+    const v = Object.values(rec).find(x => typeof x === "number" || typeof x === "string" || typeof x === "bigint");
+    return Number(v ?? 0) === 0;
+  } catch {
+    return false;
+  }
 }

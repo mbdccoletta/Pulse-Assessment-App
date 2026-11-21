@@ -98,8 +98,10 @@ function isPresence(r: Row): boolean {
 
 function fmtValue(r: Row): string {
   if (rowState(r) === "na") return "—";
-  if (isPresence(r)) return (r.count ?? 0).toLocaleString();
-  return r.isRatio ? `${Math.floor(r.value * 10) / 10}%` : r.value.toLocaleString();
+  // "≈" marks a partial read: it stopped at the scan ceiling (the tooltip says so).
+  const p = r.partial ? "≈ " : "";
+  if (isPresence(r)) return `${p}${(r.count ?? 0).toLocaleString()}`;
+  return r.isRatio ? `${p}${Math.floor(r.value * 10) / 10}%` : `${p}${r.value.toLocaleString()}`;
 }
 
 function fmtFloor(r: Row): string {
@@ -119,7 +121,8 @@ function dqlForCopy(query: string): string {
 function tipFor(r: Row): string {
   const why = CRITERION_IMPORTANCE[r.id];
   const fix = CRITERION_ACTIONS[r.id]?.action;
-  return [r.description, why, fix ? `Next step: ${fix}` : ""].filter(Boolean).join("\n\n");
+  const partial = r.partial ? "Partial reading: the query stopped at the 50 GB scan ceiling, so the value covers part of the window. A Dynatrace user reads it in full." : "";
+  return [partial, r.description, why, fix ? `Next step: ${fix}` : ""].filter(Boolean).join("\n\n");
 }
 
 // ── Building blocks ─────────────────────────────────────────────────────────

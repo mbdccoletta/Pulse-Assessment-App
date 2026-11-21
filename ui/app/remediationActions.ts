@@ -8,6 +8,14 @@ export interface RemediationAction {
   docLabel: string;
 }
 
+/** Actions that replace the defaults for the current environment (for example
+ *  the OpenTelemetry wording when no OneAgent reports). The environment does not
+ *  change during a session, so they are set once, before the first run. */
+export function setActionOverrides(overrides: Record<string, RemediationAction> | null): void {
+  for (const id of Object.keys(DEFAULTS)) CRITERION_ACTIONS[id] = DEFAULTS[id];
+  if (overrides) for (const [id, a] of Object.entries(overrides)) CRITERION_ACTIONS[id] = a;
+}
+
 export const CRITERION_ACTIONS: Record<string, RemediationAction> = {
   // ── Infrastructure Observability ──
   i1:  { action: "Deploy OneAgent on all hosts to collect CPU usage metrics, or ingest via OTel/cloud integration.", docUrl: "https://docs.dynatrace.com/docs/observe/infrastructure-observability/infrastructure-and-operations/hosts", docLabel: "Host CPU monitoring" },
@@ -170,3 +178,9 @@ export const CRITERION_ACTIONS: Record<string, RemediationAction> = {
   f7: { action: "Review steady workloads paid on demand and evaluate a commitment discount with the cloud provider.", docUrl: "https://docs.dynatrace.com/docs", docLabel: "Dynatrace documentation" },
   f8: { action: "Right-size hosts with low CPU usage; wasted energy comes from capacity that stays idle.", docUrl: "https://docs.dynatrace.com/docs", docLabel: "Dynatrace documentation" },
 };
+
+/** The catalog's own actions, kept so an override can be undone. */
+const DEFAULTS: Record<string, RemediationAction> = { ...CRITERION_ACTIONS };
+
+/** The catalog's own action for a criterion, whatever override is active. */
+export const defaultAction = (id: string): RemediationAction | undefined => DEFAULTS[id];

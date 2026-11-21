@@ -121,8 +121,10 @@ export const CAPABILITIES: CapabilityDef[] = [
       },
       {
         id: "i11", label: "Host-process topology (%)",
-        description: "Percentage of hosts with detected process groups — validates entity relationship discovery.",
-        query: "fetch dt.entity.process_group_instance | fieldsAdd host = belongs_to[dt.entity.host] | expand host | summarize count = countDistinct(host)",
+        description: "Percentage of hosts with detected, monitored processes — validates host-to-process topology discovery.",
+        // Read from the process metric's host dimension: free and fast. Expanding every
+        // process group instance timed out on a 180,000-instance estate and left the check unassessed.
+        query: "timeseries v = avg(dt.process.cpu.usage), by:{dt.entity.host} | summarize count = countDistinct(dt.entity.host)",
         queryB: "fetch dt.entity.host | summarize count()",
         thresholds: [{ min: 90 }, { min: 60 }, { min: 1 }],
       },
@@ -178,10 +180,11 @@ export const CAPABILITIES: CapabilityDef[] = [
       },
       {
         id: "i19", label: "K8s node monitoring depth (%)",
-        description: "Ratio of K8s nodes to clusters — validates node-level cloud compute monitoring.",
+        description: "Share of Kubernetes nodes that report container resource metrics — validates node-level compute monitoring.",
         query: "timeseries val=avg(dt.kubernetes.container.cpu_usage), by:{k8s.node.name} | fields k8s.node.name | dedup k8s.node.name | summarize c=count()",
-        queryB: "fetch dt.entity.kubernetes_cluster | summarize count()",
-        thresholds: [{ min: 100 }, { min: 50 }, { min: 1 }],
+        // Nodes over nodes. It divided nodes by clusters, which passed every cluster with two nodes or more.
+        queryB: "fetch dt.entity.kubernetes_node | summarize count()",
+        thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
         id: "i20", label: "Cloud namespace metric coverage (%)",
