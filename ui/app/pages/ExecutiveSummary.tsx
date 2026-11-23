@@ -28,7 +28,7 @@ import { useAppNames } from "../hooks/useAppNames";
 import { ADOPTION_FULL_RATE, gainIfMet } from "../pulseScore";
 import { scoreBand } from "../utils/colors";
 import { CRITERION_ACTIONS } from "../remediationActions";
-import { AppLink, BAND_THRESHOLDS, Panel, StateMark, TIERS, TierMeter, TrendChart, VerdictChip, pctFormat } from "./CapabilityDetailPage";
+import { AppLink, ScoreGauge, BAND_THRESHOLDS, Panel, StateMark, TIERS, TierMeter, TrendChart, VerdictChip, pctFormat } from "./CapabilityDetailPage";
 import type { TierKey } from "./CapabilityDetailPage";
 
 const MONO = Typography.Code.Small.Default.Family;
@@ -134,9 +134,7 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
 
       <Grid style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
         <Panel title="Score">
-          <GaugeChart value={totalScore} min={0} max={100} formatter={pctFormat} height={150} showThresholdIndicators>
-            {BAND_THRESHOLDS.map(t => <GaugeChart.ThresholdIndicator key={t.value} value={t.value} color={t.color} />)}
-          </GaugeChart>
+          <ScoreGauge value={totalScore} />
         </Panel>
 
         <Panel title="What makes the score" right={<InformationOverlay aria-label="How the score is built"><InformationOverlay.Content>{`Average of the capabilities. Each capability is equal parts coverage, utilization and adoption; adoption counts as 100 when ${ADOPTION_FULL_RATE}% of active users open its apps.`}</InformationOverlay.Content></InformationOverlay>}>

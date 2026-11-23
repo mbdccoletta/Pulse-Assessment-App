@@ -99,6 +99,19 @@ export const AppLink: React.FC<{ appId: string; children: React.ReactNode }> = (
     : <>{children}</>;
 };
 
+/** The score gauge. Strato's GaugeChart colours the arc from the thresholds
+ *  but always draws the number in the default text colour; the number takes
+ *  the band's status text colour here, like every other score in the app. */
+const GAUGE_CSS = ".pulse-gauge foreignObject span { color: var(--pulse-gauge-text) !important; }";
+export const ScoreGauge: React.FC<{ value: number }> = ({ value }) => (
+  <div className="pulse-gauge" style={{ ["--pulse-gauge-text" as string]: scoreBand(value).text } as React.CSSProperties}>
+    <style>{GAUGE_CSS}</style>
+    <GaugeChart value={value} min={0} max={100} formatter={pctFormat} height={150} showThresholdIndicators>
+      {BAND_THRESHOLDS.map(t => <GaugeChart.ThresholdIndicator key={t.value} value={t.value} color={t.color} />)}
+    </GaugeChart>
+  </div>
+);
+
 /** Verdict as a Strato chip; the colour is the judgement. */
 const VERDICT_CHIP: Record<string, "neutral" | "primary" | "success" | "warning" | "critical"> = {
   healthy: "success", starved: "primary", unwatched: "critical", skinDeep: "warning", dark: "neutral", notAssessed: "neutral",
@@ -514,9 +527,7 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
         {/* Summary: the three readings, each as a Strato chart */}
         <Grid style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
           <Panel title="Score">
-            <GaugeChart value={cap.score} min={0} max={100} formatter={pctFormat} height={150} showThresholdIndicators>
-              {BAND_THRESHOLDS.map(t => <GaugeChart.ThresholdIndicator key={t.value} value={t.value} color={t.color} />)}
-            </GaugeChart>
+            <ScoreGauge value={cap.score} />
           </Panel>
 
           <Panel title="What makes the score" right={<InformationOverlay aria-label="How the score is built"><InformationOverlay.Content>{`The score is the average of three equal parts. Adoption counts as 100 when ${ADOPTION_FULL_RATE}% of active users open the capability's apps.`}</InformationOverlay.Content></InformationOverlay>}>

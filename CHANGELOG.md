@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.15] — 2026-11-23
+
+### Fixed
+- The score gauge (Overall score and capability pages) drew its number in the default text colour while the arc followed the band; the number now takes the band's status colour, like every other score in the app.
+
 ## [3.0.14] — 2026-11-23
 
 ### Changed
