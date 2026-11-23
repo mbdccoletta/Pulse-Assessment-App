@@ -22,7 +22,7 @@ import { Breadcrumbs } from "@dynatrace/strato-components/navigation";
 import { GaugeChart, MeterBarChart, TimeseriesChart } from "@dynatrace/strato-components/charts";
 import type { CoverageData, CapabilityResult } from "../hooks/useCoverageData";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
-import { NO_ADOPTION, peopleReading } from "../hooks/useAppAdoption";
+import { NO_ADOPTION, isOfficialApp, peopleReading } from "../hooks/useAppAdoption";
 import { IntelligenceBar } from "../components/IntelligenceBar";
 import { LENS, capabilityQuestions, capabilityFacts } from "../ai/pageIntelligence";
 import { Tooltip } from "../components/Tooltip";
@@ -481,7 +481,7 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
   // Related apps: the capability's own, the cross-cutting ones that also serve
   // it, and the installed ones nobody opened.
   const serves = (id: string) => capabilityForApp(id) === cap.name || sharedCapabilitiesForApp(id).includes(cap.name);
-  const usedApps = adoption.apps.filter(a => serves(a.appId)).sort((x, y) => y.users - x.users);
+  const usedApps = adoption.apps.filter(a => isOfficialApp(a.appId) && serves(a.appId)).sort((x, y) => y.users - x.users);
   const usedIds = new Set(usedApps.map(a => a.appId));
   const unusedApps = installed
     .filter(id => !usedIds.has(id) && id.startsWith("dynatrace.") && serves(id))

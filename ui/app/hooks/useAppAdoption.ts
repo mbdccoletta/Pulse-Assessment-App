@@ -238,7 +238,13 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
  *  screen runs thousands of queries for nobody. */
 export function peopleReading(a: Pick<AppUsage, "users" | "dailyUsers">, month = "a month", day = "a day", people = "people"): string {
   const d = a.dailyUsers > 0 && a.dailyUsers < 1 ? "<1" : Math.floor(a.dailyUsers).toLocaleString();
-  return `${a.users.toLocaleString()} ${people} ${month} · ${d} ${day}`;
+  const singular: Record<string, string> = { people: "person", pessoas: "pessoa", personas: "persona" };
+  const who = a.users === 1 ? singular[people] ?? people : people;
+  return `${a.users.toLocaleString()} ${who} ${month} · ${d} ${day}`;
 }
+
+/** Apps Dynatrace ships. Custom apps built in an environment are usage too,
+ *  but the app lists recommend platform apps only. */
+export const isOfficialApp = (appId: string) => appId.startsWith("dynatrace.");
 
 export { OTHER_BUCKET };

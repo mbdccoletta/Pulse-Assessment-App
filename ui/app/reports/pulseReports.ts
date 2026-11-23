@@ -17,7 +17,7 @@
 // from the same constants the scoring uses.
 
 import { jsPDF } from "jspdf";
-import { peopleReading } from "../hooks/useAppAdoption";
+import { isOfficialApp, peopleReading } from "../hooks/useAppAdoption";
 import type { CapabilityResult } from "../hooks/useCoverageData";
 import { FOUNDATION_WEIGHT, BEST_PRACTICE_WEIGHT, EXCELLENCE_WEIGHT } from "../hooks/useCoverageData";
 import type { AssessmentSnapshot } from "../hooks/useAssessmentHistory";
@@ -658,7 +658,7 @@ function appsBlock(k: Kit, T: Words, input: ReportInput) {
   if (!ad || ad.apps.length === 0 || ad.totalUsers === 0) return;
   k.h2(`${T.apps}  (${ad.windowDays} ${T.days})`, 34);
   const { M, CW } = k;
-  for (const a of ad.apps.slice(0, 10)) {
+  for (const a of ad.apps.filter(x => isOfficialApp(x.appId)).slice(0, 10)) {
     k.ensure(8);
     const share = Math.floor((a.users / ad.totalUsers) * 1000) / 10;
     k.font(9.5, true); k.color(INK); k.text(input.appName(a.appId), M, k.y);

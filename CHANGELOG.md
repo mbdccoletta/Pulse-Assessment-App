@@ -4,6 +4,14 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.16] — 2026-11-23
+
+### Changed
+- App lists (Related apps on the capability page, the app list on the Overall score page and in the reports) show official Dynatrace apps only; custom apps built in the environment still count as usage but are not recommended. The raw export keeps every app.
+
+### Fixed
+- "1 people" reads "1 person" (and "1 pessoa", "1 persona" in the reports).
+
 ## [3.0.15] — 2026-11-23
 
 ### Fixed

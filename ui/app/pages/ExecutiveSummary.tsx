@@ -20,7 +20,7 @@ import { Flex, Grid } from "@dynatrace/strato-components/layouts";
 import { GaugeChart, MeterBarChart } from "@dynatrace/strato-components/charts";
 import type { CapabilityResult } from "../hooks/useCoverageData";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
-import { peopleReading, type UseAppAdoptionResult } from "../hooks/useAppAdoption";
+import { isOfficialApp, peopleReading, type UseAppAdoptionResult } from "../hooks/useAppAdoption";
 import { Tooltip } from "../components/Tooltip";
 import { diagnose } from "../diagnosis";
 import { passLine } from "../passLine";
@@ -122,7 +122,7 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
     })
     .sort((a, b) => a.t - b.t).slice(-20), [history.snapshots]);
 
-  const topApps = adoption.apps.slice(0, 9);
+  const topApps = adoption.apps.filter(a => isOfficialApp(a.appId)).slice(0, 9);
 
   return (
     <Flex flexDirection="column" gap={16} style={{ flex: 1, minWidth: 0, width: "100%", boxSizing: "border-box", alignSelf: "flex-start", padding: "16px 20px 32px" }}>
