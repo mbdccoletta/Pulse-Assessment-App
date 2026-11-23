@@ -244,7 +244,7 @@ wasteful DQL that scans Grail just to return a fixed number — see the
 When `queries.ts` changes, re-extract:
 
 ```bash
-cd /Users/marcelo.coletta/pulse-assessment-dyna-version
+cd <repository root>
 python3 - <<'PY'
 import re
 src = open("ui/app/queries.ts").read()
