@@ -99,7 +99,7 @@ export const App = () => {
           ))}
         </AppHeader.Navigation>
         <AppHeader.ActionItems>
-          {/* The assessment page portals Refresh and Reports here. */}
+          {/* Refresh and Reports are portalled here on every page. */}
           <div id="pulse-header-actions" style={{ display: "flex", alignItems: "center", gap: 8 }} />
         </AppHeader.ActionItems>
         <AppHeader.Menus>
@@ -131,6 +131,11 @@ export const App = () => {
               <Route path="/compare" element={<EvolutionPage snapshots={history.snapshots} loading={history.loading} assessing={assessing} />} />
               <Route path="/capability/:name" element={<CapabilityDetailPage coverageData={coverageData} history={history} />} />
             </Routes>
+            {/* Refresh and Reports on every page: the assessment page renders
+                them itself; the others mount its header actions only. */}
+            {pathname !== "/" && pathname !== "/summary" && (
+              <CoverageAssessment headerOnly view="coverage" history={history} coverageData={coverageData} scale={scale} />
+            )}
           </Suspense>
         </PageLayout.Content>
       </PageLayout>

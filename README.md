@@ -2,7 +2,7 @@
 
 > How well is this environment actually using Dynatrace? One run answers it from the tenant's own data.
 
-Pulse Assessment is a native **Dynatrace App** that scores an environment's observability posture across **11 capabilities** and **143 criteria**, read with DQL against Grail and with the platform's settings and SLO services. Every capability gets one score built from three parts — **coverage**, **utilization** and **adoption** — plus a verdict, the criteria that fail, the action that fixes each one, and how the score moved since the last run.
+Pulse Assessment is a native **Dynatrace App** that scores an environment's observability posture across **11 capabilities** and **138 criteria**, read with DQL against Grail and with the platform's settings and SLO services. Every capability gets one score built from three parts — **coverage**, **utilization** and **adoption** — plus a verdict, the criteria that fail, the action that fixes each one, and how the score moved since the last run.
 
 ---
 
@@ -17,7 +17,7 @@ Pulse Assessment is a native **Dynatrace App** that scores an environment's obse
 - **Dynatrace Intelligence on every page** — page-specific questions answered by Davis CoPilot from the numbers on screen; one answer costs 3 AI Units and nothing is asked until you click
 - **Reports** — the Overall score PDF carries the Overview radar, and every report names the teams to involve per capability, from the environment's own Ownership teams. Overall, Action plan and Criteria PDFs in English, Portuguese and Spanish (criterion names, descriptions and actions are translated; capability names stay as Dynatrace writes them), a FinOps report, a Smart Report written by Davis CoPilot, and raw data as JSON or CSV
 - **OneAgent, OpenTelemetry or both** — the app identifies the source on open and classifies the estate as Full OneAgent, Mixed or Pure OpenTelemetry. With OpenTelemetry only, hosts, Kubernetes and logs are read from the OpenTelemetry metrics and attributes, and criteria that only exist with OneAgent leave the score. With both, each host and namespace is counted once across the two sides
-- **Full fidelity for Dynatrace users** — signed in with a Dynatrace account, every criterion reads its whole window, unsampled and without a scan ceiling. Other users keep the cost controls, and a value Grail read only in part is marked with ≈
+- **Metrics first, one query shape for everyone** — criteria read Dynatrace metrics and Smartscape wherever they give the same answer; the remaining log and AI reads share one scan per family, carry a 50 GB ceiling, and a value the ceiling cuts is marked with ≈. The number does not depend on who opens the app
 - **Works on any licensing model** — without Traces on Grail it switches to Trace Proxy Mode (metric and topology equivalents for span checks; checks with no honest proxy leave the score). Without the classic entity model it reads Smartscape
 - **Not assessed is not failed** — a criterion that cannot be measured in the environment is left out of the score and named as such
 - **Dark/Light theme** — Dynatrace Strato components and design tokens throughout
@@ -72,18 +72,18 @@ Pulse Assessment is a native **Dynatrace App** that scores an environment's obse
 
 | Capability | Criteria | Tiers (F / BP / E) |
 |---|---|---|
-| Infrastructure Observability | 26 | 3 / 13 / 10 |
-| Application Observability | 15 | 3 / 6 / 6 |
+| Infrastructure Observability | 25 | 3 / 13 / 9 |
+| Application Observability | 12 | 1 / 6 / 5 |
 | Digital Experience | 15 | 3 / 7 / 5 |
 | Log Analytics | 16 | 3 / 9 / 4 |
 | Application Security | 7 | 1 / 5 / 1 |
 | Threat Observability | 4 | 1 / 2 / 1 |
-| AI/LLM Observability | 16 | 3 / 5 / 8 |
+| AI/LLM Observability | 15 | 3 / 5 / 7 |
 | Business Observability | 10 | 3 / 4 / 3 |
 | Software Delivery | 6 | 1 / 2 / 3 |
 | Platform Governance | 18 | 1 / 13 / 4 |
 | FinOps & Sustainability | 10 | 3 / 4 / 3 |
-| **Total** | **143** | **25 / 70 / 48** |
+| **Total** | **138** | **23 / 70 / 45** |
 
 ## Scoring model
 
@@ -203,7 +203,7 @@ The app requests 17 scopes (configured in `app.config.json`):
 │   └── app/
 │       ├── App.tsx               # Routes, the single score, run history save
 │       ├── appVersion.ts         # Must match app.config.json
-│       ├── queries.ts            # The 143 criteria
+│       ├── queries.ts            # The 138 criteria
 │       ├── pulseScore.ts         # Coverage + utilization + adoption
 │       ├── diagnosis.ts          # Verdict per capability
 │       ├── remediationActions.ts # Action and link per criterion

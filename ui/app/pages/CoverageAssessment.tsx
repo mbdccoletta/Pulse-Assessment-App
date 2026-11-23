@@ -8,7 +8,8 @@ import { Link, Text } from "@dynatrace/strato-components/typography";
 import { MeterBarChart } from "@dynatrace/strato-components/charts";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Menu } from "@dynatrace/strato-components/navigation";
-import { Chip, EmptyState, MessageContainer, ProgressBar } from "@dynatrace/strato-components/content";
+import { Chip, EmptyState, MessageContainer } from "@dynatrace/strato-components/content";
+import { PulseLoader } from "../components/PulseLoader";
 import { showToast } from "@dynatrace/strato-components/notifications";
 import { DownloadIcon, RefreshIcon } from "@dynatrace/strato-icons";
 import type { CoverageData, ViewMode } from "../hooks/useCoverageData";
@@ -28,8 +29,7 @@ import { useAppNames } from "../hooks/useAppNames";
 const loadReports = () => import("../reports/pulseReports");
 import { SmartReportModal } from "../components/SmartReportModal";
 import { tracesNotEntitled, classicEntitiesMissing, detectTelemetry, simulatedOtelSkipsLogScans } from "../hooks/usePreflight";
-import { detectFidelity, setFidelity, type Fidelity } from "../fidelity";
-import { TELEMETRY_LABEL, telemetryShares, telemetrySummary, setCurrentTelemetry, type TelemetryProfile } from "../telemetry";
+import { TELEMETRY_LABEL, telemetryShares, telemetrySummary, setCurrentTelemetry, getCurrentTelemetry, type TelemetryProfile } from "../telemetry";
 import { Tooltip } from "../components/Tooltip";
 import { applyOtelMode, applyMixedMode, mixedActions, OTEL_ACTIONS, type OtelModeInfo, type TelemetrySource } from "../otel-mode";
 import { setActionOverrides, CRITERION_ACTIONS } from "../remediationActions";
@@ -47,7 +47,7 @@ const SCALE = SCORE_BANDS.map(b => ({
   c: b.token,
   hex: b.color,
   r: `${b.min}-${b.max === 100 ? 100 : b.max - 1}%`,
-  tip: b.label === "N/A" ? "Critical gaps — the capability is barely adopted or has no data flowing."
+  tip: b.label === "Critical" ? "Critical gaps — the capability is barely adopted or has no data flowing."
      : b.label === "Low" ? "Early adoption — some data exists but significant gaps remain."
      : b.label === "Moderate" ? "Partial coverage — key areas configured but important criteria still missing."
      : b.label === "Good" ? "Strong adoption — most criteria met with room for further optimization."
@@ -66,12 +66,15 @@ interface Props {
    *  callers / tests that don't thread the tier through still compile —
    *  in that case the banner is simply not rendered. */
   scale?: UseScaleTierResult;
+  /** Render only the header actions (Refresh, Reports) and the dialogs they
+   *  open: used on the pages that do not show the assessment itself. */
+  headerOnly?: boolean;
   /** Production gate: when false (customer tenant, no `?dev=1`), the
    *  diagnostic controls (Force-refresh, Download perf JSON) are hidden.
    *  SEs flip the flag via URL or console to unlock the diagnostic surface. */
 }
 
-export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageData, scale }) => {
+export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageData, scale, headerOnly }) => {
   const { capabilities, totalScore, overallUtilizationLevel, loading, error, tenant, date, stats, start, refresh } = coverageData;
   const navigate = useNavigate();
   const [chartSize, setChartSize] = useState(500);
@@ -100,10 +103,10 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
    *  continue. Span checks run against metric/topology proxies; unproxiable
    *  ones (incl. all of AI/LLM Observability) leave the scoring denominator.
    *  See ../trace-proxy.ts and docs/STUDY-CLASSIC-SAAS-NO-GRAIL-TRACES.md. */
-  const [traceProxyMode, setTraceProxyMode] = useState(false);
+  const [traceProxyMode, setTraceProxyMode] = useState(() => session.traceProxy);
 
   /** What the probes found in this environment; decides how the catalog is adapted. */
-  const envRef = useRef<{ noEntities: boolean; logMetric: boolean; source: TelemetrySource }>({ noEntities: false, logMetric: false, source: "oneagent" });
+  const envRef = useRef<RunEnv>(session.env);
   /** The catalog for this environment. Order matters: the trace proxy brings
    *  classic entity queries, so the Smartscape rewrite must come after it. */
   const prepareCaps = useCallback((proxy: boolean) => {
@@ -154,13 +157,11 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
 
   const [preparing, setPreparing] = useState(capabilities.length === 0);
   /** Set when the run reads Smartscape because the classic entity tables are absent. */
-  const [entityModelInfo, setEntityModelInfo] = useState<SmartscapeModelInfo | null>(null);
+  const [entityModelInfo, setEntityModelInfo] = useState<SmartscapeModelInfo | null>(() => session.modelInfo);
   /** Set when the run reads hosts and Kubernetes from OpenTelemetry because no OneAgent reports. */
-  const [otelInfo, setOtelInfo] = useState<OtelModeInfo | null>(null);
+  const [otelInfo, setOtelInfo] = useState<OtelModeInfo | null>(() => session.otelInfo);
   /** Where the telemetry comes from: OneAgent, OpenTelemetry or both. */
-  const [telemetry, setTelemetry] = useState<TelemetryProfile | null>(null);
-  /** Full fidelity for a Dynatrace user (not billed), cost mode for anyone else. */
-  const [fidelity] = useState<Fidelity>(() => { const f = detectFidelity(); setFidelity(f); return f; });
+  const [telemetry, setTelemetry] = useState<TelemetryProfile | null>(() => getCurrentTelemetry());
   const telemetrySource: TelemetrySource = telemetry?.source ?? "oneagent";
   useEffect(() => {
     if (autoRanRef.current || loading || capabilities.length > 0) { if (capabilities.length > 0) setPreparing(false); return; }
@@ -176,10 +177,14 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
       ]);
       const profile = await detectTelemetry(noEntities).catch((): TelemetryProfile => ({ source: "oneagent", oneAgentHosts: 0, otelOnlyHosts: 0, sharedHosts: 0 }));
       envRef.current = { noEntities, logMetric, source: profile.source };
+      session.env = envRef.current;
+      session.traceProxy = noTraces;
       setTelemetry(profile);
       setCurrentTelemetry(profile);
       if (noTraces) setTraceProxyMode(true);
       const prepared = prepareCaps(noTraces);
+      session.modelInfo = prepared.modelInfo;
+      session.otelInfo = prepared.otelInfo;
       if (prepared.modelInfo) setEntityModelInfo(prepared.modelInfo);
       if (prepared.otelInfo) setOtelInfo(prepared.otelInfo);
       start(prepared.caps);
@@ -214,11 +219,10 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
       otel: telemetrySource === "otel",
       mixed: telemetrySource === "mixed",
       telemetry: telemetry ?? undefined,
-      fullFidelity: fidelity === "full",
-      estimated: fidelity !== "full" && !!scale && TIER_CONFIG[scale.tier].sampled,
+      estimated: !!scale && TIER_CONFIG[scale.tier].sampled,
       tier: scale?.tier,
     },
-  }), [capabilities, totalScore, tenant, date, adoption, history.snapshots, appName, traceProxyMode, entityModelInfo, otelInfo, telemetry, telemetrySource, fidelity, scale]);
+  }), [capabilities, totalScore, tenant, date, adoption, history.snapshots, appName, traceProxyMode, entityModelInfo, otelInfo, telemetry, telemetrySource, scale]);
   const runExport = useCallback((job: (m: Awaited<ReturnType<typeof loadReports>>) => void) => {
     if (exporting || capabilities.length === 0) return;
     setExporting(true);
@@ -294,55 +298,14 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
   const text = Colors.Text.Neutral.Default;
   const textSec = Colors.Text.Neutral.Subdued;
 
-  return (
-    <Flex flexDirection="column" ref={rootRef} style={{ height: "100%",
-      overflow: "auto", boxSizing: "border-box", padding: "0",
-      fontFamily: "inherit",
-      background: bg, color: text, transition: "background 0.4s, color 0.4s" }}>
-      {/* A run in flight: say so. Without this the page stayed blank until the
-          last query returned, on first open and on every Refresh. */}
-      {(loading || preparing) && (
-        <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
-          <Flex flexDirection="column" gap={8} style={{ width: "min(420px, 100%)" }}>
-            <ProgressBar value={loading && coverageData.progress > 0 ? coverageData.progress : "indeterminate"}>
-              <ProgressBar.Label>Assessing the environment</ProgressBar.Label>
-              {loading && coverageData.progress > 0 && <ProgressBar.Value>{`${Math.floor(coverageData.progress)}%`}</ProgressBar.Value>}
-            </ProgressBar>
-          </Flex>
-        </Flex>
-      )}
-
-      {/* No start page: the app opens on the assessment. This only shows if a run produced nothing. */}
-      {!loading && !preparing && capabilities.length === 0 && (
-        <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
-          <EmptyState>
-            <EmptyState.VisualPreset context="chart" type="something-missing" />
-            <EmptyState.Title>No assessment results</EmptyState.Title>
-            <EmptyState.Actions><Button variant="accent" color="primary" onClick={() => startFiltered()}>Run assessment</Button></EmptyState.Actions>
-          </EmptyState>
-        </Flex>
-      )}
-
-      {/* Nothing could be measured: say so instead of drawing a 0% assessment. */}
-      {!loading && nothingMeasured && (
-        <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
-          <EmptyState>
-            <EmptyState.VisualPreset context="generic" type="something-wrong" />
-            <EmptyState.Title>The assessment could not read this environment</EmptyState.Title>
-            <EmptyState.Details>None of the queries returned. This usually means the connection to the environment was lost or the session expired.</EmptyState.Details>
-            <EmptyState.Actions><Button variant="accent" color="primary" onClick={refresh}>Try again</Button></EmptyState.Actions>
-          </EmptyState>
-        </Flex>
-      )}
-
-      {!loading && capabilities.length > 0 && !nothingMeasured && (
-        <>
-          {/* Page actions live in the AppHeader (portal) — one bar for the whole app. */}
-          {/* Intelligence layer: predefined questions, short answers, hand-off to Assist */}
-          {/* Refresh and Reports live in the app header, next to the pages. Only these two:
-              with the environment text there too, the header ran out of room and
-              folded the navigation into the overflow button. */}
-          {headerSlot && createPortal(
+  /** The readings are in but adoption, one of the three parts of every score,
+   *  is still on its way: keep the loader up instead of painting a score that
+   *  changes a few seconds later. */
+  const waitingScore = !loading && capabilities.length > 0 && coverageData.scoreSettled === false;
+  /** Refresh and Reports, portalled into the app header. Built here so every
+   *  page shows them (other routes mount this component with `headerOnly`). */
+  const headerActions = !loading && capabilities.length > 0 && !nothingMeasured
+    ? (headerSlot && createPortal(
           <Flex alignItems="center" gap={8}>
             <Button onClick={freshRun} size="condensed"><Button.Prefix><RefreshIcon /></Button.Prefix>Refresh</Button>
             {/* Reports: the PDFs and the raw export are built in the browser
@@ -390,7 +353,75 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                 </Menu.Content>
               </Menu>
             )}
-          </Flex>, headerSlot)}
+          </Flex>, headerSlot))
+    : null;
+  /** The Smart report dialog the Reports menu opens. */
+  const smartReport = (<SmartReportModal
+          open={showSmartReport}
+          onClose={() => setShowSmartReport(false)}
+          ctx={{
+            tenant: tenant ?? "(unknown)",
+            date: date ?? "",
+            overallCoverage: totalScore,
+            overallUtilization: overallUtilizationLevel,
+            capabilities,
+            finopsNote: finops ? finopsNote(finops) : undefined,
+            // The same lens and computed facts as the Overall score page, so the
+            // report ranks by the gains the app computed instead of its own.
+            lens: LENS.overall,
+            pageNote: overallFacts(capabilities, totalScore, adoption, appName),
+          }}
+          loadFinopsNote={loadFinopsNote}
+          dk={dk}
+        />);
+  if (headerOnly) return <>{headerActions}{smartReport}</>;
+
+  return (
+    <Flex flexDirection="column" ref={rootRef} style={{ height: "100%",
+      overflow: "auto", boxSizing: "border-box", padding: "0",
+      fontFamily: "inherit",
+      background: bg, color: text, transition: "background 0.4s, color 0.4s" }}>
+      {/* A run in flight: say so. Without this the page stayed blank until the
+          last query returned, on first open and on every Refresh. */}
+      {(loading || preparing || waitingScore) && (
+        <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
+          <Flex flexDirection="column" gap={8} style={{ width: "min(420px, 100%)" }}>
+            <PulseLoader value={loading ? coverageData.progress : undefined} />
+          </Flex>
+        </Flex>
+      )}
+
+      {/* No start page: the app opens on the assessment. This only shows if a run produced nothing. */}
+      {!loading && !preparing && capabilities.length === 0 && (
+        <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
+          <EmptyState>
+            <EmptyState.VisualPreset context="chart" type="something-missing" />
+            <EmptyState.Title>No assessment results</EmptyState.Title>
+            <EmptyState.Actions><Button variant="accent" color="primary" onClick={() => startFiltered()}>Run assessment</Button></EmptyState.Actions>
+          </EmptyState>
+        </Flex>
+      )}
+
+      {/* Nothing could be measured: say so instead of drawing a 0% assessment. */}
+      {!loading && nothingMeasured && (
+        <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
+          <EmptyState>
+            <EmptyState.VisualPreset context="generic" type="something-wrong" />
+            <EmptyState.Title>The assessment could not read this environment</EmptyState.Title>
+            <EmptyState.Details>None of the queries returned. This usually means the connection to the environment was lost or the session expired.</EmptyState.Details>
+            <EmptyState.Actions><Button variant="accent" color="primary" onClick={refresh}>Try again</Button></EmptyState.Actions>
+          </EmptyState>
+        </Flex>
+      )}
+
+      {!loading && !waitingScore && capabilities.length > 0 && !nothingMeasured && (
+        <>
+          {/* Page actions live in the AppHeader (portal) — one bar for the whole app. */}
+          {/* Intelligence layer: predefined questions, short answers, hand-off to Assist */}
+          {/* Refresh and Reports live in the app header, next to the pages. Only these two:
+              with the environment text there too, the header ran out of room and
+              folded the navigation into the overflow button. */}
+          {headerActions}
           <IntelligenceBar
             key={viewMode === "recommendations" ? "overall" : "overview"}
             questions={viewMode === "recommendations" ? QUESTIONS.overall : QUESTIONS.overview}
@@ -410,11 +441,8 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                 </Text>
               )}
               <DpsCostBadge
-                note={fidelity === "full"
-                  ? "Full fidelity: you are signed in as a Dynatrace user, so every criterion reads its whole window, unsampled and without a scan ceiling. Queries by Dynatrace users are not billed to the customer."
-                  : COST_MODE_TEXT}
+                note={COST_MODE_TEXT}
                 stats={stats}
-                billed={fidelity !== "full"}
                 partialCount={capabilities.reduce((n, c) => n + c.criteriaResults.filter(r => r.partial).length, 0)}
                 liveScannedBytes={coverageData.liveScannedBytes}
                 lastRunMeta={coverageData.lastRunMeta}
@@ -432,7 +460,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
               tenants, so this insertion is zero-impact for the existing UX. */}
           {scale && (
             <Flex style={{ padding: "0 16px", marginTop: 8, flexShrink: 0 }}>
-              {fidelity !== "full" && <ScaleTierBanner scale={scale} />}
+              <ScaleTierBanner scale={scale} />
             </Flex>
           )}
           {/* Trace Proxy Mode banner — renders only after the user continued
@@ -483,7 +511,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                   <Flex alignItems="baseline" gap={8}>
                     <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>Overall score</Text>
                     <Link onClick={() => navigate("/summary")}><strong style={{ fontVariantNumeric: "tabular-nums" }}>{totalScore}%</strong></Link>
-                    <Text textStyle="small" style={{ color: scoreBand(totalScore).token }}>{scoreBand(totalScore).label}</Text>
+                    <Text textStyle="small" style={{ color: scoreBand(totalScore).text }}>{scoreBand(totalScore).label}</Text>
                   </Flex>
                   {capabilities.map((c, i) => ({ c, i })).sort((a, b) => a.c.score - b.c.score).map(({ c, i }) => (
                     <MeterBarChart key={c.name} value={Math.floor(c.score)} min={0} max={100} color={scoreBand(c.score).token} size="size8" formatter={(v: number) => `${Math.floor(v)}%`}>
@@ -541,28 +569,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
         </Flex>
       )}
 
-      {/* Smart report via Dynatrace Assist. Reached from the Reports menu.
-          No Davis call happens until the user submits a request. */}
-      {(
-        <SmartReportModal
-          open={showSmartReport}
-          onClose={() => setShowSmartReport(false)}
-          ctx={{
-            tenant: tenant ?? "(unknown)",
-            date: date ?? "",
-            overallCoverage: totalScore,
-            overallUtilization: overallUtilizationLevel,
-            capabilities,
-            finopsNote: finops ? finopsNote(finops) : undefined,
-            // The same lens and computed facts as the Overall score page, so the
-            // report ranks by the gains the app computed instead of its own.
-            lens: LENS.overall,
-            pageNote: overallFacts(capabilities, totalScore, adoption, appName),
-          }}
-          loadFinopsNote={loadFinopsNote}
-          dk={dk}
-        />
-      )}
+      {smartReport}
 
     </Flex>
   );
@@ -574,6 +581,20 @@ const TELEMETRY_FACT: Record<TelemetrySource, string> = {
   mixed: "Hosts, Kubernetes, processes and logs are counted on both sides, a host seen by both once; criteria that only exist with OneAgent measure the OneAgent part.",
   otel: "Hosts, Kubernetes and logs are read from OpenTelemetry metrics and attributes; criteria that only exist with OneAgent are left out of the score.",
 };
+
+/** What the probes found in this environment; decides how the catalog is adapted. */
+interface RunEnv { noEntities: boolean; logMetric: boolean; source: TelemetrySource }
+
+/** What the first open of the session detected. The Overview unmounts when the
+ *  user opens another page, and the probes run only once per session, so the
+ *  page reads its run modes back from here instead of starting from defaults:
+ *  otherwise the chip disappears and a Refresh runs the default catalog. */
+const session: {
+  env: RunEnv;
+  traceProxy: boolean;
+  modelInfo: SmartscapeModelInfo | null;
+  otelInfo: OtelModeInfo | null;
+} = { env: { noEntities: false, logMetric: false, source: "oneagent" }, traceProxy: false, modelInfo: null, otelInfo: null };
 
 /** The telemetry strategy, as a neutral chip: a fact about the estate, not a judgement.
  *  Shares on screen; counts and what the strategy changes in the tooltip. */

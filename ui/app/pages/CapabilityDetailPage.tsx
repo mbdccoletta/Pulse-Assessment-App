@@ -470,8 +470,8 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
         <Flex alignItems="center" gap={12} flexWrap="wrap">
           <Flex style={{ display: "inline-flex", width: 12, height: 12, borderRadius: "50%", background: cap.color, flexShrink: 0 }} />
           <Heading level={2}>{cap.name}</Heading>
-          <Text style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: band.token }}>{cap.score}%</Text>
-          <Text textStyle="base-emphasized" style={{ color: band.token }}>{band.label}</Text>
+          <Text style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: band.text }}>{cap.score}%</Text>
+          <Text textStyle="base-emphasized" style={{ color: band.text }}>{band.label}</Text>
           <VerdictChip id={dx.id} label={dx.label} meaning={dx.meaning} />
         </Flex>
 

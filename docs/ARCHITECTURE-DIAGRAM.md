@@ -29,7 +29,7 @@ flowchart TB
     end
 
     subgraph Engine["Catalog and scoring"]
-        Q["queries.ts<br/>11 capabilities, 143 criteria"]
+        Q["queries.ts<br/>11 capabilities, 138 criteria"]
         ADAPT["log-metric.ts<br/>trace-proxy.ts<br/>entity-model.ts"]
         SCALE["scale-tier.ts"]
         CACHE["perf/queryCache.ts"]

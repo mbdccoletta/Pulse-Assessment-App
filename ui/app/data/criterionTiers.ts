@@ -33,7 +33,6 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   i15: "excellence",     // Cloud region diversity
   i16: "excellence",     // Cloud AZ diversity
   i17: "bestPractice",   // Cloud account monitoring
-  i18: "excellence",     // Cloud span enrichment
   i19: "bestPractice",   // K8s node monitoring depth
   i20: "bestPractice",   // Cloud namespace metric coverage
   i21: "bestPractice",   // Container restart monitoring
@@ -42,16 +41,13 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   i24: "excellence",     // Problems with automated response
 
   // ─── 2. APPLICATION OBSERVABILITY ───
-  a1:  "foundation",     // Service tracing coverage
-  a3:  "foundation",     // Root span coverage
   a5:  "foundation",     // Response time coverage
   a2:  "bestPractice",   // Service method coverage
   a6:  "bestPractice",   // Failure tracking coverage
   a7:  "bestPractice",   // Throughput coverage
-  a4:  "excellence",     // OTel instrumentation coverage
   a8:  "excellence",     // Database span coverage
   a9:  "excellence",     // Messaging span coverage
-  a10: "excellence",     // Multi-service trace depth
+  a17: "excellence",     // Services calling other services
   a11: "bestPractice",   // Service-process mapping
   a12: "bestPractice",     // Service tagging utilization
   a13: "excellence",     // Database call depth
@@ -110,7 +106,6 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   ai5: "excellence",     // Prompt/response tracing coverage
   ai7: "excellence",     // Guardrail coverage
   ai8: "excellence",     // Cost tracking coverage
-  ai9: "excellence",     // AI tracing service breadth
   ai10: "bestPractice",  // Agent tool-call tracing
   ai18: "excellence",    // dtctl driven by AI agents
   ai12: "excellence",    // Agentic AI in use

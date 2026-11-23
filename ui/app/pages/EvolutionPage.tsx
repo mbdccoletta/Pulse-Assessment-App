@@ -15,7 +15,8 @@ import Colors from "@dynatrace/strato-design-tokens/colors";
 import Typography from "@dynatrace/strato-design-tokens/typography";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { Heading, Link, Text } from "@dynatrace/strato-components/typography";
-import { Accordion, Chip, EmptyState, MessageContainer, ProgressCircle } from "@dynatrace/strato-components/content";
+import { Accordion, Chip, EmptyState } from "@dynatrace/strato-components/content";
+import { PulseLoader } from "../components/PulseLoader";
 import { DataTable } from "@dynatrace/strato-components/tables";
 import { Flex, Grid } from "@dynatrace/strato-components/layouts";
 import { ToggleButtonGroup } from "@dynatrace/strato-components/forms";
@@ -61,6 +62,10 @@ const reading = (r: SnapRow | undefined) => {
 
 const avg = (xs: number[]) => (xs.length ? Math.floor(xs.reduce((a, b) => a + b, 0) / xs.length) : 0);
 const stateOf = (r?: SnapRow): State => (!r || r.notAssessed || r.error ? "na" : r.points > 0 ? "pass" : "fail");
+/** A capability's colour from the current catalog: saved runs keep the colour
+ *  of the version that wrote them, which may have since changed. */
+const CAP_COLORS = new Map(CAPABILITIES.map(c => [c.name, c.color]));
+const catalogColor = (name: string, saved?: string) => CAP_COLORS.get(name) ?? saved ?? "";
 const cleanName = (label: string) => label.replace(/\s*\(%\)\s*$/, "");
 const fmtRun = (iso: string) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const fmtValue = (r: SnapRow | undefined) => (stateOf(r) === "na" ? "—" : IS_RATIO[r!.id] ? `${Math.floor(r!.value * 10) / 10}%` : r!.value.toLocaleString());
@@ -156,7 +161,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
     if (!to || !from) return [];
     return to.capabilities.map(c => {
       const prev = from.capabilities.find(p => p.name === c.name);
-      return { name: c.name, color: c.color, to: c, from: prev, delta: prev ? c.score - prev.score : null };
+      return { name: c.name, color: catalogColor(c.name, c.color), to: c, from: prev, delta: prev ? c.score - prev.score : null };
     }).sort((a, b) => (a.delta ?? 0) - (b.delta ?? 0) || a.to.score - b.to.score);
   }, [to, from]);
 
@@ -182,7 +187,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
       const parts = (["coverage", "utilization", "adoption"] as const).map(k => ({ key: k, from: p?.[k] ?? null, to: c[k] ?? null }));
       const counted = parts.filter(x => x.to != null).length || 1;
       return {
-        name: c.name, color: c.color, isNew: !p,
+        name: c.name, color: catalogColor(c.name, c.color), isNew: !p,
         from: p?.score ?? null, to: c.score, delta: p ? c.score - p.score : null,
         // Each part is one equal share of the score.
         parts: parts.map(x => ({ ...x, delta: x.from != null && x.to != null ? x.to - x.from : null, points: x.from != null && x.to != null ? (x.to - x.from) / counted : null })),
@@ -249,7 +254,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
       const known = parts.filter(p => p.value != null);
       const lowest = known.length ? known.reduce((m, p) => ((p.value as number) < (m.value as number) ? p : m)).key : null;
       return {
-        name: c.name, color: c.color, score: c.score, parts, lowest, adoptionRate: c.adoptionRate ?? null,
+        name: c.name, color: catalogColor(c.name, c.color), score: c.score, parts, lowest, adoptionRate: c.adoptionRate ?? null,
         unmet: c.criteriaResults.filter(r => stateOf(r) === "fail"),
         notAssessed: c.criteriaResults.filter(r => stateOf(r) === "na"),
       };
@@ -287,7 +292,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
   }), [runs, cap]);
 
   if ((loading || assessing) && runs.length === 0) {
-    return <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}><ProgressCircle aria-label="Loading saved runs" /></Flex>;
+    return <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}><PulseLoader label={assessing ? "Assessing the environment" : "Loading saved runs"} /></Flex>;
   }
   if (!to || !from) {
     return (
@@ -306,7 +311,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
   // appear with the second run.
   const solo = runs.length === 1;
   const band = scoreBand(to.totalScore);
-  const capColor = cap ? (to.capabilities.find(c => c.name === cap)?.color ?? Colors.Charts.Categorical.Color01.Default) : Colors.Charts.Categorical.Color01.Default;
+  const capColor = cap ? (catalogColor(cap) || Colors.Charts.Categorical.Color01.Default) : Colors.Charts.Categorical.Color01.Default;
   const clearCap = cap ? <Chip color="primary" size="condensed">{cap}<Chip.DeleteButton aria-label={`Clear the ${cap} filter`} onClick={() => setCap(null)} /></Chip> : null;
   return (
     <Flex flexDirection="column" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
@@ -326,7 +331,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
       <Flex flexDirection="column" gap={16} style={{ padding: "16px 20px 32px" }}>
         <Flex alignItems="center" gap={12} flexWrap="wrap">
           <Heading level={2}>Evolution</Heading>
-          <Text style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: band.token }}>{to.totalScore}%</Text>
+          <Text style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: band.text }}>{to.totalScore}%</Text>
           {solo ? <Chip size="condensed" color="primary">First run</Chip> : <Delta d={to.totalScore - from.totalScore} size={14} />}
           <Flex alignItems="center" gap={16} flexWrap="wrap" style={{ marginLeft: "auto" }}>
             <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{solo ? fmtRun(to.timestamp) : `${fmtRun(from.timestamp)} → ${fmtRun(to.timestamp)}`}</Text>
@@ -367,7 +372,7 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
                         <Flex style={{ display: "inline-flex", width: 8, height: 8, borderRadius: "50%", background: c.color, flexShrink: 0 }} />
                         <Text textStyle="base-emphasized">{c.name}</Text>
                       </Flex>
-                      <Text textStyle="base-emphasized" style={{ fontFamily: MONO, color: scoreBand(c.score).token, textAlign: "right" }}>{c.score}%</Text>
+                      <Text textStyle="base-emphasized" style={{ fontFamily: MONO, color: scoreBand(c.score).text, textAlign: "right" }}>{c.score}%</Text>
                     </Grid>
                   </Accordion.SectionLabel>
                   <Accordion.SectionContent>
@@ -411,19 +416,18 @@ export const EvolutionPage: React.FC<Props> = ({ snapshots, loading = false, ass
           ) : (
             <Flex flexDirection="column" gap={12}>
               {(causes.versions || causes.telemetry || causes.added.length > 0 || causes.removed.length > 0) && (
-                <MessageContainer variant="primary">
-                  <MessageContainer.Prefix />
-                  <MessageContainer.Title>What is measured changed between these runs</MessageContainer.Title>
-                  <MessageContainer.Description>
-                    {[
-                      causes.versions ? `App version ${causes.versions[0]} to ${causes.versions[1]}.` : "",
-                      causes.telemetry ? `Telemetry strategy ${causes.telemetry[0]} to ${causes.telemetry[1]}.` : "",
-                      causes.added.length ? `Capabilities added: ${causes.added.join(", ")}.` : "",
-                      causes.removed.length ? `Capabilities removed: ${causes.removed.join(", ")}.` : "",
-                      "Part of the difference comes from the measurement itself, not from the environment.",
-                    ].filter(Boolean).join(" ")}
-                  </MessageContainer.Description>
-                </MessageContainer>
+                <Flex gap={8} flexWrap="wrap">
+                  {([
+                    causes.versions ? [`Version ${causes.versions[0]} → ${causes.versions[1]}`, `The app version changed between these runs (${causes.versions[0]} to ${causes.versions[1]}). Part of the difference comes from what is measured, not from the environment.`] : null,
+                    causes.telemetry ? [`Telemetry ${causes.telemetry[0]} → ${causes.telemetry[1]}`, `The telemetry strategy changed between these runs (${causes.telemetry[0]} to ${causes.telemetry[1]}), so hosts, Kubernetes and logs are counted on a different population.`] : null,
+                    causes.added.length ? [`Capabilities added · ${causes.added.length}`, `Added: ${causes.added.join(", ")}. They have no earlier reading to compare with.`] : null,
+                    causes.removed.length ? [`Capabilities removed · ${causes.removed.length}`, `Removed: ${causes.removed.join(", ")}. They no longer count in the overall score.`] : null,
+                  ].filter(Boolean) as [string, string][]).map(([label, tip]) => (
+                    <Tooltip key={label} text={tip}>
+                      <Chip size="condensed" style={{ maxWidth: "none" }}>{label}</Chip>
+                    </Tooltip>
+                  ))}
+                </Flex>
               )}
               <Accordion multiple defaultExpanded={causes.caps.slice(0, 2).map(c => c.name)}>
                 {causes.caps.map(c => (

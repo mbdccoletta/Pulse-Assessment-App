@@ -47,9 +47,10 @@ const TIER_ORDER: ScaleTier[] = ['exact', 'large', 'xlarge'];
  *  banner promised "~370 GB to ~41 GB"; a real tenant scanned 453 GB with
  *  the mode on, so the text no longer quotes a saving it cannot guarantee. */
 export const COST_MODE_TEXT =
-  'Ratio checks on high-volume logs, spans and events read a 1-in-1000 sample; ' +
-  'breadth checks read a shorter window; AI-span ratios read 4 hours unsampled. ' +
-  'Values marked as ratios are close estimates, not exact counts.';
+  'Criteria read Dynatrace metrics and Smartscape wherever they answer the question. ' +
+  'Ratio checks on logs and events read a 1-in-1000 sample; breadth checks read 15 minutes; ' +
+  'AI checks read 4 hours unsampled; criteria over the same records share one read. ' +
+  'Every read stops at 50 GB, and a value it cuts shows with ≈.';
 
 export const CostModeNote: React.FC<{ className?: string }> = ({ className }) => (
   <Text

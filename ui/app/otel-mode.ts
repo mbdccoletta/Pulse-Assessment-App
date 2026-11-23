@@ -168,6 +168,7 @@ export const OTEL_EXCLUSION_REASONS: Record<string, string> = {
   f2: "Carbon measurement per host is computed from OneAgent host data.",
   f5: "Carbon measurement per namespace is computed from OneAgent host data.",
   f6: "Host utilization for cost is computed from OneAgent host data.",
+  f8: "Energy per host is computed from OneAgent host data.",
 };
 
 export interface OtelModeInfo {

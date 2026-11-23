@@ -144,8 +144,8 @@ export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, on
             <circle cx={ax} cy={ay} r={2.5} fill={s.c.color} />
             <text x={lx} y={ly + lift} textAnchor={anchor} fontSize={13} fontWeight={700} fill={ink}>
               {s.c.name}
-              <tspan x={lx} dy="1.35em" fontSize={13} fontWeight={700} fill={band.token} style={{ fontVariantNumeric: "tabular-nums" }}>{s.c.score}%</tspan>
-              <tspan dx={6} fontSize={11} fontWeight={600} fill={band.token}>{band.label}</tspan>
+              <tspan x={lx} dy="1.35em" fontSize={13} fontWeight={700} fill={band.text} style={{ fontVariantNumeric: "tabular-nums" }}>{s.c.score}%</tspan>
+              <tspan dx={6} fontSize={11} fontWeight={600} fill={band.text}>{band.label}</tspan>
             </text>
           </g>
         );
@@ -162,15 +162,15 @@ export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, on
         onKeyDown={e => { if (onOpenOverall && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpenOverall(); } }} />
       {hover == null ? (
         <g style={{ pointerEvents: "none" }}>
-          <text textAnchor="middle" y={hole * 0.08} fontSize={hole * 0.52} fontWeight={700} fill={total.token} style={{ fontVariantNumeric: "tabular-nums" }}>{totalScore}%</text>
-          <text textAnchor="middle" y={hole * 0.42} fontSize={11} fontWeight={600} fill={total.token}>{total.label}</text>
+          <text textAnchor="middle" y={hole * 0.08} fontSize={hole * 0.52} fontWeight={700} fill={total.text} style={{ fontVariantNumeric: "tabular-nums" }}>{totalScore}%</text>
+          <text textAnchor="middle" y={hole * 0.42} fontSize={11} fontWeight={600} fill={total.text}>{total.label}</text>
           <text textAnchor="middle" y={-hole * 0.5} fontSize={10} fill={sub} letterSpacing={1.2}>OVERALL SCORE</text>
         </g>
       ) : (
         <g style={{ pointerEvents: "none" }}>
           <text textAnchor="middle" y={-hole * 0.56} fontSize={12} fontWeight={700} fill={ink}>{SHORT[sectors[hover].c.name] ?? sectors[hover].c.name}</text>
           {/* the capability's own score, in its band colour, above its parts */}
-          <text textAnchor="middle" y={-hole * 0.24} fontSize={hole * 0.26} fontWeight={700} fill={scoreBand(sectors[hover].c.score).token} style={{ fontVariantNumeric: "tabular-nums" }}>{sectors[hover].c.score}%</text>
+          <text textAnchor="middle" y={-hole * 0.24} fontSize={hole * 0.26} fontWeight={700} fill={scoreBand(sectors[hover].c.score).text} style={{ fontVariantNumeric: "tabular-nums" }}>{sectors[hover].c.score}%</text>
           {/* label on the left edge, value on the right edge of the same row: they cannot collide */}
           {sectors[hover].bars.map((b, k) => (
             <g key={b.key} transform={`translate(0, ${hole * 0.04 + k * hole * 0.24})`}>
@@ -197,7 +197,6 @@ export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, on
             </g>
           );
         })}
-        <text y={PARTS.length * 26 + 6} fontSize={11} fill={sub}>Rings at 25, 50, 75 and 100</text>
       </g>
     </svg>
   );

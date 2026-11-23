@@ -172,13 +172,6 @@ export const CAPABILITIES: CapabilityDef[] = [
         thresholds: [{ min: 80 }, { min: 40 }, { min: 1 }],
       },
       {
-        id: "i18", label: "Cloud span enrichment (%)",
-        description: "Percentage of services with cloud provider context in span data.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(cloud.provider) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
-        queryB: "fetch dt.entity.service | summarize count()",
-        thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
-      },
-      {
         id: "i19", label: "K8s node monitoring depth (%)",
         description: "Share of Kubernetes nodes that report container resource metrics — validates node-level compute monitoring.",
         query: "timeseries val=avg(dt.kubernetes.container.cpu_usage), by:{k8s.node.name} | fields k8s.node.name | dedup k8s.node.name | summarize c=count()",
@@ -245,32 +238,11 @@ export const CAPABILITIES: CapabilityDef[] = [
     color: "#8B5CF6",
     criteria: [
       {
-        id: "a1", label: "Service tracing coverage (%)",
-        description: "Percentage of detected services with active span data in the last 2h (OneAgent or OTel).",
-        query: "fetch spans, from:now()-2h | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
-        queryB: "fetch dt.entity.service | summarize count()",
-        thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
-      },
-      {
         id: "a2", label: "Service method coverage (%)",
         description: "Percentage of services with method-level tracing.",
         query: "fetch dt.entity.service_method | summarize count()",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 60 }, { min: 30 }, { min: 1 }],
-      },
-      {
-        id: "a3", label: "Root span coverage (%)",
-        description: "Percentage of services with root spans (incoming requests) in the last 2h.",
-        query: "fetch spans, from:now()-2h | filter request.is_root_span == true | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
-        queryB: "fetch dt.entity.service | summarize count()",
-        thresholds: [{ min: 70 }, { min: 40 }, { min: 1 }],
-      },
-      {
-        id: "a4", label: "OTel instrumentation coverage (%)",
-        description: "Percentage of services with OpenTelemetry spans — vendor-neutral instrumentation adoption.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(otel.scope.name) or isNotNull(telemetry.sdk.name) or isNotNull(telemetry.sdk.language) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
-        queryB: "fetch dt.entity.service | summarize count()",
-        thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
       {
         id: "a5", label: "Response time coverage (%)",
@@ -295,23 +267,26 @@ export const CAPABILITIES: CapabilityDef[] = [
       },
       {
         id: "a8", label: "Database span coverage (%)",
-        description: "Percentage of services with database operation spans.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(db.system) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
+        description: "Percentage of services that query a database, from the database metrics Dynatrace derives from their spans (dt.service.database.query.count).",
+        query: "timeseries v = sum(dt.service.database.query.count), by:{dt.smartscape.service} | summarize count = count()",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
         id: "a9", label: "Messaging span coverage (%)",
-        description: "Percentage of services with messaging spans (Kafka, RabbitMQ, SQS).",
-        query: "fetch spans, from:now()-2h | filter isNotNull(messaging.system) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
+        description: "Percentage of services that publish, receive or process messages (Kafka, RabbitMQ, SQS), from the messaging metrics Dynatrace derives from their spans. Serverless consumers that record a message as an invocation (for example an SQS-triggered Lambda function) are not counted.",
+        query: "timeseries v = sum(dt.service.messaging.process.count), by:{dt.smartscape.service} | fields k = dt.smartscape.service | append [timeseries v = sum(dt.service.messaging.publish.count), by:{dt.smartscape.service} | fields k = dt.smartscape.service] | append [timeseries v = sum(dt.service.messaging.receive.count), by:{dt.smartscape.service} | fields k = dt.smartscape.service] | dedup k | summarize count = count()",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 20 }, { min: 5 }, { min: 1 }],
       },
       {
-        id: "a10", label: "Multi-service trace depth (%)",
-        description: "Percentage of traces spanning 2+ services — validates distributed tracing depth.",
-        query: "fetch spans, from:now()-2h | summarize services = countDistinct(dt.service.name), by: {trace.id} | filter services > 1 | summarize count()",
-        queryB: "fetch spans, from:now()-2h | summarize countDistinct(trace.id)",
+        id: "a17", label: "Services calling other services (%)",
+        description: "Percentage of services that called at least one other service in the last 2h, from the call relations Smartscape observes in distributed traces.",
+        // Smartscape on both sides: "calls" is a dynamic edge observed in the
+        // window (2h by default), and the classic relationship field is
+        // truncated on large estates.
+        query: 'smartscapeEdges "calls" | filter source_type == "SERVICE" and target_type == "SERVICE" | summarize count = countDistinct(source_id)',
+        queryB: 'smartscapeNodes "SERVICE" | summarize count()',
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
@@ -323,9 +298,9 @@ export const CAPABILITIES: CapabilityDef[] = [
       },
       {
         id: "a13", label: "Database call depth (%)",
-        description: "Percentage of DB-using services that interact with 2+ database systems — validates deep database monitoring across the stack.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(db.system) | fieldsAdd _svc = coalesce(dt.entity.service, service.name) | summarize systems = countDistinct(db.system), by:{_svc} | filter systems >= 2 | summarize count()",
-        queryB: "fetch spans, from:now()-2h | filter isNotNull(db.system) | summarize count = countDistinct(coalesce(dt.entity.service, service.name))",
+        description: "Percentage of database-calling services that reach 2+ database systems, from the database metrics Dynatrace derives from their spans.",
+        query: "timeseries v = sum(dt.service.database.query.count), by:{dt.smartscape.service, db.system} | summarize systems = countDistinct(db.system), by:{dt.smartscape.service} | filter systems >= 2 | summarize count = count()",
+        queryB: "timeseries v = sum(dt.service.database.query.count), by:{dt.smartscape.service} | summarize count = count()",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
@@ -468,7 +443,7 @@ export const CAPABILITIES: CapabilityDef[] = [
   // ─── 4. LOG ANALYTICS ───
   {
     name: "Log Analytics",
-    color: "#F59E0B",
+    color: "#06B6D4",
     criteria: [
       {
         id: "l1", label: "Host log coverage (%)",
@@ -591,7 +566,7 @@ export const CAPABILITIES: CapabilityDef[] = [
   // ─── 5. APPLICATION SECURITY ───
   {
     name: "Application Security",
-    color: "#EF4444",
+    color: "#6366F1",
     criteria: [
       {
         id: "s13", label: "Runtime Vulnerability Analytics active",
@@ -648,7 +623,7 @@ export const CAPABILITIES: CapabilityDef[] = [
   // ─── 6. THREAT OBSERVABILITY ───
   {
     name: "Threat Observability",
-    color: "#F97316",
+    color: "#D946EF",
     criteria: [
       {
         id: "t4", label: "Detection findings",
@@ -684,7 +659,7 @@ export const CAPABILITIES: CapabilityDef[] = [
   // ─── 7. AI OBSERVABILITY ───
   {
     name: "AI/LLM Observability",
-    color: "#06B6D4",
+    color: "#0EA5E9",
     criteria: [
       {
         id: "ai1", label: "AI span service coverage (%)",
@@ -750,16 +725,6 @@ export const CAPABILITIES: CapabilityDef[] = [
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
       {
-        id: "ai9", label: "AI tracing service breadth (%)",
-        description: "Percentage of total spans that are AI-related.",
-        // Same count as the AI-span denominator of ai2–ai8, but its own string:
-        // this ratio is against ALL spans, so both sides stay sampled, while
-        // the AI-only ratios read unsampled (see isSparseSignal in scale-tier).
-        query: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize ai_spans = count()",
-        queryB: "fetch spans, from:now()-72h | summarize count()",
-        thresholds: [{ min: 5 }, { min: 1 }],
-      },
-      {
         id: "ai10", label: "Agent tool-call tracing",
         description: "Presence of agent tool executions in AI spans (gen_ai.operation.name = execute_tool) in the last 72h.",
         query: 'fetch spans, from:now()-72h | filter gen_ai.operation.name == "execute_tool" | summarize count()',
@@ -807,7 +772,7 @@ export const CAPABILITIES: CapabilityDef[] = [
   // ─── 8. BUSINESS OBSERVABILITY ───
   {
     name: "Business Observability",
-    color: "#10B981",
+    color: "#A855F7",
     criteria: [
       {
         id: "b1", label: "Service bizevent coverage (%)",
@@ -885,7 +850,7 @@ export const CAPABILITIES: CapabilityDef[] = [
   // ─── 9. SOFTWARE DELIVERY ───
   {
     name: "Software Delivery",
-    color: "#6366F1",
+    color: "#94A3B8",
     criteria: [
       {
         id: "sd1", label: "Service deployment coverage (%)",
@@ -1065,7 +1030,7 @@ export const CAPABILITIES: CapabilityDef[] = [
   },
   {
     name: "FinOps & Sustainability",
-    color: "#84CC16",
+    color: "#818CF8",
     criteria: [
       {
         id: "f1", label: "Cost and carbon calculation running",

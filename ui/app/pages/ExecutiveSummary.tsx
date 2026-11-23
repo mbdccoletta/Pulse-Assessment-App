@@ -128,8 +128,8 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
     <Flex flexDirection="column" gap={16} style={{ flex: 1, minWidth: 0, width: "100%", boxSizing: "border-box", alignSelf: "flex-start", padding: "16px 20px 32px" }}>
       <Flex alignItems="center" gap={12} flexWrap="wrap">
         <Heading level={2}>Overall score</Heading>
-        <Text style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: band.token }}>{totalScore}%</Text>
-        <Text textStyle="base-emphasized" style={{ color: band.token }}>{band.label}</Text>
+        <Text style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: band.text }}>{totalScore}%</Text>
+        <Text textStyle="base-emphasized" style={{ color: band.text }}>{band.label}</Text>
       </Flex>
 
       <Grid style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>

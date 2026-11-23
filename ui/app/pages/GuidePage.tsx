@@ -201,9 +201,9 @@ export const GuidePage: React.FC<{ coverageData: CoverageData }> = ({ coverageDa
             details" on the Overview shows how much data the run read.
           </P>
           <P>
-            When the signed-in user has a Dynatrace account, every query reads its full window with no scan ceiling. For
-            other users the app keeps the cost controls; a value read only in part, because Grail stopped at the scan
-            ceiling, shows with "≈" and its tooltip says so.
+            Criteria read Dynatrace metrics and Smartscape wherever they answer the question, at no Grail scan. The
+            remaining log and AI reads share one scan per family and stop at 50 GB; a value read only in part shows
+            with "≈" and its tooltip says so.
           </P>
         </Section>
 

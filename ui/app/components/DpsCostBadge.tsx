@@ -1,37 +1,14 @@
 // ui/app/components/DpsCostBadge.tsx
 //
-// Customer-facing DPS cost indicator. Renders in the toolbar next to the
-// existing "X records scanned" line so anyone running the assessment knows
-// at a glance what the run cost in Grail DPS — and what Scale Tier / 24h
-// cache saved them.
-//
-// Why customer-facing ────────────────────────────────────────────────────
-// At xLarge scale a single cold assessment can scan multi-TB and cost tens
-// to hundreds of USD. Hiding that number behind a developer flag means SEs
-// have to dig in a downloaded JSON or estimate it offline. A small badge
-// in the toolbar turns the cost into a normal product surface — same way
-// every cloud console shows "estimated bill" while you're configuring
-// resources.
-//
-// What it does NOT do ────────────────────────────────────────────────────
-// It does not bill the customer or change behaviour. It only renders the
-// numbers the perf instrumentation already collected (stats + lastRunMeta).
-// The displayed USD is an estimate at the Dynatrace published DPS pricing
-// (range $0.0065–$0.01 per GiB scanned, low/high tier of typical contracts).
-// We display the HIGH bound to set conservative expectations.
-//
-// Layout ────────────────────────────────────────────────────────────────
-//   Inline span:  "≈ $1.61 DPS · 173 GB scanned"  (always shown post-run)
-//   Trailing:     " · saved $1.61 via cache"      (when cache hit > 0)
-//   Title attr:   detailed breakdown + cadence projections (1×/day, 1×/week,
-//                 1×/month annualised) so a hover reveals the long-term
-//                 cost picture without taking screen real estate.
-//
-// Anyone running the app sees this. No dev / demo gate.
+// "Run details": what the last run read from Grail, shown on hover next to
+// the environment name. Volumes only. The GiB a query scans is the load on
+// Grail; what is billed is a different figure that depends on the
+// environment's licensing and on who runs the query (measured on a production
+// estate: ~1.25 million GiB scanned in 48 hours, ~229 GiB billed). A list
+// price times the scanned volume would read as a bill, so no money is shown.
 
 import React from 'react';
 import { Text } from '@dynatrace/strato-components/typography';
-import Colors from '@dynatrace/strato-design-tokens/colors';
 import { Tooltip } from './Tooltip';
 import type { QueryStats, CoverageData } from '../hooks/useCoverageData';
 
@@ -51,19 +28,9 @@ interface DpsCostBadgeProps {
   textSecColor: string;
   /** Extra disclosure appended to the tooltip (economy mode). */
   note?: string;
-  /** False when the run is not billed to the customer (Dynatrace user): the
-   *  dollar estimates and projections are left out, scan volume stays. */
-  billed?: boolean;
   /** Criteria whose read stopped at the scan ceiling on this run. */
   partialCount?: number;
 }
-
-/** Upper-bound DPS pricing in USD per GiB scanned. Matches what Dynatrace
- *  publishes for the most common tier of customer contracts; SEs running
- *  the badge on lower-tier contracts will see a CONSERVATIVE (high) number,
- *  which is the right error direction. */
-const USD_PER_GB_HIGH = 0.0035; // public list price per GiB scanned (logs, traces, events)
-const USD_PER_GB_LOW = 0.0035;
 
 /** Format a bytes count compactly: <1 GiB → MB, <1024 GiB → GB, else TB. */
 function fmtBytes(bytes: number): string {
@@ -74,15 +41,6 @@ function fmtBytes(bytes: number): string {
   return `${(gb / 1024).toFixed(1)} TB`;
 }
 
-/** Format a dollar amount with sensible precision: <$1 → 2 decimals,
- *  <$100 → 0 decimals, larger → rounded to nearest $10. */
-function fmtUsd(usd: number): string {
-  if (usd < 0.01) return '<$0.01';
-  if (usd < 1) return `$${usd.toFixed(2)}`;
-  if (usd < 100) return `$${usd.toFixed(0)}`;
-  return `$${Math.round(usd / 10) * 10}`;
-}
-
 export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
   stats,
   liveScannedBytes,
@@ -91,80 +49,38 @@ export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
   textColor,
   textSecColor,
   note,
-  billed = true,
   partialCount = 0,
 }) => {
-  // Mid-run: surface the live counter so the badge climbs as the assessment
-  // progresses. Post-run: use the canonical totals from `stats`.
+  void textColor;
   const scannedBytes = stats?.scannedBytes ?? liveScannedBytes ?? 0;
-  const gb = scannedBytes / (1024 ** 3);
-  const usdHigh = gb * USD_PER_GB_HIGH;
-  const usdLow = gb * USD_PER_GB_LOW;
-
   const savedBytes = lastRunMeta?.cachedBytesSaved ?? 0;
-  const savedGB = savedBytes / (1024 ** 3);
-  const savedUsdHigh = savedGB * USD_PER_GB_HIGH;
   const cacheHits = lastRunMeta?.cacheHits ?? 0;
   const cacheMisses = lastRunMeta?.cacheMisses ?? 0;
   const cacheTotal = cacheHits + cacheMisses;
+  const liveTag = loading && cacheTotal === 0 ? 'Running…' : '';
 
-  // Forward projection assumes the same per-run cost. If the cache is warm
-  // (cacheHits == cacheTotal), subsequent runs in the same day cost ~$0; we
-  // show the AVERAGE cost at typical cadences as a planning aid.
-  const isFullyCached = cacheTotal > 0 && cacheHits === cacheTotal;
-  // Per-run cost we'd pay if we ran NOW with a cold cache. Approximated by
-  // adding back what the cache saved.
-  const coldRunUsd = usdHigh + savedUsdHigh;
-  // Amortised yearly cost at common cadences:
-  //   weekly:  52 cold runs/year
-  //   daily:   1 cold run/day + 2 warm runs ≈ 1 cold/3 = 122/year
-  //   hourly:  1 cold/day + 23 warm ≈ 365/year (still 365 cold equivalents
-  //            without persistent cache)
-  const weeklyYear = coldRunUsd * 52;
-  const dailyYear = coldRunUsd * 122; // assumes 24h cache absorbs ~67% of daily re-runs
-  const dailyYearNoCache = coldRunUsd * 365;
-
-  // Tooltip text — multi-line via newlines, Strato Text renders it as-is in
-  // the title attribute.
-  const tooltip = (billed ? [
-    `Current run scanned ${fmtBytes(scannedBytes)} of Grail data.`,
-    `Cost estimate at standard DPS pricing: ${fmtUsd(usdLow)}–${fmtUsd(usdHigh)} per run.`,
-    '',
+  const lines = [
+    ...(stats
+      ? [
+          `${stats.succeeded} of ${stats.total} queries ran.${stats.failed > 0 ? ` ${stats.failed} failed.` : ''}`,
+          partialCount > 0
+            ? `${partialCount} ${partialCount === 1 ? 'reading' : 'readings'} stopped at the 50 GB scan ceiling and show with ≈.`
+            : 'Every reading is complete.',
+          '',
+        ]
+      : []),
+    `Read from Grail: ${fmtBytes(scannedBytes)}${stats ? ` (${stats.scannedRecords.toLocaleString()} records)` : ''}.`,
     cacheTotal > 0
-      ? `Cache: ${cacheHits}/${cacheTotal} queries served from the 24h Document Store cache.${savedBytes > 0 ? ` Saved ${fmtBytes(savedBytes)} (~${fmtUsd(savedUsdHigh)}) on this run.` : ''}`
-      : 'Cache: not active on this run (first run of the day or force-refresh).',
+      ? `Cache: ${cacheHits} of ${cacheTotal} queries served from the 24h cache${savedBytes > 0 ? `, ${fmtBytes(savedBytes)} not read again` : ''}.`
+      : 'Cache: not used on this run (first run of the day or Refresh).',
     '',
-    'Annual cost projection at this scale (assuming similar runs):',
-    `  • Weekly:  ${fmtUsd(weeklyYear)} / year`,
-    `  • Daily (with cache):  ${fmtUsd(dailyYear)} / year`,
-    `  • Daily (without cache):  ${fmtUsd(dailyYearNoCache)} / year`,
-    '',
-    'Estimates at the public list price of US$ 0.0035 per GiB scanned. Contracts may differ.',
-  ] : [
-    `Current run scanned ${fmtBytes(scannedBytes)} of Grail data.`,
-    cacheTotal > 0
-      ? `Cache: ${cacheHits}/${cacheTotal} queries served from the 24h Document Store cache.`
-      : 'Cache: not active on this run (first run of the day or force-refresh).',
-  ]).join('\n');
-
-  // Loading state: we deliberately keep the badge visible so the operator
-  // can watch the cost climb during a long xLarge run.
-  const liveTag = loading && cacheTotal === 0 ? ' (running…)' : '';
-
-  const runLines = stats
-    ? [
-        `${stats.succeeded} of ${stats.total} queries ran.${stats.failed > 0 ? ` ${stats.failed} failed.` : ''}`,
-        `${stats.scannedRecords.toLocaleString()} records scanned.`,
-        partialCount > 0
-          ? `${partialCount} ${partialCount === 1 ? 'reading' : 'readings'} stopped at the scan ceiling and show with ≈.`
-          : 'Every reading is complete.',
-        '',
-      ]
-    : [];
-  const full = [...runLines, tooltip, ...(note ? ['', note] : [])].join('\n') + (liveTag ? `\n${liveTag.trim()}` : '');
+    'Volume read is the load on Grail. What is billed depends on the environment\'s licensing.',
+    ...(note ? ['', note] : []),
+    ...(liveTag ? ['', liveTag] : []),
+  ];
 
   return (
-    <Tooltip text={full} position="bottom">
+    <Tooltip text={lines.join('\n')} position="bottom">
       <Text style={{ marginLeft: 8, fontSize: 12, color: textSecColor, borderBottom: `1px dotted ${textSecColor}`, cursor: 'help' }}>
         Run details
       </Text>

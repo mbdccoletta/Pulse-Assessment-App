@@ -4,6 +4,36 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.13] — 2026-11-22
+
+### Changed
+- Metrics first. Database, messaging and database-depth coverage (a8, a9, a13) read the service metrics Dynatrace derives from spans (`dt.service.database.query.count`, `dt.service.messaging.*`) instead of scanning spans. Checked service by service against the span reading on a ~20,000-host estate: 98–99.5% of the same services, no Grail scan.
+- "Multi-service trace depth" (a10, share of traces crossing services) is replaced by "Services calling other services" (a17), read from the call relations Smartscape observes in traces over the last 2 hours. A new id, because the question changed; free to read.
+- One query shape for every user. The per-user full-fidelity mode of 3.0.12 is removed: a Dynatrace user and a customer user run the same windows, sampling and 50 GB ceiling, so a number never depends on who opened the app. A reading the ceiling cuts is marked ≈, as before.
+- Criteria that read the same records share one Grail scan: the log breadth criteria (hosts, services, sources, levels, namespaces, services with errors, cloud hosts, and their OpenTelemetry forms) and the AI span criteria (services, providers, tokens, models, agents, content, errors, guardrails). Each field is the same number its own query returns; each criterion keeps its DQL in reports and its entry in the 24h cache.
+- Measured on a lab tenant ingesting about 18 million log records a minute: a fresh run scans 74 GiB, against about 356 GiB in 3.0.12.
+- Status colours follow the Dynatrace platform: green for Good and Excellent, amber for Moderate, red for Low and Critical, from the platform's status tokens (two bands had used series colours). Numbers and labels use the status text tokens, which stay legible on the dark theme; bars and rings use the chart status tokens. The lowest band, 0–19%, is named Critical instead of "N/A", which read as "not applicable".
+- Capability colours no longer use red, amber or green, which mean status: Log Analytics, Application Security, Threat Observability, AI/LLM Observability, Business Observability, Software Delivery and FinOps & Sustainability moved to blue, violet, pink and cyan tones.
+- Refresh and Reports are in the header on every page, not only on the Overview and Overall score.
+- The loading state is a pulse running along an electrocardiogram trace, with the share of queries done; it stays still when the system asks for reduced motion.
+- Run details shows what the run read from Grail (volume, records, cache) instead of a list-price dollar estimate: the volume read is the load on Grail, and what is billed depends on the environment's licensing.
+- A read shared by several criteria gets the scan ceiling of all of them (50 GB each), so sharing never cuts a reading that would have been complete on its own.
+- The radar no longer prints "Rings at 25, 50, 75 and 100".
+- Evolution names a change in what is measured as chips (app version, telemetry strategy, capabilities added or removed) with the explanation in their tooltip, instead of a paragraph on screen. Capability colours there follow the current catalog, not the colour a saved run recorded.
+
+### Removed
+- "Service tracing coverage" (a1) and "Root span coverage" (a3): read from metrics they are the same number as "Throughput coverage" (a7), measured 99.96% the same services; one fact, one number.
+- "OTel instrumentation coverage" (a4): it scored the share of services using OpenTelemetry, which judges the customer's choice of source. The assessment is source-agnostic: it judges whether data arrives and is put to use.
+- "AI tracing service breadth" (ai9): the share of all spans that are AI spans judges the mix of the data, not the use of the platform, and its denominator read every span of 72 hours. "AI span service coverage" (ai1) keeps measuring AI adoption.
+- "Cloud span enrichment" (i18): no source answers it per service without scanning spans; cloud context stays measured on hosts and logs (i13–i17).
+- 138 criteria.
+
+### Fixed
+- Ratio criteria were read unsampled over their whole window in cost mode. The rule that keeps the window of presence checks recognised them by the query ending in "summarize count()", which ratios such as Structured logging and Multi-source host logging share. Presence is now decided by the criterion (no denominator, or a constant 1), so ratios are sampled again.
+- Pure OpenTelemetry no longer marks down "Energy in productive use": like the other carbon criteria it is computed from OneAgent host data, so it leaves the score instead of reading 0%.
+- The Overview painted the score before app adoption, one of its three parts, had arrived, and the number changed a few seconds later (measured: 61% then 56%). The loader now stays until the score is final.
+- The telemetry chip, and the run modes behind it (OpenTelemetry, Trace Proxy, Smartscape), are kept when the user leaves the Overview and comes back. Before, the chip disappeared and a Refresh from that point ran the default OneAgent catalog.
+
 ## [3.0.12] — 2026-11-21
 
 ### Added

@@ -6,7 +6,7 @@ every section names the file it was checked against.
 
 Summary of the model:
 
-- 11 capabilities, 143 criteria (`ui/app/queries.ts`).
+- 11 capabilities, 138 criteria (`ui/app/queries.ts`).
 - Each criterion ends in one of three states: met, not met, not assessed.
 - Each capability has three parts on a 0–100 scale: coverage, utilization, adoption.
 - Capability score = floor of the average of the parts. Overall score = floor of the average of the capability scores.

@@ -86,11 +86,6 @@ export const ES: Record<string, CriterionText> = {
     description: "Porcentaje de logs enriquecidos con datos de nube que tienen metadatos de ID de cuenta — valida la gobernanza de nube multicuenta.",
     action: "Configure la integración de nube para incluir cloud.account.id para la gobernanza multicuenta.",
   },
-  i18: {
-    label: "Enriquecimiento de spans de nube",
-    description: "Porcentaje de servicios con contexto del proveedor de nube en los datos de spans.",
-    action: "Verifique que el contexto cloud.provider esté presente en los datos de spans mediante las integraciones con la plataforma de nube.",
-  },
   i19: {
     label: "Profundidad de monitoreo de nodos K8s",
     description: "Porcentaje de nodos de Kubernetes que reportan métricas de recursos de contenedor — valida el monitoreo del cómputo a nivel de nodo.",
@@ -131,25 +126,10 @@ export const ES: Record<string, CriterionText> = {
     description: "Personas que consultaron métricas y topología mediante Dynatrace Assist, un cliente MCP o la CLI dtctl en los últimos 30 días.",
     action: "Presente Dynatrace Assist al equipo responsable de estos datos y conecte su IDE o agente de programación mediante el servidor MCP de Dynatrace o dtctl.",
   },
-  a1: {
-    label: "Cobertura de trazado de servicios",
-    description: "Porcentaje de servicios detectados con datos de spans activos en las últimas 2 h (OneAgent u OTel).",
-    action: "Despliegue OneAgent en los servidores de aplicaciones o ingeste traces de OpenTelemetry para la detección de servicios.",
-  },
   a2: {
     label: "Cobertura de métodos de servicios",
     description: "Porcentaje de servicios con trazado a nivel de método.",
     action: "Active el trazado a nivel de método en la configuración del servicio. Use reglas de sensores para una visibilidad más profunda.",
-  },
-  a3: {
-    label: "Cobertura de spans raíz",
-    description: "Porcentaje de servicios con spans raíz (solicitudes entrantes) en las últimas 2 h.",
-    action: "Asegúrese de que se capturen los spans raíz (solicitudes entrantes). Revise la instrumentación de OneAgent u OTel en los puntos de entrada.",
-  },
-  a4: {
-    label: "Cobertura de instrumentación OTel",
-    description: "Porcentaje de servicios con spans de OpenTelemetry — adopción de instrumentación independiente del proveedor.",
-    action: "Instrumente las aplicaciones con el SDK de OpenTelemetry o configure OTel Collector para exportar a Dynatrace.",
   },
   a5: {
     label: "Cobertura de tiempo de respuesta",
@@ -168,18 +148,18 @@ export const ES: Record<string, CriterionText> = {
   },
   a8: {
     label: "Cobertura de spans de base de datos",
-    description: "Porcentaje de servicios con spans de operaciones de base de datos.",
+    description: "Porcentaje de servicios que consultan una base de datos, según las métricas de base de datos que Dynatrace deriva de los spans (dt.service.database.query.count).",
     action: "Asegúrese de que las llamadas a bases de datos se tracen. Active la captura de solicitudes de base de datos en la configuración del servicio.",
   },
   a9: {
     label: "Cobertura de spans de mensajería",
-    description: "Porcentaje de servicios con spans de mensajería (Kafka, RabbitMQ, SQS).",
+    description: "Porcentaje de servicios que publican, reciben o procesan mensajes (Kafka, RabbitMQ, SQS), según las métricas de mensajería que Dynatrace deriva de los spans. Los consumidores serverless que registran el mensaje como una invocación (por ejemplo una función Lambda activada por SQS) no se cuentan.",
     action: "Active el trazado de colas de mensajes para Kafka, RabbitMQ, SQS y otros sistemas de mensajería.",
   },
-  a10: {
-    label: "Profundidad de traces multiservicio",
-    description: "Porcentaje de traces que abarcan 2 o más servicios — valida la profundidad del trazado distribuido.",
-    action: "Asegúrese de que los traces distribuidos abarquen 2 o más servicios. Revise la correlación entre servicios y la propagación de contexto.",
+  a17: {
+    label: "Servicios que llaman a otros servicios",
+    description: "Porcentaje de servicios que llaman al menos a otro servicio, según las relaciones de llamada que Dynatrace construye a partir de los traces distribuidos.",
+    action: "Propague el contexto de traza entre los servicios (W3C traceparent) para que Dynatrace construya las relaciones de llamada entre ellos.",
   },
   a11: {
     label: "Mapeo servicio-proceso",
@@ -188,7 +168,7 @@ export const ES: Record<string, CriterionText> = {
   },
   a13: {
     label: "Profundidad de llamadas a bases de datos",
-    description: "Porcentaje de servicios que usan bases de datos e interactúan con 2 o más sistemas de base de datos — valida el monitoreo profundo de bases de datos en todo el stack.",
+    description: "Porcentaje de los servicios que llaman a bases de datos y alcanzan 2 o más sistemas de base de datos, según las métricas que Dynatrace deriva de los spans.",
     action: "Active el trazado profundo de llamadas a bases de datos en los servicios. Asegúrese de que los servicios conectados a varios sistemas de base de datos tengan registrados todos los atributos db.system.",
   },
   a14: {
@@ -460,11 +440,6 @@ export const ES: Record<string, CriterionText> = {
     label: "Cobertura de seguimiento de costos",
     description: "Porcentaje de spans de IA que incluyen el conteo de tokens y el modelo, que la aplicación AI Observability necesita para calcular el costo.",
     action: "Envíe el uso de tokens (gen_ai.usage.input_tokens, gen_ai.usage.output_tokens) y el modelo (gen_ai.request.model) en los spans de IA para que la aplicación AI Observability pueda calcular el costo.",
-  },
-  ai9: {
-    label: "Amplitud de servicios con trazado de IA",
-    description: "Porcentaje del total de spans que están relacionados con IA.",
-    action: "Amplíe la instrumentación de spans de IA para cubrir más servicios y lograr una mayor amplitud del trazado de IA.",
   },
   ai10: {
     label: "Trazado de llamadas a herramientas de agentes",

@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { passLine } from "../passLine";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { getEnvironmentUrl } from "@dynatrace-sdk/app-environment";
-import { getFidelity } from "../fidelity";
+import { sharedScanFor } from "../shared-scans";
 import { CAPABILITIES, type CapabilityDef, type Threshold } from "../queries";
 import { CRITERION_TIERS, type CriterionTier } from "../data/criterionTiers";
-import { scaleQuery, TIER_CONFIG, type ScaleTier } from "../scale-tier";
+import { scaleQuery, TIER_CONFIG, type ScaleTier, COST_SCAN_LIMIT_GB } from "../scale-tier";
 import { classifySource, type InFlightPerfEntry, type PerfReport } from "../perf/types";
 import { buildReport, downloadReport } from "../perf/buildReport";
 import { QueryCache } from "../perf/queryCache";
@@ -22,7 +22,7 @@ export interface UtilizationResult {
   level: 0 | 1 | 2 | 3;
   levelLabel: string;
   utilizationScore: number;  // 0-100 weighted score
-  utilizationBand: string;  // "N/A" | "Low" | "Moderate" | "Good" | "Excellent"
+  utilizationBand: string;  // "Critical" | "Low" | "Moderate" | "Good" | "Excellent"
 }
 
 export interface CapabilityResult {
@@ -195,7 +195,9 @@ function extractValue(result: any): number {
 
 interface DqlResult { value: number; scannedBytes: number; scannedRecords: number; scannedDataPoints: number;
   /** The read stopped at the scan ceiling: the value covers part of the window only. */
-  partial?: boolean; }
+  partial?: boolean;
+  /** First result record, for a shared scan whose members read different fields. */
+  record?: Record<string, unknown>; }
 
 /** Debug logging — disabled in production to avoid noisy output.
  *  Enable via browser console: localStorage.setItem("CCA_DEBUG","1") then reload. */
@@ -206,10 +208,6 @@ const warn = (...args: unknown[]) => { if (DEBUG) console.warn("[CCA]", ...args)
 const MAX_POLL_ATTEMPTS = 10;
 const POLL_INTERVAL_MS = 3000;
 const QUERY_TIMEOUT_MS = 30000;
-/** Full fidelity reads whole windows unsampled: on a large estate one query can
- *  run for minutes, so it waits up to 15 minutes before giving up. */
-const FULL_POLL_ATTEMPTS = 300;
-const FULL_QUERY_TIMEOUT_MS = 60000;
 const DEFAULT_TIMEFRAME_HOURS = 2;
 
 /** A criterion that reads configuration, not data. No Grail scan.
@@ -287,7 +285,7 @@ async function executeDql(query: string): Promise<DqlResult> {
     const response = await queryExecutionClient.queryExecute({
       body: {
         query,
-        requestTimeoutMilliseconds: getFidelity() === "full" ? FULL_QUERY_TIMEOUT_MS : QUERY_TIMEOUT_MS,
+        requestTimeoutMilliseconds: QUERY_TIMEOUT_MS,
         maxResultRecords: 1000,
         defaultTimeframeStart: new Date(Date.now() - DEFAULT_TIMEFRAME_HOURS * 60 * 60 * 1000).toISOString(),
         defaultTimeframeEnd: new Date().toISOString(),
@@ -302,7 +300,7 @@ async function executeDql(query: string): Promise<DqlResult> {
     // If query is still running, poll for result
     if (state === "RUNNING" && requestToken) {
       log(`⏳ Query still running, polling...`, query.substring(0, 60));
-      const attempts = getFidelity() === "full" ? FULL_POLL_ATTEMPTS : MAX_POLL_ATTEMPTS;
+      const attempts = MAX_POLL_ATTEMPTS;
       for (let attempt = 0; attempt < attempts; attempt++) {
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
         const poll = await queryExecutionClient.queryPoll({ requestToken });
@@ -349,7 +347,7 @@ async function executeDql(query: string): Promise<DqlResult> {
       log(`⚠ query returned 0 (state=${state}). Raw record[0]:`, JSON.stringify(res.records?.[0] ?? null), `| records.length=${res.records?.length ?? "N/A"}`);
     }
     log(`✓ ${query.substring(0, 80)} → ${value}`);
-    return { value, scannedBytes, scannedRecords, scannedDataPoints, ...(partial ? { partial: true } : {}) };
+    return { value, scannedBytes, scannedRecords, scannedDataPoints, ...(partial ? { partial: true } : {}), record: res.records?.[0] as Record<string, unknown> | undefined };
   } catch (err: any) {
     warn(`✗ ${query.substring(0, 80)} → ERROR:`, err?.message || err);
     return { value: -1, scannedBytes: 0, scannedRecords: 0, scannedDataPoints: 0 };
@@ -450,6 +448,41 @@ async function executeAllUnique(
   let cachedBytesSaved = 0;
   const perfEntries: InFlightPerfEntry[] = [];
 
+  // Shared scans (./shared-scans.ts): at full fidelity a family of criteria
+  // reading the same records runs one query. The first member to need it
+  // starts the scan and carries its bytes; the others wait for the same
+  // promise and read their field at no extra cost.
+  const sharedRuns = new Map<string, Promise<DqlResult>>();
+  // A shared read answers several criteria, each of which would have had its
+  // own 50 GB ceiling. It gets their sum, so sharing never makes a reading
+  // partial that would have been complete on its own.
+  const membersPerBase = new Map<string, number>();
+  for (const q of unique) {
+    const m = sharedScanFor(q);
+    if (m) membersPerBase.set(m.scan.base, (membersPerBase.get(m.scan.base) ?? 0) + 1);
+  }
+  async function readShared(base: string, field: string): Promise<{ result: DqlResult; executed: string }> {
+    const ceiling = COST_SCAN_LIMIT_GB * Math.max(1, membersPerBase.get(base) ?? 1);
+    const executed = scaleQuery(base, tier).replace(/scanLimitGBytes\s*:\s*\d+/gi, `scanLimitGBytes: ${ceiling}`);
+    let run = sharedRuns.get(base);
+    const first = !run;
+    if (!run) { run = executeDql(executed); sharedRuns.set(base, run); }
+    const r = await run;
+    const raw = r.record?.[field];
+    const n = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+    const value = r.value === -1 || !Number.isFinite(n) ? -1 : n;
+    return {
+      executed,
+      result: {
+        value,
+        scannedBytes: first ? r.scannedBytes : 0,
+        scannedRecords: first ? r.scannedRecords : 0,
+        scannedDataPoints: first ? r.scannedDataPoints : 0,
+        ...(r.partial ? { partial: true } : {}),
+      },
+    };
+  }
+
   async function next(): Promise<void> {
     while (idx < unique.length) {
       const originalQ = unique[idx++];
@@ -497,13 +530,20 @@ async function executeAllUnique(
       // scaleQuery is a no-op in 'exact' mode AND for any query that doesn't
       // target a hot streaming source (entity / metrics / problems pass through).
       // See ../scale-tier.ts for the transformation rules.
-      const executedQ = scaleQuery(originalQ, tier);
+      const shared = sharedScanFor(originalQ);
+      let executedQ = scaleQuery(originalQ, tier);
       const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       let result: DqlResult | null = null;
       let ok = true;
       let errorMessage: string | null = null;
       try {
-        result = await executeDql(executedQ);
+        if (shared) {
+          const s = await readShared(shared.scan.base, shared.field);
+          result = s.result;
+          executedQ = s.executed;
+        } else {
+          result = await executeDql(executedQ);
+        }
       } catch (err) {
         ok = false;
         errorMessage = err instanceof Error ? err.message : String(err);
@@ -532,7 +572,8 @@ async function executeAllUnique(
       // -1 sentinel (same reason).
       if (ok && result.value !== -1 && persistentCache && !isConfig) {
         persistentCache.set(
-          executedQ,
+          // The key the lookup above uses: per criterion, also when a shared scan answered it.
+          scaleQuery(originalQ, tier),
           tier,
           result.value,
           result.scannedBytes,
@@ -904,7 +945,7 @@ export function useCoverageData(
         const effB = fPct >= 0.8 ? bPct : 0;
         const effE = effB >= 0.6 ? ePct : 0;
         const utilizationScore = Math.floor((fPct * FOUNDATION_WEIGHT + effB * BEST_PRACTICE_WEIGHT + effE * EXCELLENCE_WEIGHT) + 1e-9);
-        const utilizationBand = utilizationScore >= 80 ? "Excellent" : utilizationScore >= 60 ? "Good" : utilizationScore >= 40 ? "Moderate" : utilizationScore >= 20 ? "Low" : "N/A";
+        const utilizationBand = utilizationScore >= 80 ? "Excellent" : utilizationScore >= 60 ? "Good" : utilizationScore >= 40 ? "Moderate" : utilizationScore >= 20 ? "Low" : "Critical";
 
         const utilization: UtilizationResult = {
           foundation: tierCounts.foundation,

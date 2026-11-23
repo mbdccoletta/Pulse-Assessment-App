@@ -63,7 +63,6 @@
 
 import { CAPABILITIES } from './queries';
 
-import { getFidelity } from './fidelity';
 
 export type ScaleTier = 'exact' | 'large' | 'xlarge';
 
@@ -153,8 +152,23 @@ function isHotSource(query: string): boolean {
  *  that happened 10 hours ago is invisible in a 4-hour window, and the check
  *  would read "none" for an environment that does use the feature. These keep
  *  the window they were written with; only the scan ceiling applies. */
+/** A presence check asks "is there any?": a criterion with no denominator, or
+ *  a constant 1. Its window is its meaning (deployments in 24h, log events in
+ *  24h), so it keeps it. Decided by the criterion, not by the string's shape:
+ *  a ratio of two counts also ends in "summarize count()" and is sampled. */
+let presenceCache: Set<string> | null = null;
 function isPresenceCheck(query: string): boolean {
-  return isHotSource(query) && /\|\s*summarize\s+count\(\)\s*$/i.test(query.trim());
+  if (!presenceCache) {
+    const presence = new Set<string>(), ratio = new Set<string>();
+    for (const cap of CAPABILITIES) for (const cr of cap.criteria) {
+      const isPresence = !cr.queryB && (cr.denominatorConstant == null || cr.denominatorConstant === 1);
+      (isPresence ? presence : ratio).add(cr.query);
+      if (cr.queryB) ratio.add(cr.queryB);
+    }
+    for (const q of ratio) presence.delete(q);
+    presenceCache = presence;
+  }
+  return isHotSource(query) && presenceCache.has(query);
 }
 function isFixedWindow(query: string): boolean {
   return /dynatrace\.biz\.carbon/.test(query) || isPresenceCheck(query);
@@ -187,7 +201,7 @@ const DISTINCT_WINDOW_MIN = 15;
  *  the last four hours — which a live AI workload does continuously. */
 const MAX_WINDOW_MIN = 4 * 60;
 /** Hard ceiling so no single query can ever run away, whatever the tenant. */
-const COST_SCAN_LIMIT_GB = 50;
+export const COST_SCAN_LIMIT_GB = 50;
 
 /** True when the query's value is invariant under uniform sampling.
  *  count()/countIf() scale linearly and cancel in a ratio; countDistinct and
@@ -376,8 +390,12 @@ export function costOptimizeQuery(query: string, original = query): string {
  * bit-identical so the result column shape matches the original query.
  */
 export function scaleQuery(query: string, tier: ScaleTier): string {
-  // Full fidelity (a Dynatrace user, not billed): the query as written.
-  if (getFidelity() === "full") return query;
+  // One query shape and one scan ceiling for every user, so a number never
+  // depends on who opened the app. A reading the ceiling cuts is marked ≈.
+  return costShapedQuery(query, tier);
+}
+
+function costShapedQuery(query: string, tier: ScaleTier): string {
   if (isFixedWindow(query)) return capOnly(query);
   // Cost mode runs at every tier. On "exact" it is the only transform: the
   // question the criterion asks is unchanged, Grail just reads far less to

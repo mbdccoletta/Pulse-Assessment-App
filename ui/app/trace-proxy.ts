@@ -46,53 +46,14 @@ interface ProxyDef {
   note: string;
 }
 
-// Shared strings so executeAllUnique dedups them with existing checks
-// (a7/sd5 already run REQUEST_METRIC_SERVICES — the a1/a3 proxies are free).
-const REQUEST_METRIC_SERVICES =
-  "timeseries val=sum(dt.service.request.count), by:{dt.entity.service} | fields dt.entity.service | dedup dt.entity.service | summarize c=count()";
-const DB_CALLER_SERVICES =
-  'fetch dt.entity.service | filter serviceType == "DATABASE_SERVICE" | fieldsAdd callers = called_by[dt.entity.service] | expand callers | filter isNotNull(callers) | summarize count = countDistinct(callers)';
-
-const PROXIES: Record<string, ProxyDef> = {
-  a1: {
-    query: REQUEST_METRIC_SERVICES,
-    note: "Proxy: services emitting request metrics (dt.service.request.count) — a traced service always emits them. Validated Δ+7pts vs span truth.",
-  },
-  a3: {
-    query: REQUEST_METRIC_SERVICES,
-    note: "Proxy: services processing incoming requests (request metrics). Root-span detection needs spans; incoming-request activity is the closest honest signal.",
-  },
-  a4: {
-    query: 'fetch dt.entity.service | filter serviceType == "UNIFIED" | summarize count()',
-    note: "Proxy (low fidelity): unified-model services, which predominantly originate from OTel/span ingest. Directional only — validated Δ-4pts on an OTel-heavy tenant.",
-  },
-  a8: {
-    query: DB_CALLER_SERVICES,
-    note: "Proxy: services with topology calls to DATABASE_SERVICE entities. Faithful on OneAgent estates; undercounts on pure-OTel setups where DBs are not modeled as entities.",
-  },
-  a9: {
-    query:
-      'fetch dt.entity.service | filter in(serviceType, {"MESSAGING_SERVICE", "QUEUE_LISTENER_SERVICE"}) | fieldsAdd callers = called_by[dt.entity.service] | expand callers | summarize count = countDistinct(coalesce(callers, id))',
-    note: "Proxy: messaging/queue-listener services plus their topology callers. Undercounts vs span truth (validated 2-4 vs 10 services); still detects messaging adoption.",
-  },
-  a10: {
-    query:
-      "fetch dt.entity.service | fieldsAdd callee = calls[dt.entity.service] | expand callee | filter isNotNull(callee) | summarize count = countDistinct(id)",
-    queryB: "fetch dt.entity.service | summarize count()",
-    note: "Proxy: % of services with outgoing cross-service calls (topology), instead of % of traces spanning 2+ services. Same spirit, service-level denominator.",
-  },
-  a13: {
-    query:
-      'fetch dt.entity.service | filter serviceType == "DATABASE_SERVICE" | fieldsAdd callers = called_by[dt.entity.service] | expand callers | filter isNotNull(callers) | summarize dbs = countDistinct(id), by:{callers} | filter dbs >= 2 | summarize count()',
-    queryB: DB_CALLER_SERVICES,
-    note: "Proxy: DB-calling services connected to 2+ distinct DATABASE_SERVICE entities (topology), instead of 2+ db.system values on spans.",
-  },
-};
+// Since 3.0.13 the application criteria that once read spans (database,
+// messaging, call relations) read the service metrics and topology Dynatrace
+// derives from traces, on every tenant. No criterion outside AI/LLM
+// Observability reads spans any more, so there is nothing left to proxy.
+const PROXIES: Record<string, ProxyDef> = {};
 
 /** Human-readable reasons for the span checks that have NO honest proxy. */
-export const PROXY_EXCLUSION_REASONS: Record<string, string> = {
-  i18: "Cloud span enrichment has no metric/topology equivalent; cloud context is already measured via logs and hosts (i13–i17).",
-};
+export const PROXY_EXCLUSION_REASONS: Record<string, string> = {};
 
 export interface TraceProxyInfo {
   /** Criterion IDs whose queries were replaced with metric/topology proxies. */

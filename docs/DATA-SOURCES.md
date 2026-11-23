@@ -49,13 +49,12 @@ Version: v2.6.0 (123 criteria). The per-capability lists below date from v2.5.5;
 | i15 | Cloud region enrichment | `fetch logs` (cloud.region) |
 | i16 | Cloud AZ enrichment | `fetch logs` (cloud.availability_zone) |
 | i17 | Cloud account enrichment | `fetch logs` (cloud.account.id) |
-| i18 | Cloud span enrichment | `fetch spans` (cloud.provider) |
 | i19 | K8s node monitoring depth | metric `dt.kubernetes.container.cpu_usage` |
 | i20 | Cloud namespace metric coverage | metric `dt.kubernetes.container.cpu_usage` |
 | i21 | Container restart monitoring | metric `dt.kubernetes.container.restarts` |
 | i22 | Container resource limits | metric `dt.kubernetes.container.limits_cpu` |
 
-> Note: Infra is multi-source — metrics for live signals, entities for topology, logs for cloud enrichment, spans for cloud span context, Davis for problem coverage.
+> Note: Infra is multi-source — metrics for live signals, entities for topology, logs for cloud enrichment, Davis for problem coverage.
 
 ---
 
@@ -63,19 +62,18 @@ Version: v2.6.0 (123 criteria). The per-capability lists below date from v2.5.5;
 
 | ID | What it validates | Grail source |
 |---|---|---|
-| a1 | Service tracing coverage | `fetch spans` |
 | a2 | Service method coverage | entity `dt.entity.service_method` |
-| a3 | Root span coverage | `fetch spans` |
-| a4 | OTel instrumentation | `fetch spans` |
 | a5 | Response time coverage | metric `dt.service.request.response_time` (percentile) |
 | a6 | Failure tracking | metric `dt.service.request.failure_count` |
 | a7 | Throughput | metric `dt.service.request.count` |
-| a8 | Database span coverage | `fetch spans` |
-| a9 | Messaging span coverage | `fetch spans` |
-| a10 | Multi-service trace depth | `fetch spans` |
+| a8 | Database span coverage | metric `dt.service.database.query.count` (derived from spans) |
+| a9 | Messaging span coverage | metrics `dt.service.messaging.{process,publish,receive}.count` |
 | a11 | Service-process mapping | entity `dt.entity.service` |
 | a12 | Service tagging utilization | entity `dt.entity.service` |
-| a13 | Database call depth | `fetch spans` |
+| a13 | Database call depth | metric `dt.service.database.query.count` by `db.system` |
+| a17 | Services calling other services | Smartscape `smartscapeEdges "calls"` / `smartscapeNodes "SERVICE"` |
+
+> Since 3.0.13 no Application Observability criterion scans spans. a1 and a3 were removed (read from metrics they equal a7), a4 was removed (it judged the choice of source), a10 became a17.
 
 ---
 
@@ -97,7 +95,7 @@ Version: v2.6.0 (123 criteria). The per-capability lists below date from v2.5.5;
 
 ---
 
-## 4. Log Analytics  (color #F59E0B)
+## 4. Log Analytics  (color #06B6D4)
 
 All 16 criteria query **`fetch logs`** with different filters (host coverage,
 service coverage, error logs, K8s logs, parsing/enrichment quality, etc.).
@@ -110,7 +108,7 @@ service coverage, error logs, K8s logs, parsing/enrichment quality, etc.).
 
 ---
 
-## 5. Application Security  (color #EF4444)
+## 5. Application Security  (color #6366F1)
 
 | ID | What it validates | Grail source |
 |---|---|---|
@@ -128,7 +126,7 @@ service coverage, error logs, K8s logs, parsing/enrichment quality, etc.).
 
 ---
 
-## 6. Threat Observability  (color #F97316)
+## 6. Threat Observability  (color #D946EF)
 
 | ID | What it validates | Grail source |
 |---|---|---|
@@ -146,15 +144,15 @@ service coverage, error logs, K8s logs, parsing/enrichment quality, etc.).
 
 ---
 
-## 7. AI Observability  (color #06B6D4)
+## 7. AI Observability  (color #0EA5E9)
 
-All 9 criteria query **`fetch spans`** filtered for GenAI semantic-convention
+The AI span criteria query **`fetch spans`** filtered for GenAI semantic-convention
 attributes (`gen_ai.system`, `gen_ai.provider.name`, `gen_ai.request.*`,
 `gen_ai.usage.*`, etc.).
 
 | ID range | Source |
 |---|---|
-| ai1–ai9 | `fetch spans` (gen_ai.* attributes) |
+| ai1–ai8, ai10, ai19 | `fetch spans` (gen_ai.* attributes); ai1–ai8 and ai19 share one scan (`shared-scans.ts`) |
 
 > **CRITICAL window note**: AI Obs uses `from:now()-72h`, NOT 2h. GenAI
 > workloads are bursty — a 2h window missed real spans on the reference tenant (244,964
@@ -163,7 +161,7 @@ attributes (`gen_ai.system`, `gen_ai.provider.name`, `gen_ai.request.*`,
 
 ---
 
-## 8. Business Observability  (color #10B981)
+## 8. Business Observability  (color #A855F7)
 
 All 8 criteria query **`fetch bizevents`** (business event volume, type
 diversity, recency, field richness, etc.).
@@ -174,7 +172,7 @@ diversity, recency, field richness, etc.).
 
 ---
 
-## 9. Software Delivery  (color #6366F1)
+## 9. Software Delivery  (color #94A3B8)
 
 | ID | What it validates | Grail source |
 |---|---|---|

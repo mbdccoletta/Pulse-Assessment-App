@@ -1,6 +1,6 @@
 # Criteria summary
 
-Every criterion the assessment reads: 143 criteria across 11 capabilities. This file is generated from the catalog (`ui/app/queries.ts`, `ui/app/data/criterionTiers.ts`, `ui/app/passLine.ts`); regenerate it when the catalog changes rather than editing it by hand.
+Every criterion the assessment reads: 138 criteria across 11 capabilities. This file is generated from the catalog (`ui/app/queries.ts`, `ui/app/data/criterionTiers.ts`, `ui/app/passLine.ts`); regenerate it when the catalog changes rather than editing it by hand.
 
 ## How to read the tables
 
@@ -12,24 +12,24 @@ Every criterion the assessment reads: 143 criteria across 11 capabilities. This 
 
 A criterion that cannot be measured in the environment is not assessed: it leaves the score and is never counted as not met.
 
-Readings by kind: 106 shares, 32 presence checks, 5 configuration counts.
+Readings by kind: 101 shares, 32 presence checks, 5 configuration counts.
 
 ## Capabilities
 
 | Capability | Criteria | Foundation | Best practice | Excellence |
 |---|---|---|---|---|
-| Infrastructure Observability | 26 | 3 | 13 | 10 |
-| Application Observability | 15 | 3 | 6 | 6 |
+| Infrastructure Observability | 25 | 3 | 13 | 9 |
+| Application Observability | 12 | 1 | 6 | 5 |
 | Digital Experience | 15 | 3 | 7 | 5 |
 | Log Analytics | 16 | 3 | 9 | 4 |
 | Application Security | 7 | 1 | 5 | 1 |
 | Threat Observability | 4 | 1 | 2 | 1 |
-| AI/LLM Observability | 16 | 3 | 5 | 8 |
+| AI/LLM Observability | 15 | 3 | 5 | 7 |
 | Business Observability | 10 | 3 | 4 | 3 |
 | Software Delivery | 6 | 1 | 2 | 3 |
 | Platform Governance | 18 | 1 | 13 | 4 |
 | FinOps & Sustainability | 10 | 3 | 4 | 3 |
-| **Total** | **143** | **25** | **70** | **48** |
+| **Total** | **138** | **23** | **70** | **45** |
 
 ## Infrastructure Observability
 
@@ -57,7 +57,6 @@ Readings by kind: 106 shares, 32 presence checks, 5 configuration counts.
 | K8s workload mapping | Excellence | Share | 50% | Percentage of Kubernetes clusters with at least one detected cloud application namespace — validates workload topology. |
 | Cloud region enrichment | Excellence | Share | 40% | Percentage of cloud-enriched logs that also contain region metadata — validates multi-region observability depth. |
 | Cloud AZ enrichment | Excellence | Share | 40% | Percentage of cloud-enriched logs with availability zone metadata — validates resilience observability across failure domains. |
-| Cloud span enrichment | Excellence | Share | 20% | Percentage of services with cloud provider context in span data. |
 | Container resource limits | Excellence | Share | 50% | Percentage of K8s namespaces with defined resource limits — essential for cluster stability and resource governance. |
 | Problems with automated response | Excellence | Share | 30% | Share of Davis problems on infrastructure entities (hosts, processes, Kubernetes, cloud, custom devices) in the last 72h that triggered at least one workflow execution. |
 | Infrastructure automation workflows | Excellence | Presence | At least 1 | Workflows that ran a cloud, Kubernetes or configuration-management action (AWS, Azure, GCP, Kubernetes, Ansible connectors) in the last 24h. |
@@ -66,8 +65,6 @@ Readings by kind: 106 shares, 32 presence checks, 5 configuration counts.
 
 | Criterion | Tier | Reading | Met at | What it measures |
 |---|---|---|---|---|
-| Service tracing coverage | Foundation | Share | 50% | Percentage of detected services with active span data in the last 2h (OneAgent or OTel). |
-| Root span coverage | Foundation | Share | 40% | Percentage of services with root spans (incoming requests) in the last 2h. |
 | Response time coverage | Foundation | Share | 50% | Percentage of services with response time metrics (p95). |
 | Service method coverage | Best practice | Share | 30% | Percentage of services with method-level tracing. |
 | Failure tracking coverage | Best practice | Share | 40% | Percentage of services with failure rate metrics. |
@@ -75,11 +72,10 @@ Readings by kind: 106 shares, 32 presence checks, 5 configuration counts.
 | Service-process mapping | Best practice | Share | 50% | Percentage of services with associated process groups — validates service-to-infrastructure topology. |
 | Problems with root cause | Best practice | Share | 50% | Share of Davis problems on services and queues in the last 72h where Davis identified a root-cause entity. |
 | Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read traces through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
-| OTel instrumentation coverage | Excellence | Share | 20% | Percentage of services with OpenTelemetry spans — vendor-neutral instrumentation adoption. |
-| Database span coverage | Excellence | Share | 10% | Percentage of services with database operation spans. |
-| Messaging span coverage | Excellence | Share | 5% | Percentage of services with messaging spans (Kafka, RabbitMQ, SQS). |
-| Multi-service trace depth | Excellence | Share | 10% | Percentage of traces spanning 2+ services — validates distributed tracing depth. |
-| Database call depth | Excellence | Share | 10% | Percentage of DB-using services that interact with 2+ database systems — validates deep database monitoring across the stack. |
+| Database span coverage | Excellence | Share | 10% | Percentage of services that query a database, from the database metrics Dynatrace derives from their spans (dt.service.database.query.count). |
+| Messaging span coverage | Excellence | Share | 5% | Percentage of services that publish, receive or process messages (Kafka, RabbitMQ, SQS), from the messaging metrics Dynatrace derives from their spans. Serverless consumers that record a message as an invocation (for example an SQS-triggered Lambda function) are not counted. |
+| Services calling other services | Excellence | Share | 10% | Percentage of services that called at least one other service in the last 2h, from the call relations Smartscape observes in distributed traces. |
+| Database call depth | Excellence | Share | 10% | Percentage of database-calling services that reach 2+ database systems, from the database metrics Dynatrace derives from their spans. |
 | Problems with automated response | Excellence | Share | 30% | Share of Davis problems on services and queues in the last 72h that triggered at least one workflow execution. |
 
 ## Digital Experience
@@ -159,7 +155,6 @@ Readings by kind: 106 shares, 32 presence checks, 5 configuration counts.
 | Prompt/response tracing coverage | Excellence | Share | 50% | Percentage of AI spans with prompt or response tracing. |
 | Guardrail coverage | Excellence | Share | 20% | Percentage of AI spans with guardrail monitoring. |
 | Cost tracking coverage | Excellence | Share | 20% | Percentage of AI spans carrying token counts and the model, which the AI Observability app needs to calculate cost. |
-| AI tracing service breadth | Excellence | Share | 5% | Percentage of total spans that are AI-related. |
 | Agentic AI in use | Excellence | Presence | At least 1 | Agentic Dynatrace Assist sessions in the last 30 days (GENAI_EVENT with skill = operator). |
 | dtctl driven by AI agents | Excellence | Presence | At least 1 | People whose AI coding agent (for example Claude Code) ran dtctl in the last 30 days. |
 | Agentic workflows | Excellence | Presence | At least 1 | Workflows that consumed AI Units in the last 30 days, such as the SRE Agent running on a problem trigger. |
