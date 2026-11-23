@@ -210,14 +210,13 @@ export const GuidePage: React.FC<{ coverageData: CoverageData }> = ({ coverageDa
         <Section title="Telemetry strategy">
           <P>
             On open the app classifies how the environment collects telemetry, and reads each criterion accordingly. The
-            classification is shown next to the environment name and in every report.
+            classification heads every report.
           </P>
           <Flex flexDirection="column">
             <Def term="Full OneAgent">Every host is monitored by OneAgent. Every criterion reads OneAgent data.</Def>
             <Def term="Mixed">
               Part of the hosts run OneAgent, part are reported only through OpenTelemetry. Hosts, Kubernetes, processes
-              and logs are counted on both sides, and a host seen by both counts once. The chip shows the share of hosts on
-              each side.
+              and logs are counted on both sides, and a host seen by both counts once.
             </Def>
             <Def term="Pure OpenTelemetry">
               No host runs OneAgent. Hosts, Kubernetes and logs are read from OpenTelemetry metrics and attributes, and the

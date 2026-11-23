@@ -4,6 +4,15 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.14] — 2026-11-23
+
+### Changed
+- App usage counts people, not queries. Related apps (capability page and Overall score) and the reports show, per app, the people who opened it in 30 days and the average per day ("1,498 people a month · 205 a day"). A query count measured traffic, not adoption: a dashboard on a wall screen runs thousands of queries for nobody. The raw export carries `peopleMonth` and `peoplePerDay` instead of query counts. The "Queries by app" bar is removed.
+- Related apps tells which apps to use more. Apps are split into "Use more" and "In use" at the adoption line the verdict already uses (12% of active users); "Use more" comes first, the capability's own apps before shared ones, each with the people it needs to reach the line ("+13 people to reach 12%"). Bars use the status colours: amber below the line, red when nobody opened the app, green above.
+- Every app name opens the official app in a new tab.
+- The verdict of each capability (Healthy, Unwatched, Skin-deep, Starved, Dark) opens its app usage: on the Overall score page it opens the capability at Related apps; on the capability page it scrolls there.
+- The Overview header no longer shows the environment id, the date or the telemetry-strategy chip: the app identifies the environment and the strategy by itself, and the strategy still drives the catalog, the reports and the Dynatrace Intelligence facts. Run details stays.
+
 ## [3.0.13] — 2026-11-22
 
 ### Changed

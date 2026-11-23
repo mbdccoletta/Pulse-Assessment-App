@@ -17,6 +17,7 @@
 // from the same constants the scoring uses.
 
 import { jsPDF } from "jspdf";
+import { peopleReading } from "../hooks/useAppAdoption";
 import type { CapabilityResult } from "../hooks/useCoverageData";
 import { FOUNDATION_WEIGHT, BEST_PRACTICE_WEIGHT, EXCELLENCE_WEIGHT } from "../hooks/useCoverageData";
 import type { AssessmentSnapshot } from "../hooks/useAssessmentHistory";
@@ -51,7 +52,7 @@ export interface ReportInput {
     windowDays: number;
     totalUsers: number;
     byCapability: Record<string, { users: number; rate: number }>;
-    apps: { appId: string; users: number; queries: number; capability: string }[];
+    apps: { appId: string; users: number; dailyUsers: number; queries: number; capability: string }[];
   };
   history: AssessmentSnapshot[];
   /** App id → display name. */
@@ -94,7 +95,7 @@ interface Words {
   teams: string; noTeams: string; andMore: string; responsibilities: Record<Responsibility, string>;
   actFirst: string; whatToDo: string; criterion: string; value: string; target: string; gain: string;
   tier: string; state: string; met: string; notMet: string; notAssessed: string;
-  overTime: string; apps: string; people: string; queries: string; ofUsers: string;
+  overTime: string; apps: string; people: string; perMonth: string; perDay: string; ofUsers: string;
   howToRead: string; method: string[];
   nothingAssessed: string; notAssessedNote: string;
   runNotes: { traceProxy: string; smartscape: string; otel: string; mixed: string; estimated: string; partial: string };
@@ -149,7 +150,7 @@ const WORDS: Record<ReportLang, Words> = {
     responsibilities: { development: "Development", security: "Security", operations: "Operations", infrastructure: "Infrastructure", lineOfBusiness: "Line of business" },
     actFirst: "Where to act first", whatToDo: "What to do", criterion: "Criterion", value: "Value", target: "Target", gain: "Gain",
     tier: "Tier", state: "State", met: "Met", notMet: "Not met", notAssessed: "Not assessed",
-    overTime: "Score over time", apps: "Most used apps", people: "people", queries: "queries", ofUsers: "of active users",
+    overTime: "Score over time", apps: "Most used apps", people: "people", perMonth: "a month", perDay: "a day", ofUsers: "of active users",
     howToRead: "How to read this report", method: method("en"),
     nothingAssessed: "None of this capability's criteria could be assessed in this environment.",
     notAssessedNote: "Not assessed: the criterion could not be measured in this environment (for example, there is nothing of that kind to measure). It is left out of the score and never counts as not met.",
@@ -178,7 +179,7 @@ const WORDS: Record<ReportLang, Words> = {
     responsibilities: { development: "Desenvolvimento", security: "Segurança", operations: "Operações", infrastructure: "Infraestrutura", lineOfBusiness: "Linha de negócio" },
     actFirst: "Onde agir primeiro", whatToDo: "O que fazer", criterion: "Critério", value: "Valor", target: "Meta", gain: "Ganho",
     tier: "Nível", state: "Estado", met: "Atendido", notMet: "Não atendido", notAssessed: "Não avaliado",
-    overTime: "Pontuação ao longo do tempo", apps: "Apps mais usados", people: "pessoas", queries: "consultas", ofUsers: "dos usuários ativos",
+    overTime: "Pontuação ao longo do tempo", apps: "Apps mais usados", people: "pessoas", perMonth: "no mês", perDay: "por dia", ofUsers: "dos usuários ativos",
     howToRead: "Como ler este relatório", method: method("pt"),
     nothingAssessed: "Nenhum critério desta capacidade pôde ser avaliado neste ambiente.",
     notAssessedNote: "Não avaliado: o critério não pôde ser medido neste ambiente (por exemplo, não há nada desse tipo para medir). Fica fora da pontuação e nunca conta como não atendido.",
@@ -214,7 +215,7 @@ const WORDS: Record<ReportLang, Words> = {
     responsibilities: { development: "Desarrollo", security: "Seguridad", operations: "Operaciones", infrastructure: "Infraestructura", lineOfBusiness: "Línea de negocio" },
     actFirst: "Dónde actuar primero", whatToDo: "Qué hacer", criterion: "Criterio", value: "Valor", target: "Meta", gain: "Ganancia",
     tier: "Nivel", state: "Estado", met: "Cumplido", notMet: "No cumplido", notAssessed: "No evaluado",
-    overTime: "Puntuación en el tiempo", apps: "Apps más usadas", people: "personas", queries: "consultas", ofUsers: "de los usuarios activos",
+    overTime: "Puntuación en el tiempo", apps: "Apps más usadas", people: "personas", perMonth: "al mes", perDay: "al día", ofUsers: "de los usuarios activos",
     howToRead: "Cómo leer este informe", method: method("es"),
     nothingAssessed: "Ningún criterio de esta capacidad pudo evaluarse en este entorno.",
     notAssessedNote: "No evaluado: el criterio no pudo medirse en este entorno (por ejemplo, no hay nada de ese tipo que medir). Queda fuera de la puntuación y nunca cuenta como no cumplido.",
@@ -664,7 +665,7 @@ function appsBlock(k: Kit, T: Words, input: ReportInput) {
     k.meter(M + 62, k.y - 2.2, 40, share, ACCENT);
     k.font(9, true); k.text(`${share}%`, M + 116, k.y, { align: "right" });
     k.font(8.5); k.color(DIM);
-    k.text(`${a.users.toLocaleString()} ${T.people}  |  ${a.queries.toLocaleString()} ${T.queries}`, M + CW, k.y, { align: "right" });
+    k.text(peopleReading(a, T.perMonth, T.perDay, T.people), M + CW, k.y, { align: "right" });
     k.y += 6.5;
   }
   k.y += 2;
@@ -1075,7 +1076,7 @@ export function buildRawData(input: ReportInput) {
     appUsage: input.adoption ? {
       windowDays: input.adoption.windowDays,
       activeUsers: input.adoption.totalUsers,
-      apps: input.adoption.apps.map(a => ({ appId: a.appId, name: input.appName(a.appId), capability: a.capability, people: a.users, queries: a.queries })),
+      apps: input.adoption.apps.map(a => ({ appId: a.appId, name: input.appName(a.appId), capability: a.capability, peopleMonth: a.users, peoplePerDay: Math.round(a.dailyUsers * 10) / 10 })),
     } : null,
     history: comparableRuns(input.history).map(s => ({
       timestamp: s.timestamp,

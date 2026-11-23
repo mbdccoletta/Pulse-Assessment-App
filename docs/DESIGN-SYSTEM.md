@@ -69,7 +69,7 @@ Components in `ui/app/components/`:
 
 Top to bottom:
 
-1. `IntelligenceBar`. Its `actions` slot holds the environment name and date, a warning-coloured text when checks failed, and `DpsCostBadge`.
+1. `IntelligenceBar`. Its `actions` slot holds a warning-coloured text when checks failed and `DpsCostBadge` (Run details). The environment id, the date and the telemetry strategy are not shown: the app identifies them itself.
 2. Disclosure banners, only when they apply: `ScaleTierBanner`, `TraceProxyBanner`, and a `MessageContainer variant="primary"` titled "Smartscape entity model".
 3. A lead row: the text "Needs attention" followed by up to three `Chip`s, one per capability below 60%, lowest first (`color="critical"` below 40, otherwise `"warning"`); each chip opens the capability. When none is below 60 the text reads "All capabilities at 60% or above".
 4. `PulseRadar`, sized by a `ResizeObserver` on the page root (at most 620px, at least 220px, or 200px below a 640px-wide container).

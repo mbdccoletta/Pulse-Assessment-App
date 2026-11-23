@@ -34,7 +34,10 @@ import { capabilityForApp, OTHER_BUCKET } from "../data/appCapabilityMap";
 
 export interface AppUsage {
   appId: string;
+  /** Distinct people who opened the app in the window (30 days). */
   users: number;
+  /** Distinct people per day, averaged over every day of the window. */
+  dailyUsers: number;
   queries: number;
   capability: string;
 }
@@ -88,6 +91,18 @@ fetch dt.system.events, from:now()-${WINDOW_DAYS}d
 | filter isNotNull(user.email) and not(contains(user.email, "heimdall.dynatrace.com"))
 | summarize users = countDistinct(user.email), queries = count(), by:{appId = client.application_context}
 | sort users desc, queries desc
+| limit 200`;
+
+/** Distinct people per app per day, averaged over all days of the window
+ *  (days without use count as zero). Same filters as above; system events,
+ *  no Grail scan. */
+const DAILY_USERS_QUERY = `
+fetch dt.system.events, from:now()-${WINDOW_DAYS}d
+| filter event.kind == "QUERY_EXECUTION_EVENT"
+| filter isNotNull(client.application_context) and client.application_context != "dynatrace.appshell"
+| filter isNotNull(user.email) and not(contains(user.email, "heimdall.dynatrace.com"))
+| summarize u = countDistinct(user.email), by:{appId = client.application_context, day = bin(timestamp, 1d)}
+| summarize dailyUsers = sum(u) / ${WINDOW_DAYS}.0, by:{appId}
 | limit 200`;
 
 const TOTAL_USERS_QUERY = `
@@ -146,10 +161,12 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
     (async () => {
       setLoading(true);
       setUnavailable(false);
-      const [rows, totalRows] = await Promise.all([
+      const [rows, totalRows, dailyRows] = await Promise.all([
         runQuery(ADOPTION_QUERY),
         runQuery(TOTAL_USERS_QUERY),
+        runQuery(DAILY_USERS_QUERY),
       ]);
+      const daily = new Map((dailyRows ?? []).map(r => [String(r.appId ?? ""), num(r.dailyUsers)]));
       if (cancelled) return;
 
       if (!rows || rows.length === 0) {
@@ -165,6 +182,7 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
           return {
             appId,
             users: num(r.users),
+            dailyUsers: daily.get(appId) ?? 0,
             queries: num(r.queries),
             capability: capabilityForApp(appId),
           };
@@ -214,6 +232,13 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
   const refresh = useCallback(() => setRunId(n => n + 1), []);
 
   return { loading: loading || (enabled && !done), unavailable, apps, byCapability, totalUsers, windowDays: WINDOW_DAYS, refresh };
+}
+
+/** "N people a month · M a day" — people, never queries: a dashboard on a wall
+ *  screen runs thousands of queries for nobody. */
+export function peopleReading(a: Pick<AppUsage, "users" | "dailyUsers">, month = "a month", day = "a day", people = "people"): string {
+  const d = a.dailyUsers > 0 && a.dailyUsers < 1 ? "<1" : Math.floor(a.dailyUsers).toLocaleString();
+  return `${a.users.toLocaleString()} ${people} ${month} · ${d} ${day}`;
 }
 
 export { OTHER_BUCKET };

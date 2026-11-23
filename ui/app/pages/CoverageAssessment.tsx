@@ -29,7 +29,7 @@ import { useAppNames } from "../hooks/useAppNames";
 const loadReports = () => import("../reports/pulseReports");
 import { SmartReportModal } from "../components/SmartReportModal";
 import { tracesNotEntitled, classicEntitiesMissing, detectTelemetry, simulatedOtelSkipsLogScans } from "../hooks/usePreflight";
-import { TELEMETRY_LABEL, telemetryShares, telemetrySummary, setCurrentTelemetry, getCurrentTelemetry, type TelemetryProfile } from "../telemetry";
+import { telemetrySummary, setCurrentTelemetry, getCurrentTelemetry, type TelemetryProfile } from "../telemetry";
 import { Tooltip } from "../components/Tooltip";
 import { applyOtelMode, applyMixedMode, mixedActions, OTEL_ACTIONS, type OtelModeInfo, type TelemetrySource } from "../otel-mode";
 import { setActionOverrides, CRITERION_ACTIONS } from "../remediationActions";
@@ -432,12 +432,13 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
             }}
             actions={
           <Flex alignItems="center" gap={8}>
-            {telemetry && <TelemetryChip profile={telemetry} />}
+            {/* The app knows the environment and its telemetry strategy by
+                itself: neither is shown here. The strategy still drives the
+                catalog, the reports and the Dynatrace Intelligence facts. */}
             <Text style={{ fontSize: 12, color: textSec }}>
-              <Text style={{ fontWeight: 600, color: text }}>{tenant}</Text> · {date}
               {stats && stats.failed > 0 && (
-                <Text style={{ marginLeft: 8, fontSize: 12, color: Colors.Text.Warning.Default }}>
-                  · {stats.failed} {stats.failed === 1 ? "check" : "checks"} could not run
+                <Text style={{ marginRight: 8, fontSize: 12, color: Colors.Text.Warning.Default }}>
+                  {stats.failed} {stats.failed === 1 ? "check" : "checks"} could not run ·
                 </Text>
               )}
               <DpsCostBadge
@@ -596,24 +597,3 @@ const session: {
   otelInfo: OtelModeInfo | null;
 } = { env: { noEntities: false, logMetric: false, source: "oneagent" }, traceProxy: false, modelInfo: null, otelInfo: null };
 
-/** The telemetry strategy, as a neutral chip: a fact about the estate, not a judgement.
- *  Shares on screen; counts and what the strategy changes in the tooltip. */
-const TelemetryChip: React.FC<{ profile: TelemetryProfile }> = ({ profile }) => {
-  const s = telemetryShares(profile);
-  const label = profile.source === "mixed"
-    ? `${TELEMETRY_LABEL.mixed} · OneAgent ${s.oneAgent}% · OpenTelemetry ${s.otelOnly}%`
-    : TELEMETRY_LABEL[profile.source];
-  const tip = [
-    `Telemetry strategy: ${TELEMETRY_LABEL[profile.source]}.`,
-    profile.oneAgentHosts + profile.otelOnlyHosts > 0
-      ? `${profile.oneAgentHosts.toLocaleString()} hosts monitored by OneAgent (${profile.sharedHosts.toLocaleString()} of them also report OpenTelemetry); ${profile.otelOnlyHosts.toLocaleString()} hosts and Kubernetes nodes reported only through OpenTelemetry.`
-      : "",
-    TELEMETRY_FACT[profile.source],
-  ].filter(Boolean).join("\n");
-  return (
-    <Tooltip text={tip}>
-      {/* The Chip caps its width at 250px and cuts the text; the label must show in full. */}
-      <Chip size="condensed" color="neutral" style={{ maxWidth: "none" }}>{label}</Chip>
-    </Tooltip>
-  );
-};

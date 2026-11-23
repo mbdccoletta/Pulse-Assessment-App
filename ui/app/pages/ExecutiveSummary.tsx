@@ -20,7 +20,7 @@ import { Flex, Grid } from "@dynatrace/strato-components/layouts";
 import { GaugeChart, MeterBarChart } from "@dynatrace/strato-components/charts";
 import type { CapabilityResult } from "../hooks/useCoverageData";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
-import type { UseAppAdoptionResult } from "../hooks/useAppAdoption";
+import { peopleReading, type UseAppAdoptionResult } from "../hooks/useAppAdoption";
 import { Tooltip } from "../components/Tooltip";
 import { diagnose } from "../diagnosis";
 import { passLine } from "../passLine";
@@ -28,7 +28,7 @@ import { useAppNames } from "../hooks/useAppNames";
 import { ADOPTION_FULL_RATE, gainIfMet } from "../pulseScore";
 import { scoreBand } from "../utils/colors";
 import { CRITERION_ACTIONS } from "../remediationActions";
-import { BAND_THRESHOLDS, Panel, StateMark, TIERS, TierMeter, TrendChart, VerdictChip, pctFormat } from "./CapabilityDetailPage";
+import { AppLink, BAND_THRESHOLDS, Panel, StateMark, TIERS, TierMeter, TrendChart, VerdictChip, pctFormat } from "./CapabilityDetailPage";
 import type { TierKey } from "./CapabilityDetailPage";
 
 const MONO = Typography.Code.Small.Default.Family;
@@ -64,7 +64,7 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
   const appName = useAppNames();
   /** Tier picked in "Utilization tiers": narrows Capabilities and What to do. */
   const [tier, setTier] = useState<TierKey | null>(null);
-  const open = (c: CapabilityResult) => navigate(`/capability/${encodeURIComponent(c.name.replace(/\//g, "~"))}`);
+  const open = (c: CapabilityResult, section?: string) => navigate(`/capability/${encodeURIComponent(c.name.replace(/\//g, "~"))}`, section ? { state: { section } } : undefined);
 
   const band = scoreBand(totalScore);
   const adoptionRan = !adoption.unavailable && !adoption.loading;
@@ -183,7 +183,7 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
                   <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>
                     {tier ? `Score ${c.score}%` : `Coverage ${Math.floor(c.coverageScore ?? c.score)}% · Utilization ${Math.floor(c.effectiveUtilizationScore)}% · Adoption ${c.adoptionScore == null ? "—" : `${Math.floor(c.adoptionScore)}%`}`}
                   </Text>
-                  <VerdictChip id={dx.id} label={dx.label} meaning={dx.meaning} size="condensed" />
+                  <VerdictChip id={dx.id} label={dx.label} meaning={dx.meaning} size="condensed" onClick={() => open(c, "related-apps")} />
                 </Flex>
               </Flex>
             );
@@ -214,10 +214,10 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
                   return (
                     <Flex key={a.appId} flexDirection="column" gap={4} style={{ minWidth: 0 }}>
                       <MeterBarChart value={share} min={0} max={100} color={Colors.Charts.Categorical.Color01.Default} size="size8" formatter={pctFormat}>
-                        <MeterBarChart.Label>{appName(a.appId)}</MeterBarChart.Label>
+                        <MeterBarChart.Label><AppLink appId={a.appId}>{appName(a.appId)}</AppLink></MeterBarChart.Label>
                         <MeterBarChart.Value>{pctFormat(share)}</MeterBarChart.Value>
                       </MeterBarChart>
-                      <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{a.users.toLocaleString()} people · {a.queries.toLocaleString()} queries</Text>
+                      <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{peopleReading(a)}</Text>
                     </Flex>
                   );
                 })}

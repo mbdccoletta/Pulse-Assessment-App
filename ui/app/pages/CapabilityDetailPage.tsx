@@ -8,8 +8,8 @@
 // explanations sit in tooltips.
 
 import { ToggleButtonGroup } from "@dynatrace/strato-components/forms";
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import Typography from "@dynatrace/strato-design-tokens/typography";
 import { Button } from "@dynatrace/strato-components/buttons";
@@ -19,21 +19,22 @@ import { ExternalLink, Heading, Text } from "@dynatrace/strato-components/typogr
 import { Flex, Surface, Grid } from "@dynatrace/strato-components/layouts";
 import { Chip, EmptyState, HealthIndicator, InformationOverlay, SkeletonText, Accordion } from "@dynatrace/strato-components/content";
 import { Breadcrumbs } from "@dynatrace/strato-components/navigation";
-import { GaugeChart, MeterBarChart, MultiMeterBarChart, TimeseriesChart } from "@dynatrace/strato-components/charts";
+import { GaugeChart, MeterBarChart, TimeseriesChart } from "@dynatrace/strato-components/charts";
 import type { CoverageData, CapabilityResult } from "../hooks/useCoverageData";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
-import { NO_ADOPTION } from "../hooks/useAppAdoption";
+import { NO_ADOPTION, peopleReading } from "../hooks/useAppAdoption";
 import { IntelligenceBar } from "../components/IntelligenceBar";
 import { LENS, capabilityQuestions, capabilityFacts } from "../ai/pageIntelligence";
 import { Tooltip } from "../components/Tooltip";
-import { diagnose } from "../diagnosis";
+import { DEFAULT_CUTS, diagnose } from "../diagnosis";
 import { passLine } from "../passLine";
 import { useAppNames, useInstalledApps } from "../hooks/useAppNames";
 import { capabilityForApp, sharedCapabilitiesForApp } from "../data/appCapabilityMap";
 import { ADOPTION_FULL_RATE, gainIfMet } from "../pulseScore";
 import { openDynatraceAssist } from "../ai/assistIntent";
 import type { ReportContext } from "../ai/reportPrompt";
-import { sendIntent } from "@dynatrace-sdk/navigation";
+import { getAppLink, sendIntent } from "@dynatrace-sdk/navigation";
+import { getEnvironmentUrl } from "@dynatrace-sdk/app-environment";
 import { ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, DynatraceIntelligenceSignetIcon, MinusIcon } from "@dynatrace/strato-icons";
 import { gapFor, runGap } from "../data/criterionGaps";
 import { scoreBand, SCORE_BANDS } from "../utils/colors";
@@ -82,12 +83,36 @@ export const StateMark: React.FC<{ state: keyof typeof STATE_META; label?: boole
     : <HealthIndicator status={m.status} aria-label={m.word} />;
 };
 
+/** An app's name as a link to the official app, opened in a new tab so the
+ *  assessment stays where it was. Plain text when the shell gives no link. */
+export const AppLink: React.FC<{ appId: string; children: React.ReactNode }> = ({ appId, children }) => {
+  let href: string | undefined;
+  try { href = getAppLink(appId); } catch { href = undefined; }
+  // Outside the platform shell (local development) the SDK returns a generic
+  // address: build the app's own address from the environment instead.
+  if (!href || !href.includes(appId)) {
+    try { href = `${getEnvironmentUrl().replace(/\/$/, "")}/ui/apps/${appId}`; } catch { href = undefined; }
+  }
+  return href
+    ? <a href={href} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+        style={{ color: "inherit", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 3 }}>{children}</a>
+    : <>{children}</>;
+};
+
 /** Verdict as a Strato chip; the colour is the judgement. */
 const VERDICT_CHIP: Record<string, "neutral" | "primary" | "success" | "warning" | "critical"> = {
   healthy: "success", starved: "primary", unwatched: "critical", skinDeep: "warning", dark: "neutral", notAssessed: "neutral",
 };
-export const VerdictChip: React.FC<{ id: string; label: string; meaning?: string; size?: "default" | "condensed" }> = ({ id, label, meaning, size }) => {
-  const chip = <Chip color={VERDICT_CHIP[id] ?? "neutral"} variant="accent" size={size} style={{ flexShrink: 0 }}>{label}</Chip>;
+export const VerdictChip: React.FC<{ id: string; label: string; meaning?: string; size?: "default" | "condensed"; onClick?: () => void }> = ({ id, label, meaning, size, onClick }) => {
+  const chip = (
+    <Chip color={VERDICT_CHIP[id] ?? "neutral"} variant="accent" size={size}
+      style={{ flexShrink: 0, cursor: onClick ? "pointer" : undefined }}
+      {...(onClick ? { role: "button", tabIndex: 0, "aria-label": `${label}: show app usage`,
+        onClick: (e: React.MouseEvent) => { e.stopPropagation(); onClick(); },
+        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } } : {})}>
+      {label}
+    </Chip>
+  );
   return meaning ? <Tooltip text={meaning} containerStyle={{ flexShrink: 0 }}>{chip}</Tooltip> : chip;
 };
 
@@ -127,8 +152,8 @@ function tipFor(r: Row): string {
 
 // ── Building blocks ─────────────────────────────────────────────────────────
 
-export const Panel: React.FC<{ title: string; right?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties }> = ({ title, right, children, style }) => (
-  <Surface elevation="flat" style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16, minWidth: 0, ...style }}>
+export const Panel: React.FC<{ title: string; right?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties; id?: string }> = ({ title, right, children, style, id }) => (
+  <Surface id={id} elevation="flat" style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16, minWidth: 0, ...style }}>
     <Flex alignItems="center" justifyContent="space-between" gap={8}>
       <Heading level={5}>{title}</Heading>
       {right}
@@ -357,6 +382,17 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
   const [finopsBusy, setFinopsBusy] = useState(false);
   const { name = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  /** The verdict judges adoption among other things: it leads to who uses the apps. */
+  const showApps = useCallback(() => {
+    document.getElementById("related-apps")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+  // Arriving from a verdict on the Overall score page: go straight to the apps.
+  useEffect(() => {
+    if ((location.state as { section?: string } | null)?.section !== "related-apps") return;
+    const t = setTimeout(showApps, 400);
+    return () => clearTimeout(t);
+  }, [location.state, name, showApps]);
   /** Tier picked in "Utilization tiers": narrows What to do and Criteria. */
   const [tier, setTier] = useState<string | null>(null);
   useEffect(() => { setTier(null); }, [name]);
@@ -436,7 +472,7 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
   const usedIds = new Set(usedApps.map(a => a.appId));
   const unusedApps = installed
     .filter(id => !usedIds.has(id) && id.startsWith("dynatrace.") && serves(id))
-    .map(id => ({ appId: id, users: 0, queries: 0, capability: cap.name }));
+    .map(id => ({ appId: id, users: 0, dailyUsers: 0, queries: 0, capability: cap.name }));
   const apps = [...usedApps, ...unusedApps].slice(0, 14);
   const topShare = adoption.totalUsers > 0 && apps.length > 0 ? Math.floor((apps[0].users / adoption.totalUsers) * 1000) / 10 : 0;
 
@@ -472,7 +508,7 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
           <Heading level={2}>{cap.name}</Heading>
           <Text style={{ fontFamily: MONO, fontSize: 22, fontWeight: 700, color: band.text }}>{cap.score}%</Text>
           <Text textStyle="base-emphasized" style={{ color: band.text }}>{band.label}</Text>
-          <VerdictChip id={dx.id} label={dx.label} meaning={dx.meaning} />
+          <VerdictChip id={dx.id} label={dx.label} meaning={dx.meaning} onClick={showApps} />
         </Flex>
 
         {/* Summary: the three readings, each as a Strato chart */}
@@ -543,44 +579,63 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
         </Flex>
 
         {/* Full width: a spanning item inside the auto-fit grid above kept empty tracks open */}
-        <Panel title="Related apps" right={adoptionRan ? <Text textStyle="small" style={{ color: NEUTRAL }}>Share of active users · {adoption.windowDays} days</Text> : undefined}>
+        <Panel id="related-apps" title="Related apps" right={adoptionRan ? <Text textStyle="small" style={{ color: NEUTRAL }}>Share of active users · {adoption.windowDays} days</Text> : undefined}>
           {adoption.loading ? <SkeletonText lines={3} />
             : apps.length === 0 ? <Text textStyle="small" style={{ color: NEUTRAL }}>No related apps installed</Text>
             : (
               <Flex flexDirection="column" gap={20}>
-                {/* Mix: how the capability's query activity splits across its apps */}
-                {usedApps.length > 0 && (() => {
-                  const byQueries = [...usedApps].sort((x, y) => y.queries - x.queries);
-                  const top = byQueries.slice(0, 7);
-                  const rest = byQueries.slice(7).reduce((t, a) => t + a.queries, 0);
-                  const total = byQueries.reduce((t, a) => t + a.queries, 0);
-                  return (
-                    <MultiMeterBarChart min={0} max={total} size="size16" formatter={(v: number) => v.toLocaleString()}>
-                      <MultiMeterBarChart.Label>Queries by app</MultiMeterBarChart.Label>
-                      <MultiMeterBarChart.Value>{`${total.toLocaleString()} queries`}</MultiMeterBarChart.Value>
-                      {top.map(a => <MultiMeterBarChart.Segment key={a.appId} name={appName(a.appId)} value={a.queries} />)}
-                      {rest > 0 && <MultiMeterBarChart.Segment name="Other apps" value={rest} />}
-                      <MultiMeterBarChart.Legend />
-                    </MultiMeterBarChart>
-                  );
-                })()}
-                {/* Reach: share of active users per app, with people and queries always visible */}
-                <Grid style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "16px 28px" }}>
-                  {apps.map(a => {
-                    const share = adoption.totalUsers > 0 ? Math.floor((a.users / adoption.totalUsers) * 1000) / 10 : 0;
+                {/* Two groups against the app's own adoption line (DEFAULT_CUTS.adoptionRate,
+                    the same line the verdict uses): the apps to use more come first, each with
+                    the number of people it needs to reach the line. */}
+                {(() => {
+                  const cut = DEFAULT_CUTS.adoptionRate;
+                  const total = adoption.totalUsers;
+                  const target = total > 0 ? Math.ceil((cut / 100) * total) : 0;
+                  const shareOf = (a: { users: number }) => (total > 0 ? Math.floor((a.users / total) * 1000) / 10 : 0);
+                  const primary = (id: string) => capabilityForApp(id) === cap.name;
+                  const below = apps.filter(a => shareOf(a) < cut)
+                    .sort((x, y) => Number(primary(y.appId)) - Number(primary(x.appId)) || x.users - y.users);
+                  const above = apps.filter(a => shareOf(a) >= cut);
+                  const row = (a: typeof apps[number], low: boolean) => {
+                    const share = shareOf(a);
+                    const color = !low ? Colors.Charts.Status.Ideal.Default : a.users > 0 ? Colors.Charts.Status.Warning.Default : Colors.Charts.Status.Critical.Default;
+                    const gap = Math.max(0, target - a.users);
                     return (
                       <Flex key={a.appId} flexDirection="column" gap={4} style={{ minWidth: 0 }}>
-                        <MeterBarChart value={share} min={0} max={100} color={a.users > 0 ? cap.color : NEUTRAL} size="size8" formatter={pctFormat}>
-                          <MeterBarChart.Label>{appName(a.appId)}{capabilityForApp(a.appId) !== cap.name ? " · shared" : ""}</MeterBarChart.Label>
-                          <MeterBarChart.Value>{a.users > 0 ? pctFormat(share) : "No usage data"}</MeterBarChart.Value>
+                        <MeterBarChart value={share} min={0} max={100} color={color} size="size8" formatter={pctFormat}>
+                          <MeterBarChart.Label>
+                            <AppLink appId={a.appId}>{appName(a.appId)}</AppLink>{primary(a.appId) ? "" : " · shared"}
+                          </MeterBarChart.Label>
+                          <MeterBarChart.Value>{a.users > 0 ? pctFormat(share) : "0%"}</MeterBarChart.Value>
                         </MeterBarChart>
                         <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>
-                          {a.users > 0 ? `${a.users.toLocaleString()} ${a.users === 1 ? "person" : "people"} · ${a.queries.toLocaleString()} ${a.queries === 1 ? "query" : "queries"}` : `no queries in ${adoption.windowDays} days`}
+                          {a.users > 0 ? peopleReading(a) : `no users in ${adoption.windowDays} days`}
                         </Text>
+                        {low && gap > 0 && total > 0 && (
+                          <Text textStyle="small" style={{ fontFamily: MONO, color: Colors.Text.Warning.Default }}>
+                            {`+${gap.toLocaleString()} ${gap === 1 ? "person" : "people"} to reach ${cut}%`}
+                          </Text>
+                        )}
                       </Flex>
                     );
-                  })}
-                </Grid>
+                  };
+                  const group = (title: string, tip: string, list: typeof apps, low: boolean) => list.length > 0 && (
+                    <Flex flexDirection="column" gap={12}>
+                      <Tooltip text={tip} containerStyle={{ alignSelf: "flex-start" }}>
+                        <Text textStyle="base-emphasized">{title} <Text textStyle="small" style={{ fontFamily: MONO, color: NEUTRAL }}>{list.length}</Text></Text>
+                      </Tooltip>
+                      <Grid style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "16px 28px" }}>
+                        {list.map(a => row(a, low))}
+                      </Grid>
+                    </Flex>
+                  );
+                  return (
+                    <>
+                      {group("Use more", `Apps that serve ${cap.name} and are opened by fewer than ${cut}% of active users, the line below which adoption counts as low. The capability's own apps come first; "+N" is the number of people each needs to reach ${cut}% (${target.toLocaleString()} of ${total.toLocaleString()}).`, below, true)}
+                      {group("In use", `Apps opened by ${cut}% of active users or more in ${adoption.windowDays} days.`, above, false)}
+                    </>
+                  );
+                })()}
               </Flex>
             )}
         </Panel>
