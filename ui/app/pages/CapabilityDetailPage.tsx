@@ -606,11 +606,16 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
             `A pontuação é a média de três partes iguais. A adoção vale 100 quando ${ADOPTION_FULL_RATE}% dos usuários ativos abrem os apps da capacidade.`,
             `La puntuación es el promedio de tres partes iguales. La adopción cuenta como 100 cuando el ${ADOPTION_FULL_RATE}% de los usuarios activos abre las apps de la capacidad.`)}</InformationOverlay.Content></InformationOverlay>}>
             <Flex flexDirection="column" gap={12}>
-              {cap.estateShare != null
-                ? <Tooltip text={tr(
-                    `${cap.coverageOfMonitored ?? 0}% of the criteria met × ${Math.floor(cap.estateShare * 10) / 10}% of the planned estate monitored`,
-                    `${cap.coverageOfMonitored ?? 0}% dos critérios atendidos × ${Math.floor(cap.estateShare * 10) / 10}% do ambiente previsto monitorado`,
-                    `${cap.coverageOfMonitored ?? 0}% de los criterios cumplidos × ${Math.floor(cap.estateShare * 10) / 10}% del entorno previsto monitoreado`)} containerStyle={{ display: "block" }}><Flex flexDirection="column"><TierMeter label={tr("Coverage", "Cobertura", "Cobertura")} pct={cap.coverageScore ?? cap.score} /></Flex></Tooltip>
+              {cap.coverageFactors?.length
+                ? <Tooltip text={[
+                    tr(`${cap.coverageOfMonitored ?? 0}% of the criteria met`, `${cap.coverageOfMonitored ?? 0}% dos critérios atendidos`, `${cap.coverageOfMonitored ?? 0}% de los criterios cumplidos`),
+                    ...cap.coverageFactors.map(f => {
+                      const v = `${Math.floor(f.share * 10) / 10}%`;
+                      return f.id === "a18"
+                        ? tr(`${v} of application processes instrumented`, `${v} dos processos de aplicação instrumentados`, `${v} de los procesos de aplicación instrumentados`)
+                        : tr(`${v} of the planned estate monitored`, `${v} do ambiente previsto monitorado`, `${v} del entorno previsto monitoreado`);
+                    }),
+                  ].join(" × ")} containerStyle={{ display: "block" }}><Flex flexDirection="column"><TierMeter label={tr("Coverage", "Cobertura", "Cobertura")} pct={cap.coverageScore ?? cap.score} /></Flex></Tooltip>
                 : <TierMeter label={tr("Coverage", "Cobertura", "Cobertura")} pct={cap.coverageScore ?? cap.score} />}
               <TierMeter label={tr("Utilization", "Utilização", "Utilización")} pct={cap.effectiveUtilizationScore} />
               {cap.adoptionScore != null

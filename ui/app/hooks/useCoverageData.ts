@@ -6,6 +6,44 @@ import { sharedScanFor } from "../shared-scans";
 import { CAPABILITIES, type CapabilityDef, type Threshold } from "../queries";
 import { ESTATE_CRITERIA } from "../data/estateTarget";
 const ESTATE_IDS = new Set<string>(ESTATE_CRITERIA);
+/** Criteria that scale coverage of other capabilities instead of counting in their own share met. */
+const COVERAGE_SCALE_IDS = new Set<string>(["a18"]);
+/** Capabilities whose criteria read no telemetry (platform configuration and use): the planned estate does not scale them. */
+const NOT_DATA = new Set<string>(["Platform Governance"]);
+/** Capabilities that need OneAgent code modules (traces, services, runtime vulnerability analysis). */
+const NEEDS_CODE_MODULES = new Set<string>(["Application Observability", "Application Security"]);
+
+/** Coverage = share of criteria met × the factors that apply (in place on `results`):
+ *   - planned hosts monitored (i32) → every capability that reads data; Infrastructure averages it with planned
+ *     clusters (i33); Digital Experience uses planned applications (d16) when set;
+ *   - application processes instrumented (a18) → the capabilities that need OneAgent code modules.
+ *  A factor that was not measured (no target, OpenTelemetry-only estate) is not applied. */
+function applyCoverageFactors(results: CapabilityResult[]): void {
+  const value = (id: string): number | null => {
+    for (const c of results) for (const cr of c.criteriaResults) if (cr.id === id && !cr.error && !cr.notAssessed) return Math.min(100, cr.value);
+    return null;
+  };
+  const hosts = value("i32"), clusters = value("i33"), apps = value("d16"), instrumented = value("a18");
+  for (const c of results) {
+    const f: { id: string; label: string; share: number }[] = [];
+    if (!NOT_DATA.has(c.name)) {
+      if (c.name === "Infrastructure Observability" && (hosts != null || clusters != null)) {
+        const parts = [hosts, clusters].filter((v): v is number => v != null);
+        f.push({ id: "estate", label: "planned estate monitored", share: parts.reduce((a, b) => a + b, 0) / parts.length });
+      } else if (c.name === "Digital Experience" && apps != null) {
+        f.push({ id: "estate", label: "planned applications monitored", share: apps });
+      } else if (hosts != null) {
+        f.push({ id: "estate", label: "planned hosts monitored", share: hosts });
+      }
+    }
+    if (NEEDS_CODE_MODULES.has(c.name) && instrumented != null) f.push({ id: "a18", label: "application processes instrumented", share: instrumented });
+    if (f.length === 0) continue;
+    const met = c.coverageOfMonitored ?? c.score;
+    c.score = Math.floor(f.reduce((acc, x) => (acc * x.share) / 100, met) + 1e-9);
+    c.coverageFactors = f;
+    c.estateShare = f.find(x => x.id === "estate")?.share ?? null;
+  }
+}
 import { CRITERION_TIERS, type CriterionTier } from "../data/criterionTiers";
 import { scaleQuery, TIER_CONFIG, type ScaleTier, COST_SCAN_LIMIT_GB } from "../scale-tier";
 import { classifySource, type InFlightPerfEntry, type PerfReport } from "../perf/types";
@@ -48,10 +86,12 @@ export interface CapabilityResult {
   adoptionScore?: number | null;
   /** Share of active users (0–100) behind adoptionScore. */
   adoptionRate?: number | null;
-  /** Share (0–100) of the planned estate already monitored (data/estateTarget.ts), when a target is set for this
-   *  capability. Coverage is the share of criteria met times this share: a project with 51 of 5,000 planned hosts
-   *  has covered 1% of what it set out to cover, however well those 51 are configured. */
+  /** Share (0–100) of the planned estate already monitored (data/estateTarget.ts), when a target applies to this
+   *  capability. Kept for compatibility; `coverageFactors` lists every factor applied. */
   estateShare?: number | null;
+  /** What scales coverage beyond the share of criteria met: the planned estate monitored and, for the capabilities
+   *  that need OneAgent code modules, the application processes instrumented. Coverage = share met × each factor. */
+  coverageFactors?: { id: string; label: string; share: number }[];
   /** Coverage before the estate share was applied (share of criteria met). */
   coverageOfMonitored?: number;
 }
@@ -958,8 +998,6 @@ export function useCoverageData(
         // The estate target's criteria are a scale, not a pass/fail check: they leave the tier counts and the share of
         // criteria met, and multiply coverage instead (below).
         const scored = criteriaResults.filter(cr => !ESTATE_IDS.has(cr.id));
-        const estateRows = criteriaResults.filter(cr => ESTATE_IDS.has(cr.id) && !cr.error && !cr.notAssessed);
-        const estateShare = estateRows.length > 0 ? Math.min(100, estateRows.reduce((a, cr) => a + cr.value, 0) / estateRows.length) : null;
         for (const cr of scored) {
           if (threeState && cr.notAssessed) continue;
           const t = cr.tier;
@@ -991,17 +1029,18 @@ export function useCoverageData(
           utilizationBand,
         };
 
-        const passedCount = scored.filter(cr => cr.points > 0).length;
-        const notAssessedCount = threeState ? scored.filter(cr => cr.notAssessed).length : 0;
-        const assessedCount = scored.length - notAssessedCount;
+        // A coverage-scale criterion (application processes instrumented) stays in its tier but not in the share met:
+        // it multiplies coverage instead (applyCoverageFactors), so it is not counted twice.
+        const shareRows = scored.filter(cr => !COVERAGE_SCALE_IDS.has(cr.id));
+        const passedCount = shareRows.filter(cr => cr.points > 0).length;
+        const notAssessedCount = threeState ? shareRows.filter(cr => cr.notAssessed).length : 0;
+        const assessedCount = shareRows.length - notAssessedCount;
         // "Of what we could measure, how much passes." With the flag off the
         // denominator is the full catalog again — identical to v2.5.10.
         const metShare = assessedCount > 0 ? Math.floor((passedCount / assessedCount) * 100 + 1e-9) : 0;
-        // With an estate target: of what the project plans to monitor, how much is covered.
-        const capScore = estateShare == null ? metShare : Math.floor((metShare * estateShare) / 100 + 1e-9);
-
-        return { name: cap.name, color: cap.color, score: capScore, details, criteriaResults, assessedCount, notAssessedCount, utilization, effectiveUtilizationScore: utilizationScore, estateShare, coverageOfMonitored: metShare };
+        return { name: cap.name, color: cap.color, score: metShare, details, criteriaResults, assessedCount, notAssessedCount, utilization, effectiveUtilizationScore: utilizationScore, coverageOfMonitored: metShare };
       });
+      applyCoverageFactors(results);
 
       // Log summary
       const totalCriteria = results.reduce((s, c) => s + c.criteriaResults.length, 0);

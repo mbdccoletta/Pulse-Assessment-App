@@ -4,6 +4,16 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.21] — 2026-11-24
+
+### Changed
+- **Only database servers may run without full-stack.** "Application hosts in full-stack" covers every host running application processes except database servers (MySQL, MariaDB, PostgreSQL, Db2, SQL Server, Oracle, MongoDB, Redis, Memcached, Elasticsearch, Cassandra, Couchbase, SAP HANA); hosts with no application, such as file servers, stay out as before.
+- **"Application processes instrumented" counts processes on every host but database servers**, not only on full-stack hosts: an application process on a host in infrastructure mode is not instrumented either.
+- **Coverage follows the data it depends on.** Coverage = share of criteria met × the factors that apply:
+  - the planned hosts monitored (estate target) scale every capability that reads data — all but Platform Governance. Infrastructure averages hosts with planned clusters; Digital Experience uses planned applications when set;
+  - the application processes instrumented scale Application Observability and Application Security, which need OneAgent code modules (traces, services, runtime vulnerability analysis). The criterion stays in its Foundation tier; it no longer counts in the share met, so it is not counted twice.
+  - A factor that was not measured (no target; OpenTelemetry-only estate) is not applied. The Coverage meter's tooltip lists the factors.
+
 ## [3.0.20] — 2026-11-24
 
 ### Fixed

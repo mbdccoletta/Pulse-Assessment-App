@@ -83,22 +83,26 @@ coverage = floor(met / assessed × 100)        (0 when assessed = 0)
 
 Not assessed criteria leave the denominator. They are reported and never counted as failures.
 
-### 2.1 Estate target (optional)
+### 2.1 Coverage factors
 
-Source: `ui/app/data/estateTarget.ts`, `estateShare` in `useCoverageData.ts`.
+Source: `applyCoverageFactors` in `ui/app/hooks/useCoverageData.ts`, `ui/app/data/estateTarget.ts`.
 
-When the team sets how many hosts, applications and Kubernetes clusters the project plans to monitor, each number
-adds a row to its capability (`i32` planned hosts and `i33` planned clusters to Infrastructure, `d16` planned
-applications to Digital Experience), read as monitored ÷ planned. These rows are a scale, not a pass/fail check:
-they leave `met`, `assessed` and the utilization tiers, and multiply coverage.
+The share of criteria met only reads what already reports. Two factors scale it by what the data depends on:
+
+| Factor | From | Scales |
+|---|---|---|
+| Planned estate monitored | estate target (header "Target"): `i32` hosts, `i33` clusters, `d16` applications, each monitored ÷ planned | every capability that reads data (all but Platform Governance). Infrastructure averages hosts and clusters; Digital Experience uses applications when set, hosts otherwise |
+| Application processes instrumented | `a18`: application processes with a OneAgent code module, all hosts but database servers | Application Observability and Application Security |
 
 ```
-estate share = mean of the capability's planned-estate rows, capped at 100%
-coverage     = floor(met / assessed × 100 × estate share)
+coverage = floor(met / assessed × 100 × Π factor)
 ```
 
-Example: 64% of the Infrastructure criteria met, 51 hosts against 5,000 planned (1.0%) → coverage 0%. With 4,000 of
-5,000 monitored (80%) → coverage 51%. Without a target nothing changes.
+The estate rows leave `met`, `assessed` and the tiers. `a18` stays in its Foundation tier but leaves `met` and `assessed`,
+so it is not counted twice. A factor that was not measured (no target, OpenTelemetry-only estate) is not applied.
+
+Example: 64% of the Infrastructure criteria met, 51 hosts against 5,000 planned (1.0%) → coverage 0%. Application
+Observability with 80% met and 13% of application processes instrumented → coverage 10%.
 
 ## 3. Utilization
 

@@ -60,6 +60,7 @@ function utilizationOf(f: number, b: number, e: number): number {
 export function gainIfMet(cap: CapabilityResult, tier: "foundation" | "bestPractice" | "excellence", id?: string): number {
   // An estate-target criterion is a scale on coverage, not a pass/fail check: meeting it means the whole planned
   // estate is monitored, so coverage becomes the share of criteria met.
+  // Factor criteria (planned estate, processes instrumented) scale coverage; gains are computed elsewhere for a18 too.
   if (id && (ESTATE_CRITERIA as readonly string[]).includes(id)) {
     const parts = PULSE_SCORE_PARTS === "coverage" ? 1 : cap.adoptionScore != null ? 3 : 2;
     const gain = ((cap.coverageOfMonitored ?? 0) - (cap.coverageScore ?? cap.score)) / parts;
@@ -74,7 +75,8 @@ export function gainIfMet(cap: CapabilityResult, tier: "foundation" | "bestPract
     frac(u.excellence, tier === "excellence" ? 1 : 0),
   );
   // With an estate target, coverage is the share met times the share of the planned estate monitored.
-  const coverageGain = cap.assessedCount > 0 ? (100 / cap.assessedCount) * ((cap.estateShare ?? 100) / 100) : 0;
+  const scale = (cap.coverageFactors ?? []).reduce((a, f) => (a * f.share) / 100, 1);
+  const coverageGain = id === "a18" ? 0 : cap.assessedCount > 0 ? (100 / cap.assessedCount) * scale : 0;
   const parts = PULSE_SCORE_PARTS === "coverage" ? 1 : cap.adoptionScore != null ? 3 : 2;
   const gain = PULSE_SCORE_PARTS === "coverage" ? coverageGain : (coverageGain + (utilThen - utilNow)) / parts;
   // Floored to one decimal: a gain is never shown larger than it is.

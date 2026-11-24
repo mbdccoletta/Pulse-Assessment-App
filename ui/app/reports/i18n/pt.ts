@@ -23,7 +23,7 @@ export const PT: Record<string, CriterionText> = {
   },
   i29: {
     label: "Hosts de aplicação em full-stack",
-    description: "Percentual dos hosts que rodam processos de aplicação (Java, .NET, Node.js, PHP, IIS) monitorados pelo OneAgent em modo full-stack. Um host só em modo infraestrutura roda essas aplicações sem traces nem serviços.",
+    description: "Percentual dos hosts que rodam processos de aplicação (Java, .NET, Node.js, PHP, IIS) monitorados pelo OneAgent em modo full-stack. Servidores de banco de dados podem rodar em modo infraestrutura ou discovery e ficam de fora; também ficam de fora hosts sem aplicação, como servidores de arquivos.",
     action: "Passe para full-stack os hosts que rodam aplicações, para que o OneAgent instrumente seus processos.",
   },
   i30: {
@@ -168,7 +168,7 @@ export const PT: Record<string, CriterionText> = {
   },
   a18: {
     label: "Processos de aplicação instrumentados",
-    description: "Percentual dos processos de aplicação (Java, .NET, Node.js, PHP, IIS) em hosts full-stack que rodam um módulo de código do OneAgent, como o Fleet Management mostra. Processo sem módulo não gera traces nem serviços.",
+    description: "Percentual dos processos de aplicação (Java, .NET, Node.js, PHP, IIS) que rodam um módulo de código do OneAgent, como o Fleet Management mostra, em todos os hosts exceto servidores de banco de dados. Processo sem módulo — em host no modo infraestrutura, ou iniciado antes da instalação do OneAgent — não gera traces nem serviços.",
     action: "Reinicie os processos de aplicação que subiram antes do OneAgent e confirme que a injeção automática está ligada nesses hosts (ou que o Dynatrace Operator injeta os pods).",
   },
   a2: {
