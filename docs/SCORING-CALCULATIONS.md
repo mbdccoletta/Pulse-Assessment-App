@@ -83,6 +83,23 @@ coverage = floor(met / assessed × 100)        (0 when assessed = 0)
 
 Not assessed criteria leave the denominator. They are reported and never counted as failures.
 
+### 2.1 Estate target (optional)
+
+Source: `ui/app/data/estateTarget.ts`, `estateShare` in `useCoverageData.ts`.
+
+When the team sets how many hosts, applications and Kubernetes clusters the project plans to monitor, each number
+adds a row to its capability (`i32` planned hosts and `i33` planned clusters to Infrastructure, `d16` planned
+applications to Digital Experience), read as monitored ÷ planned. These rows are a scale, not a pass/fail check:
+they leave `met`, `assessed` and the utilization tiers, and multiply coverage.
+
+```
+estate share = mean of the capability's planned-estate rows, capped at 100%
+coverage     = floor(met / assessed × 100 × estate share)
+```
+
+Example: 64% of the Infrastructure criteria met, 51 hosts against 5,000 planned (1.0%) → coverage 0%. With 4,000 of
+5,000 monitored (80%) → coverage 51%. Without a target nothing changes.
+
 ## 3. Utilization
 
 Source: `ui/app/hooks/useCoverageData.ts` (`tierCounts`, `FOUNDATION_WEIGHT`, `BEST_PRACTICE_WEIGHT`, `EXCELLENCE_WEIGHT`), `ui/app/data/criterionTiers.ts`.

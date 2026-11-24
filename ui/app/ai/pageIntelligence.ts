@@ -81,7 +81,7 @@ function verdictOf(c: CapabilityResult, adoption?: UseAppAdoptionResult) {
 /** Unmet criteria ranked by the points each adds to the OVERALL score. */
 function gains(caps: CapabilityResult[]) {
   return caps.flatMap(c => c.criteriaResults.filter(isFail).map(r => ({
-    c, r, capGain: gainIfMet(c, r.tier as Tier), gain: r1(gainIfMet(c, r.tier as Tier) / Math.max(1, caps.length)),
+    c, r, capGain: gainIfMet(c, r.tier as Tier, r.id), gain: r1(gainIfMet(c, r.tier as Tier, r.id) / Math.max(1, caps.length)),
   }))).sort((a, b) => b.gain - a.gain);
 }
 
@@ -342,7 +342,7 @@ export function overallFacts(caps: CapabilityResult[], totalScore: number, adopt
 export function capabilityFacts(cap: CapabilityResult, adoption?: UseAppAdoptionResult, apps: { name: string; users: number }[] = []): string {
   const dx = verdictOf(cap, adoption);
   const unmet = cap.criteriaResults.filter(isFail)
-    .map(r => ({ r, gain: gainIfMet(cap, r.tier as Tier) }))
+    .map(r => ({ r, gain: gainIfMet(cap, r.tier as Tier, r.id) }))
     .sort((a, b) => b.gain - a.gain)
     .map(({ r }) => {
       const act = CRITERION_ACTIONS[r.id]?.action;

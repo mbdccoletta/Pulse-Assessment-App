@@ -96,7 +96,7 @@ export const ExecutiveSummary: React.FC<Props> = ({ capabilities, totalScore, hi
   // Every unmet criterion, by what it adds to the OVERALL score.
   const todo = useMemo(() => capabilities.flatMap(c => c.criteriaResults
     .filter(r => isFail(r) && (!tier || r.tier === tier))
-    .map(r => ({ c, r, gain: Math.floor((gainIfMet(c, r.tier) / capabilities.length) * 10 + 1e-9) / 10 })))
+    .map(r => ({ c, r, gain: Math.floor((gainIfMet(c, r.tier, r.id) / capabilities.length) * 10 + 1e-9) / 10 })))
     .sort((a, b) => b.gain - a.gain), [capabilities, tier]);
   type Todo = (typeof todo)[number];
   const raises = tr("Raises the score", "Aumenta a pontuação", "Aumenta la puntuación");

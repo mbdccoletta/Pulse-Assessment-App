@@ -362,7 +362,7 @@ const ActionList: React.FC<{ cap: CapabilityResult; ctx: ReportContext; tier?: s
   };
   const todo = useMemo(() => cap.criteriaResults
     .filter(r => rowState(r) === "fail" && (!tier || r.tier === tier))
-    .map(r => ({ r, gain: gainIfMet(cap, r.tier) }))
+    .map(r => ({ r, gain: gainIfMet(cap, r.tier, r.id) }))
     .sort((a, b) => b.gain - a.gain), [cap, tier]);
   if (todo.length === 0) return null;
   const shown = all ? todo : todo.slice(0, 5);
@@ -606,7 +606,12 @@ export const CapabilityDetailPage: React.FC<Props> = ({ coverageData, history })
             `A pontuação é a média de três partes iguais. A adoção vale 100 quando ${ADOPTION_FULL_RATE}% dos usuários ativos abrem os apps da capacidade.`,
             `La puntuación es el promedio de tres partes iguales. La adopción cuenta como 100 cuando el ${ADOPTION_FULL_RATE}% de los usuarios activos abre las apps de la capacidad.`)}</InformationOverlay.Content></InformationOverlay>}>
             <Flex flexDirection="column" gap={12}>
-              <TierMeter label={tr("Coverage", "Cobertura", "Cobertura")} pct={cap.coverageScore ?? cap.score} />
+              {cap.estateShare != null
+                ? <Tooltip text={tr(
+                    `${cap.coverageOfMonitored ?? 0}% of the criteria met × ${Math.floor(cap.estateShare * 10) / 10}% of the planned estate monitored`,
+                    `${cap.coverageOfMonitored ?? 0}% dos critérios atendidos × ${Math.floor(cap.estateShare * 10) / 10}% do ambiente previsto monitorado`,
+                    `${cap.coverageOfMonitored ?? 0}% de los criterios cumplidos × ${Math.floor(cap.estateShare * 10) / 10}% del entorno previsto monitoreado`)} containerStyle={{ display: "block" }}><Flex flexDirection="column"><TierMeter label={tr("Coverage", "Cobertura", "Cobertura")} pct={cap.coverageScore ?? cap.score} /></Flex></Tooltip>
+                : <TierMeter label={tr("Coverage", "Cobertura", "Cobertura")} pct={cap.coverageScore ?? cap.score} />}
               <TierMeter label={tr("Utilization", "Utilização", "Utilización")} pct={cap.effectiveUtilizationScore} />
               {cap.adoptionScore != null
                 ? <Tooltip text={tr(

@@ -4,6 +4,8 @@ import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 import { getEnvironmentUrl } from "@dynatrace-sdk/app-environment";
 import { sharedScanFor } from "../shared-scans";
 import { CAPABILITIES, type CapabilityDef, type Threshold } from "../queries";
+import { ESTATE_CRITERIA } from "../data/estateTarget";
+const ESTATE_IDS = new Set<string>(ESTATE_CRITERIA);
 import { CRITERION_TIERS, type CriterionTier } from "../data/criterionTiers";
 import { scaleQuery, TIER_CONFIG, type ScaleTier, COST_SCAN_LIMIT_GB } from "../scale-tier";
 import { classifySource, type InFlightPerfEntry, type PerfReport } from "../perf/types";
@@ -46,6 +48,12 @@ export interface CapabilityResult {
   adoptionScore?: number | null;
   /** Share of active users (0–100) behind adoptionScore. */
   adoptionRate?: number | null;
+  /** Share (0–100) of the planned estate already monitored (data/estateTarget.ts), when a target is set for this
+   *  capability. Coverage is the share of criteria met times this share: a project with 51 of 5,000 planned hosts
+   *  has covered 1% of what it set out to cover, however well those 51 are configured. */
+  estateShare?: number | null;
+  /** Coverage before the estate share was applied (share of criteria met). */
+  coverageOfMonitored?: number;
 }
 
 export interface QueryStats {
@@ -947,7 +955,12 @@ export function useCoverageData(
         // reads as L0 "Not Adopted" when nothing was measurable at all.
         const threeState = threeStateScoringEnabled();
         const tierCounts = { foundation: { total: 0, passed: 0 }, bestPractice: { total: 0, passed: 0 }, excellence: { total: 0, passed: 0 } };
-        for (const cr of criteriaResults) {
+        // The estate target's criteria are a scale, not a pass/fail check: they leave the tier counts and the share of
+        // criteria met, and multiply coverage instead (below).
+        const scored = criteriaResults.filter(cr => !ESTATE_IDS.has(cr.id));
+        const estateRows = criteriaResults.filter(cr => ESTATE_IDS.has(cr.id) && !cr.error && !cr.notAssessed);
+        const estateShare = estateRows.length > 0 ? Math.min(100, estateRows.reduce((a, cr) => a + cr.value, 0) / estateRows.length) : null;
+        for (const cr of scored) {
           if (threeState && cr.notAssessed) continue;
           const t = cr.tier;
           tierCounts[t].total++;
@@ -978,14 +991,16 @@ export function useCoverageData(
           utilizationBand,
         };
 
-        const passedCount = criteriaResults.filter(cr => cr.points > 0).length;
-        const notAssessedCount = threeState ? criteriaResults.filter(cr => cr.notAssessed).length : 0;
-        const assessedCount = cap.criteria.length - notAssessedCount;
+        const passedCount = scored.filter(cr => cr.points > 0).length;
+        const notAssessedCount = threeState ? scored.filter(cr => cr.notAssessed).length : 0;
+        const assessedCount = scored.length - notAssessedCount;
         // "Of what we could measure, how much passes." With the flag off the
         // denominator is the full catalog again — identical to v2.5.10.
-        const capScore = assessedCount > 0 ? Math.floor((passedCount / assessedCount) * 100 + 1e-9) : 0;
+        const metShare = assessedCount > 0 ? Math.floor((passedCount / assessedCount) * 100 + 1e-9) : 0;
+        // With an estate target: of what the project plans to monitor, how much is covered.
+        const capScore = estateShare == null ? metShare : Math.floor((metShare * estateShare) / 100 + 1e-9);
 
-        return { name: cap.name, color: cap.color, score: capScore, details, criteriaResults, assessedCount, notAssessedCount, utilization, effectiveUtilizationScore: utilizationScore };
+        return { name: cap.name, color: cap.color, score: capScore, details, criteriaResults, assessedCount, notAssessedCount, utilization, effectiveUtilizationScore: utilizationScore, estateShare, coverageOfMonitored: metShare };
       });
 
       // Log summary

@@ -738,7 +738,7 @@ function capabilityHead(k: Kit, T: Words, c: CapabilityResult, input: ReportInpu
 
 const unmet = (c: CapabilityResult, perCap: number) => c.criteriaResults
   .filter(r => stateOf(r) === "notMet")
-  .map(r => ({ c, r, gain: round1(gainIfMet(c, r.tier) / perCap) }));
+  .map(r => ({ c, r, gain: round1(gainIfMet(c, r.tier, r.id) / perCap) }));
 
 export function buildReport(kind: ReportKind, input: ReportInput, lang: ReportLang = "en"): jsPDF | null {
   otelRun = !!input.run?.otel;

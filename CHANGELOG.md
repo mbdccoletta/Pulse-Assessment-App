@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.18] — 2026-11-24
+
+### Changed
+- The estate target scales coverage instead of adding a pass/fail criterion. A capability with a target reads coverage as the share of its criteria met times the share of the planned estate monitored (hosts and clusters for Infrastructure, applications for Digital Experience): 51 of 5,000 planned hosts is 1% of the project covered, however well those 51 are configured, so 5,000, 20,000 or 50,000 planned hosts now read differently. The planned-estate rows stay on the capability page and in "What to do" (their gain is the coverage the full estate would bring); they no longer count in the tiers. The Coverage meter's tooltip shows both factors.
+
 ## [3.0.17] — 2026-11-24
 
 ### Added

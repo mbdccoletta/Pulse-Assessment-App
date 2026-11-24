@@ -13,6 +13,7 @@
 // Rollback: PULSE_SCORE_PARTS = "coverage" restores the coverage-only score.
 
 import type { CapabilityResult } from "./hooks/useCoverageData";
+import { ESTATE_CRITERIA } from "./data/estateTarget";
 
 export const ADOPTION_FULL_RATE = 20;
 export const PULSE_SCORE_PARTS: "three" | "coverage" = "three";
@@ -56,7 +57,14 @@ function utilizationOf(f: number, b: number, e: number): number {
 
 /** Points the capability score gains if this one unmet criterion were met.
  *  Recomputes coverage and utilization with it passing; adoption is unchanged. */
-export function gainIfMet(cap: CapabilityResult, tier: "foundation" | "bestPractice" | "excellence"): number {
+export function gainIfMet(cap: CapabilityResult, tier: "foundation" | "bestPractice" | "excellence", id?: string): number {
+  // An estate-target criterion is a scale on coverage, not a pass/fail check: meeting it means the whole planned
+  // estate is monitored, so coverage becomes the share of criteria met.
+  if (id && (ESTATE_CRITERIA as readonly string[]).includes(id)) {
+    const parts = PULSE_SCORE_PARTS === "coverage" ? 1 : cap.adoptionScore != null ? 3 : 2;
+    const gain = ((cap.coverageOfMonitored ?? 0) - (cap.coverageScore ?? cap.score)) / parts;
+    return Math.max(0, Math.floor(gain * 10 + 1e-9) / 10);
+  }
   const u = cap.utilization;
   const frac = (t: { passed: number; total: number }, add: number) => (t.total > 0 ? Math.min(1, (t.passed + add) / t.total) : 0);
   const utilNow = utilizationOf(frac(u.foundation, 0), frac(u.bestPractice, 0), frac(u.excellence, 0));
@@ -65,7 +73,8 @@ export function gainIfMet(cap: CapabilityResult, tier: "foundation" | "bestPract
     frac(u.bestPractice, tier === "bestPractice" ? 1 : 0),
     frac(u.excellence, tier === "excellence" ? 1 : 0),
   );
-  const coverageGain = cap.assessedCount > 0 ? 100 / cap.assessedCount : 0;
+  // With an estate target, coverage is the share met times the share of the planned estate monitored.
+  const coverageGain = cap.assessedCount > 0 ? (100 / cap.assessedCount) * ((cap.estateShare ?? 100) / 100) : 0;
   const parts = PULSE_SCORE_PARTS === "coverage" ? 1 : cap.adoptionScore != null ? 3 : 2;
   const gain = PULSE_SCORE_PARTS === "coverage" ? coverageGain : (coverageGain + (utilThen - utilNow)) / parts;
   // Floored to one decimal: a gain is never shown larger than it is.
