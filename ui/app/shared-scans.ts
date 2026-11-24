@@ -18,6 +18,8 @@
 // signal is too sparse to sample) and get the same window, so the shared scan
 // returns exactly what each member would.
 
+import { CAPABILITIES } from "./queries";
+
 const SVC = "coalesce(dt.entity.service, service.name)";
 const LOGS = "fetch logs | filter timestamp > now() - 2h";
 /** Same machine identity as ./otel-mode.ts. */
@@ -86,8 +88,39 @@ export const SHARED_SCANS: SharedScan[] = [
   },
 ];
 
+// The deployment criteria (i29 application hosts in full-stack, a18 application processes instrumented) read every
+// process group instance; their numerator and denominator ran as four reads of ~20 s each on a ~1,000-host estate.
+// Two shared reads give the same four numbers (4 s and 9 s there). Built from the catalog's own text, so a member can
+// never drift from the query the catalog, the reports and the cache key carry.
+function deploymentScans(): SharedScan[] {
+  const all = CAPABILITIES.flatMap(c => c.criteria);
+  const i29 = all.find(c => c.id === "i29");
+  const a18 = all.find(c => c.id === "a18");
+  const out: SharedScan[] = [];
+  const TAIL = " | summarize count()";
+  if (i29?.queryB?.endsWith(TAIL)) {
+    const prefix = i29.queryB.slice(0, -TAIL.length);
+    out.push({
+      base: `${prefix} | summarize appHosts = count(), fullStack = countIf(host.mode == "FULL_STACK")`,
+      members: { [i29.queryB]: "appHosts", [i29.query]: "fullStack" },
+    });
+  }
+  const NUM_TAIL = " | filter isNotNull(mod.m) | summarize c = count()";
+  if (a18?.queryB?.endsWith(TAIL) && a18.query.endsWith(NUM_TAIL)) {
+    const prefix = a18.queryB.slice(0, -TAIL.length);
+    if (a18.query.startsWith(prefix)) {
+      const fleet = a18.query.slice(prefix.length, -NUM_TAIL.length);
+      out.push({
+        base: `${prefix}${fleet} | summarize procs = count(), instrumented = countIf(isNotNull(mod.m))`,
+        members: { [a18.queryB]: "procs", [a18.query]: "instrumented" },
+      });
+    }
+  }
+  return out;
+}
+
 const BY_MEMBER = new Map<string, { scan: SharedScan; field: string }>();
-for (const scan of SHARED_SCANS) for (const [q, field] of Object.entries(scan.members)) BY_MEMBER.set(q.trim(), { scan, field });
+for (const scan of [...SHARED_SCANS, ...deploymentScans()]) for (const [q, field] of Object.entries(scan.members)) BY_MEMBER.set(q.trim(), { scan, field });
 
 /** The shared scan a catalog query belongs to, if any. */
 export function sharedScanFor(query: string): { scan: SharedScan; field: string } | undefined {

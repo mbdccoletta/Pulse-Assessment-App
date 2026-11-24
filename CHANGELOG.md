@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.20] — 2026-11-24
+
+### Fixed
+- The run held at 98% on large estates: application hosts in full-stack and application processes instrumented read every process group instance, numerator and denominator separately — four reads of about 20 s each on a ~1,000-host estate. They now run as two shared reads (about 4 s and 9 s there) that return the same four numbers, built from the catalog's own queries.
+
 ## [3.0.19] — 2026-11-24
 
 ### Changed
