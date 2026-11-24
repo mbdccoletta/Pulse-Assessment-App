@@ -23,7 +23,7 @@ export const ES: Record<string, CriterionText> = {
   },
   i29: {
     label: "Hosts de aplicación en full-stack",
-    description: "Porcentaje de los hosts que ejecutan procesos de aplicación (Java, .NET, Node.js, PHP, IIS) monitoreados por OneAgent en modo full-stack. Los servidores de bases de datos pueden ejecutarse en modo infraestructura o discovery y quedan fuera; también los hosts sin aplicación, como los servidores de archivos.",
+    description: "Porcentaje de los hosts que ejecutan código de aplicación (procesos Java, .NET, Node.js, PHP que no son productos de infraestructura) monitoreados por OneAgent en modo full-stack. Quedan fuera: servidores de bases de datos, hosts donde full-stack no es compatible (z/OS, Solaris, HP-UX, solo agentes especiales) y hosts cuyos procesos no necesitan análisis de código (servidores de archivos, mensajería, caché, búsqueda, proxy y web; componentes de Dynatrace).",
     action: "Pase a full-stack los hosts que ejecutan aplicaciones para que OneAgent instrumente sus procesos.",
   },
   i30: {
@@ -168,7 +168,7 @@ export const ES: Record<string, CriterionText> = {
   },
   a18: {
     label: "Procesos de aplicación instrumentados",
-    description: "Porcentaje de los procesos de aplicación (Java, .NET, Node.js, PHP, IIS) que ejecutan un módulo de código de OneAgent, como muestra Fleet Management, en todos los hosts excepto los servidores de bases de datos. Un proceso sin módulo — en un host en modo infraestructura, o iniciado antes de instalar OneAgent — no genera traces ni servicios.",
+    description: "Porcentaje de los procesos de aplicación (código Java, .NET, Node.js, PHP, no productos de infraestructura como bases de datos, búsqueda, mensajería, proxies o componentes de Dynatrace) que ejecutan un módulo de código de OneAgent, como muestra Fleet Management, en todos los hosts donde full-stack es compatible, salvo los servidores de bases de datos. Un proceso sin módulo — en un host en modo infraestructura o discovery, o iniciado antes de instalar OneAgent — no genera traces ni servicios.",
     action: "Reinicie los procesos de aplicación que arrancaron antes de OneAgent y confirme que la inyección automática está activa en esos hosts (o que el Dynatrace Operator inyecta los pods).",
   },
   a2: {

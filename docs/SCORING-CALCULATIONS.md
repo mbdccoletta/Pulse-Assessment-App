@@ -92,7 +92,7 @@ The share of criteria met only reads what already reports. Two factors scale it 
 | Factor | From | Scales |
 |---|---|---|
 | Planned estate monitored | estate target (header "Target"): `i32` hosts, `i33` clusters, `d16` applications, each monitored ÷ planned | every capability that reads data (all but Platform Governance). Infrastructure averages hosts and clusters; Digital Experience uses applications when set, hosts otherwise |
-| Application processes instrumented | `a18`: application processes with a OneAgent code module, all hosts but database servers | Application Observability and Application Security |
+| Application processes instrumented | `a18`: Java, .NET, Node.js and PHP processes that need code analysis (not infrastructure products such as databases, search, messaging, proxies, Dynatrace components) with a OneAgent code module; hosts where full-stack is not supported (z/OS, Solaris, HP-UX, special agents only) and database servers are left out | Application Observability and Application Security |
 
 ```
 coverage = floor(met / assessed × 100 × Π factor)

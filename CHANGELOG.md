@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.22] — 2026-11-24
+
+### Changed
+- **Full-stack is required wherever code needs analysis.** The deployment criteria decide per process, not per host: a Java, .NET, Node.js or PHP process needs a OneAgent code module unless it is an infrastructure product that needs no code analysis (databases, Elasticsearch/OpenSearch, Solr, ZooKeeper, message brokers, proxies and web servers such as HAProxy, NGINX, Envoy, Varnish, Squid; Dynatrace components such as the ActiveGate). Hosts are left out when they are database servers or run an operating system where full-stack is not supported (z/OS, Solaris, HP-UX, special agents only); there infrastructure or discovery mode is correct. File servers and any host whose processes need no code analysis are not counted. IIS is read through its .NET processes.
+
 ## [3.0.21] — 2026-11-24
 
 ### Changed
