@@ -38,9 +38,9 @@ Readings by kind: 107 shares, 32 presence checks, 5 configuration counts.
 | Host CPU coverage | Foundation | Share | 50% | Percentage of monitored hosts with active CPU usage metrics from any source (OneAgent, OTel, cloud integration). |
 | Host memory coverage | Foundation | Share | 50% | Percentage of monitored hosts with active memory usage metrics. |
 | Host availability coverage | Foundation | Share | 50% | Percentage of monitored hosts with availability metrics — basis for SLA reporting. |
-| Application hosts in full-stack | Foundation | Share | 50% | Percentage of hosts running application processes (Java, .NET, Node.js, PHP, IIS) that OneAgent monitors in full-stack mode. A host only in infrastructure mode runs those applications without traces or services. |
-| OneAgent code modules up to date | Foundation | Share | 50% | Percentage of OneAgent code modules running the installed agent version. An outdated module (Fleet Management: AGENT_OUTDATED) waits for its process to restart. |
-| Hosts reporting | Foundation | Share | 50% | Percentage of the hosts seen in the last 7 days that still reported in the last 30 minutes. Kubernetes nodes are left out: they come and go by design. |
+| Application hosts in full-stack | Foundation | Share | 90% | Percentage of hosts running application processes (Java, .NET, Node.js, PHP, IIS) that OneAgent monitors in full-stack mode. A host only in infrastructure mode runs those applications without traces or services. |
+| OneAgent code modules up to date | Foundation | Share | 90% | Percentage of OneAgent code modules running the installed agent version. An outdated module (Fleet Management: AGENT_OUTDATED) waits for its process to restart. |
+| Hosts reporting | Foundation | Share | 90% | Percentage of the hosts seen in the last 7 days that still reported in the last 30 minutes. Kubernetes nodes are left out: they come and go by design. |
 | Host disk coverage | Best practice | Share | 50% | Percentage of monitored hosts with active disk utilization metrics. |
 | Host network coverage | Best practice | Share | 50% | Percentage of monitored hosts with network interface entities. |
 | Process CPU coverage | Best practice | Share | 30% | Percentage of process groups with active CPU usage metrics. |
@@ -70,7 +70,7 @@ Readings by kind: 107 shares, 32 presence checks, 5 configuration counts.
 
 | Criterion | Tier | Reading | Met at | What it measures |
 |---|---|---|---|---|
-| Application processes instrumented | Foundation | Share | 50% | Percentage of application processes (Java, .NET, Node.js, PHP, IIS) on full-stack hosts that run a OneAgent code module, as Fleet Management shows. A process without one produces no traces and no services. |
+| Application processes instrumented | Foundation | Share | 90% | Percentage of application processes (Java, .NET, Node.js, PHP, IIS) on full-stack hosts that run a OneAgent code module, as Fleet Management shows. A process without one produces no traces and no services. |
 | Response time coverage | Foundation | Share | 50% | Percentage of services with response time metrics (p95). |
 | Service method coverage | Best practice | Share | 30% | Percentage of services with method-level tracing. |
 | Failure tracking coverage | Best practice | Share | 40% | Percentage of services with failure rate metrics. |

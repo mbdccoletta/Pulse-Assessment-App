@@ -238,21 +238,21 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of hosts running application processes (Java, .NET, Node.js, PHP, IIS) that OneAgent monitors in full-stack mode. A host only in infrastructure mode runs those applications without traces or services.",
         query: "fetch dt.entity.process_group_instance | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, \"JAVA\") or matchesPhrase(tech, \"DOTNET\") or matchesPhrase(tech, \"NODE_JS\") or matchesPhrase(tech, \"PHP\") or matchesPhrase(tech, \"IIS\") | fields h = belongs_to[dt.entity.host] | dedup h | lookup [fetch dt.entity.host | fields id, mode = monitoringMode], sourceField:h, lookupField:id, prefix:\"host.\" | filter host.mode == \"FULL_STACK\" | summarize c = count()",
         queryB: "fetch dt.entity.process_group_instance | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, \"JAVA\") or matchesPhrase(tech, \"DOTNET\") or matchesPhrase(tech, \"NODE_JS\") or matchesPhrase(tech, \"PHP\") or matchesPhrase(tech, \"IIS\") | fields h = belongs_to[dt.entity.host] | dedup h | lookup [fetch dt.entity.host | fields id, mode = monitoringMode], sourceField:h, lookupField:id, prefix:\"host.\" | summarize count()",
-        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
+        thresholds: [{ min: 100 }, { min: 90 }, { min: 50 }],
       },
       {
         id: "i30", label: "OneAgent code modules up to date (%)",
         description: "Percentage of OneAgent code modules running the installed agent version. An outdated module (Fleet Management: AGENT_OUTDATED) waits for its process to restart.",
         query: "fetch events | filter dt.system.bucket == \"default_fleet_events\" and in(dt.agent.module.type, {\"java\", \"dotnet\", \"nodejs\", \"php\", \"iis\", \"apache\", \"go\"}) | dedup dt.agent.module.id, sort:{timestamp desc} | filter isFalseOrNull(contains(toString(dt.agent.module.issues), \"AGENT_OUTDATED\")) | summarize c = count()",
         queryB: "fetch events | filter dt.system.bucket == \"default_fleet_events\" and in(dt.agent.module.type, {\"java\", \"dotnet\", \"nodejs\", \"php\", \"iis\", \"apache\", \"go\"}) | dedup dt.agent.module.id, sort:{timestamp desc} | summarize count()",
-        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
+        thresholds: [{ min: 100 }, { min: 90 }, { min: 50 }],
       },
       {
         id: "i31", label: "Hosts reporting (%)",
         description: "Percentage of the hosts seen in the last 7 days that still reported in the last 30 minutes. Kubernetes nodes are left out: they come and go by design.",
         query: "smartscapeNodes \"HOST\", from:now()-7d | filter isNull(k8s.cluster.name) | filter lifetime[end] >= now() - 30m | summarize c = count()",
         queryB: "smartscapeNodes \"HOST\", from:now()-7d | filter isNull(k8s.cluster.name) | summarize count()",
-        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
+        thresholds: [{ min: 100 }, { min: 90 }, { min: 50 }],
       },
       // Network devices and their interfaces (SNMP), read as Infrastructure & Operations shows them. An estate with no
       // network device has a zero denominator: the criterion is not assessed, never a failure.
@@ -285,7 +285,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of application processes (Java, .NET, Node.js, PHP, IIS) on full-stack hosts that run a OneAgent code module, as Fleet Management shows. A process without one produces no traces and no services.",
         query: "fetch dt.entity.process_group_instance | filter lifetime[end] >= now() - 1h | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, \"JAVA\") or matchesPhrase(tech, \"DOTNET\") or matchesPhrase(tech, \"NODE_JS\") or matchesPhrase(tech, \"PHP\") or matchesPhrase(tech, \"IIS\") | fieldsAdd h = belongs_to[dt.entity.host], pid = replaceString(toString(id), \"PROCESS_GROUP_INSTANCE-\", \"PROCESS-\") | lookup [fetch dt.entity.host | filter monitoringMode == \"FULL_STACK\" | fields id], sourceField:h, lookupField:id, prefix:\"fs.\" | filter isNotNull(fs.id) | lookup [fetch events | filter dt.system.bucket == \"default_fleet_events\" and in(dt.agent.module.type, {\"java\", \"dotnet\", \"nodejs\", \"php\", \"iis\", \"apache\", \"go\"}) | summarize m = count(), by:{p = toString(dt.smartscape.process)}], sourceField:pid, lookupField:p, prefix:\"mod.\" | filter isNotNull(mod.m) | summarize c = count()",
         queryB: "fetch dt.entity.process_group_instance | filter lifetime[end] >= now() - 1h | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, \"JAVA\") or matchesPhrase(tech, \"DOTNET\") or matchesPhrase(tech, \"NODE_JS\") or matchesPhrase(tech, \"PHP\") or matchesPhrase(tech, \"IIS\") | fieldsAdd h = belongs_to[dt.entity.host], pid = replaceString(toString(id), \"PROCESS_GROUP_INSTANCE-\", \"PROCESS-\") | lookup [fetch dt.entity.host | filter monitoringMode == \"FULL_STACK\" | fields id], sourceField:h, lookupField:id, prefix:\"fs.\" | filter isNotNull(fs.id) | summarize count()",
-        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
+        thresholds: [{ min: 100 }, { min: 90 }, { min: 50 }],
       },
       {
         id: "a2", label: "Service method coverage (%)",

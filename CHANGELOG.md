@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.19] — 2026-11-24
+
+### Changed
+- The four deployment criteria (application hosts in full-stack, OneAgent code modules up to date, hosts reporting, application processes instrumented) are met at 90% instead of 50%: a gap in the deployment itself is an operational problem, not a depth of use. Targets 100 / 90 / 50; the pass line is the middle one, as for every criterion.
+
 ## [3.0.18] — 2026-11-24
 
 ### Changed
