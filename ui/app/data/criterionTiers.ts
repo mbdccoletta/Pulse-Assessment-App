@@ -18,8 +18,15 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   i1:  "foundation",     // Host CPU coverage
   i2:  "foundation",     // Host memory coverage
   i4:  "foundation",     // Host availability coverage
+  i29: "foundation",     // Application hosts in full-stack
+  i30: "foundation",     // OneAgent code modules up to date
+  i31: "foundation",     // Hosts reporting
+  i32: "foundation",     // Planned hosts monitored (only with an estate target)
+  i33: "foundation",     // Planned Kubernetes clusters monitored (only with an estate target)
   i3:  "bestPractice",   // Host disk coverage
   i5:  "bestPractice",   // Host network coverage
+  i27: "bestPractice",   // Network device monitoring
+  i28: "bestPractice",   // Network interface status
   i6:  "bestPractice",   // Process CPU coverage
   i9:  "bestPractice",   // Davis problem coverage
   i7:  "excellence",     // K8s cluster coverage
@@ -42,6 +49,7 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
 
   // ─── 2. APPLICATION OBSERVABILITY ───
   a5:  "foundation",     // Response time coverage
+  a18: "foundation",     // Application processes instrumented
   a2:  "bestPractice",   // Service method coverage
   a6:  "bestPractice",   // Failure tracking coverage
   a7:  "bestPractice",   // Throughput coverage
@@ -55,6 +63,7 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   a15: "excellence",     // Problems with automated response
 
   // ─── 3. DIGITAL EXPERIENCE ───
+  d16: "foundation",     // Planned applications monitored (only with an estate target)
   d1:  "foundation",     // RUM action coverage
   d2:  "foundation",     // Session tracking coverage
   d3:  "foundation",     // LCP coverage

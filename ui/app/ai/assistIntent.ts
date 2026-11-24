@@ -33,6 +33,7 @@
 
 import { useEffect, useState } from "react";
 import { sendIntent } from "@dynatrace-sdk/navigation";
+import { getAppId } from "@dynatrace-sdk/app-environment";
 import { publicClient } from "@dynatrace-sdk/client-davis-copilot";
 import { buildAssessmentContext, buildInstruction, type ReportContext } from "./reportPrompt";
 
@@ -40,8 +41,9 @@ import { buildAssessmentContext, buildInstruction, type ReportContext } from "./
 export const DAVIS_COPILOT_APP_ID = "dynatrace.davis.copilot";
 export const ASK_QUESTION_INTENT_ID = "ask-question";
 
-/** Our app id — sent as origin-app so Assist shows the Pulse icon. */
-const ORIGIN_APP_ID = "my.pulse.assessment";
+/** The running app's id — sent as origin-app so Assist shows its icon. Read
+ *  from the platform, so Pulse embedded in another app reports that app. */
+export const ORIGIN_APP_ID = (() => { try { return getAppId() || "my.pulse.assessment"; } catch { return "my.pulse.assessment"; } })();
 
 export interface OpenAssistOptions {
   /** The visible question (conversation starter body or user-typed text). */

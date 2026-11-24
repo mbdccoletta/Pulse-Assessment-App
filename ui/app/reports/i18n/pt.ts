@@ -21,6 +21,46 @@ export const PT: Record<string, CriterionText> = {
     description: "Percentual de hosts monitorados com métricas de disponibilidade — base para relatórios de SLA.",
     action: "Confirme que as métricas de disponibilidade dos hosts estão sendo coletadas. Revise as configurações de monitoramento de hosts e de SLA.",
   },
+  i29: {
+    label: "Hosts de aplicação em full-stack",
+    description: "Percentual dos hosts que rodam processos de aplicação (Java, .NET, Node.js, PHP, IIS) monitorados pelo OneAgent em modo full-stack. Um host só em modo infraestrutura roda essas aplicações sem traces nem serviços.",
+    action: "Passe para full-stack os hosts que rodam aplicações, para que o OneAgent instrumente seus processos.",
+  },
+  i30: {
+    label: "Módulos de código do OneAgent atualizados",
+    description: "Percentual dos módulos de código do OneAgent rodando a versão instalada do agente. Um módulo desatualizado (Fleet Management: AGENT_OUTDATED) espera o processo reiniciar.",
+    action: "Reinicie os processos que o Fleet Management lista como desatualizados para que carreguem a versão instalada do OneAgent.",
+  },
+  i31: {
+    label: "Hosts reportando",
+    description: "Percentual dos hosts vistos nos últimos 7 dias que ainda reportaram nos últimos 30 minutos. Nós de Kubernetes ficam de fora: entram e saem por design.",
+    action: "Verifique os hosts que pararam de reportar: OneAgent parado, caminho de rede até o ActiveGate, ou host desativado sem ser removido.",
+  },
+  i32: {
+    label: "Hosts previstos monitorados",
+    description: "Hosts que reportam ao Dynatrace contra os hosts que o projeto prevê monitorar.",
+    action: "Instale o OneAgent (ou conecte o OpenTelemetry) nos hosts previstos que ainda não reportam.",
+  },
+  i33: {
+    label: "Clusters Kubernetes previstos monitorados",
+    description: "Clusters Kubernetes que reportam ao Dynatrace contra os clusters que o projeto prevê monitorar.",
+    action: "Conecte os clusters Kubernetes previstos com o Dynatrace Operator.",
+  },
+  d16: {
+    label: "Aplicações previstas monitoradas",
+    description: "Aplicações web e mobile monitoradas contra as aplicações que o projeto prevê monitorar.",
+    action: "Ative o Real User Monitoring nas aplicações web e mobile previstas que ainda não são monitoradas.",
+  },
+  i27: {
+    label: "Monitoramento de dispositivos de rede",
+    description: "Percentual dos dispositivos de rede (switches, roteadores, firewalls, access points) que enviam métricas do dispositivo.",
+    action: "Inclua todos os dispositivos de rede na configuração de monitoramento SNMP para que enviem CPU, memória e uptime.",
+  },
+  i28: {
+    label: "Status das interfaces de rede",
+    description: "Percentual das interfaces dos dispositivos de rede que reportam seu status operacional.",
+    action: "Inclua as interfaces dos dispositivos na configuração de monitoramento SNMP para que cada uma reporte status e tráfego.",
+  },
   i5: {
     label: "Cobertura de rede dos hosts",
     description: "Percentual de hosts monitorados com entidades de interface de rede.",
@@ -125,6 +165,11 @@ export const PT: Record<string, CriterionText> = {
     label: "Uso de Assist, MCP e dtctl",
     description: "Pessoas que consultaram métricas e topologia pelo Dynatrace Assist, por um cliente MCP ou pela CLI dtctl nos últimos 30 dias.",
     action: "Apresente o Dynatrace Assist à equipe responsável por esses dados e conecte a IDE ou o agente de código dela por meio do servidor MCP da Dynatrace ou do dtctl.",
+  },
+  a18: {
+    label: "Processos de aplicação instrumentados",
+    description: "Percentual dos processos de aplicação (Java, .NET, Node.js, PHP, IIS) em hosts full-stack que rodam um módulo de código do OneAgent, como o Fleet Management mostra. Processo sem módulo não gera traces nem serviços.",
+    action: "Reinicie os processos de aplicação que subiram antes do OneAgent e confirme que a injeção automática está ligada nesses hosts (ou que o Dynatrace Operator injeta os pods).",
   },
   a2: {
     label: "Cobertura de métodos de serviços",

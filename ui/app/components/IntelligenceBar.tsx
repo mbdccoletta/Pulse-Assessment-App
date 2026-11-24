@@ -18,7 +18,8 @@ import { generateSmartReportText } from "../ai/smartReport";
 import { openDynatraceAssist } from "../ai/assistIntent";
 import type { ReportContext } from "../ai/reportPrompt";
 
-import type { PageQuestion } from "../ai/pageIntelligence";
+import { questionLabel, type PageQuestion } from "../ai/pageIntelligence";
+import { useLang, useTr } from "../i18n/lang";
 
 type Question = PageQuestion;
 
@@ -31,6 +32,8 @@ const asList = (md: string) => md.replace(/\s*•\s*/g, "\n- ").trim();
 type Answer = { state: "loading" } | { state: "ok"; markdown: string } | { state: "error"; message: string; hint: string };
 
 export const IntelligenceBar: React.FC<{ ctx: ReportContext; questions: Question[]; /** Page actions, shown at the right end of the same row. */ actions?: React.ReactNode }> = ({ ctx, questions, actions }) => {
+  const tr = useTr();
+  const lang = useLang();
   const [active, setActive] = useState<number | null>(null);
   const [answers, setAnswers] = useState<Record<number, Answer>>({});
   const [assistError, setAssistError] = useState<string | null>(null);
@@ -72,7 +75,7 @@ export const IntelligenceBar: React.FC<{ ctx: ReportContext; questions: Question
         </Flex>
         {questions.map((q, i) => (
           <Button key={q.label} size="condensed" variant={active === i ? "emphasized" : "default"} color={active === i ? "primary" : "neutral"} onClick={() => ask(i)}>
-            {q.label}
+            {questionLabel(q.label, lang)}
             {active === i && <Button.Suffix>{collapsed ? <ChevronDownIcon /> : <ChevronUpIcon />}</Button.Suffix>}
           </Button>
         ))}
@@ -80,7 +83,7 @@ export const IntelligenceBar: React.FC<{ ctx: ReportContext; questions: Question
       </Flex>
       {active != null && cur && !collapsed && (
         <Flex flexDirection="column" gap={8} style={{ padding: "4px 16px 12px", maxWidth: 980 }}>
-          {cur.state === "loading" && <AiLoadingIndicator><AiLoadingIndicator.Icon />Analyzing the assessment</AiLoadingIndicator>}
+          {cur.state === "loading" && <AiLoadingIndicator><AiLoadingIndicator.Icon />{tr("Analyzing the assessment", "Analisando a avaliação", "Analizando la evaluación")}</AiLoadingIndicator>}
           {cur.state === "error" && (
             <MessageContainer variant="warning">
               <MessageContainer.Prefix />
@@ -92,9 +95,9 @@ export const IntelligenceBar: React.FC<{ ctx: ReportContext; questions: Question
             <Markdown>{asList(cur.markdown)}</Markdown>
           )}
           <Flex alignItems="center" gap={8} flexWrap="wrap">
-            <Button size="condensed" variant="emphasized" color="primary" onClick={() => deeper(active)}><Button.Prefix><DynatraceIntelligenceSignetIcon /></Button.Prefix>Go deeper in Assist</Button>
-            <Button size="condensed" onClick={() => setCollapsed(true)}><Button.Prefix><ChevronUpIcon /></Button.Prefix>Collapse</Button>
-            {cur.state === "ok" && <Text textStyle="small" style={{ color: sub }}>Dynatrace Intelligence is an AI system. Verify before acting on important information.</Text>}
+            <Button size="condensed" variant="emphasized" color="primary" onClick={() => deeper(active)}><Button.Prefix><DynatraceIntelligenceSignetIcon /></Button.Prefix>{tr("Go deeper in Assist", "Aprofundar no Assist", "Profundizar en Assist")}</Button>
+            <Button size="condensed" onClick={() => setCollapsed(true)}><Button.Prefix><ChevronUpIcon /></Button.Prefix>{tr("Collapse", "Recolher", "Contraer")}</Button>
+            {cur.state === "ok" && <Text textStyle="small" style={{ color: sub }}>{tr("Dynatrace Intelligence is an AI system. Verify before acting on important information.", "Dynatrace Intelligence é um sistema de AI. Verifique antes de agir com base em informações importantes.", "Dynatrace Intelligence es un sistema de AI. Verifique antes de actuar sobre información importante.")}</Text>}
           </Flex>
           {assistError && <MessageContainer variant="warning"><MessageContainer.Prefix /><MessageContainer.Description>{assistError}</MessageContainer.Description></MessageContainer>}
         </Flex>

@@ -1,6 +1,6 @@
 # Criteria summary
 
-Every criterion the assessment reads: 138 criteria across 11 capabilities. This file is generated from the catalog (`ui/app/queries.ts`, `ui/app/data/criterionTiers.ts`, `ui/app/passLine.ts`); regenerate it when the catalog changes rather than editing it by hand.
+Every criterion the assessment reads: 144 criteria across 11 capabilities. This file is generated from the catalog (`ui/app/queries.ts`, `ui/app/data/criterionTiers.ts`, `ui/app/passLine.ts`); regenerate it when the catalog changes rather than editing it by hand.
 
 ## How to read the tables
 
@@ -12,14 +12,14 @@ Every criterion the assessment reads: 138 criteria across 11 capabilities. This 
 
 A criterion that cannot be measured in the environment is not assessed: it leaves the score and is never counted as not met.
 
-Readings by kind: 101 shares, 32 presence checks, 5 configuration counts.
+Readings by kind: 107 shares, 32 presence checks, 5 configuration counts.
 
 ## Capabilities
 
 | Capability | Criteria | Foundation | Best practice | Excellence |
 |---|---|---|---|---|
-| Infrastructure Observability | 25 | 3 | 13 | 9 |
-| Application Observability | 12 | 1 | 6 | 5 |
+| Infrastructure Observability | 30 | 6 | 15 | 9 |
+| Application Observability | 13 | 2 | 6 | 5 |
 | Digital Experience | 15 | 3 | 7 | 5 |
 | Log Analytics | 16 | 3 | 9 | 4 |
 | Application Security | 7 | 1 | 5 | 1 |
@@ -29,7 +29,7 @@ Readings by kind: 101 shares, 32 presence checks, 5 configuration counts.
 | Software Delivery | 6 | 1 | 2 | 3 |
 | Platform Governance | 18 | 1 | 13 | 4 |
 | FinOps & Sustainability | 10 | 3 | 4 | 3 |
-| **Total** | **138** | **23** | **70** | **45** |
+| **Total** | **144** | **27** | **72** | **45** |
 
 ## Infrastructure Observability
 
@@ -38,6 +38,9 @@ Readings by kind: 101 shares, 32 presence checks, 5 configuration counts.
 | Host CPU coverage | Foundation | Share | 50% | Percentage of monitored hosts with active CPU usage metrics from any source (OneAgent, OTel, cloud integration). |
 | Host memory coverage | Foundation | Share | 50% | Percentage of monitored hosts with active memory usage metrics. |
 | Host availability coverage | Foundation | Share | 50% | Percentage of monitored hosts with availability metrics — basis for SLA reporting. |
+| Application hosts in full-stack | Foundation | Share | 50% | Percentage of hosts running application processes (Java, .NET, Node.js, PHP, IIS) that OneAgent monitors in full-stack mode. A host only in infrastructure mode runs those applications without traces or services. |
+| OneAgent code modules up to date | Foundation | Share | 50% | Percentage of OneAgent code modules running the installed agent version. An outdated module (Fleet Management: AGENT_OUTDATED) waits for its process to restart. |
+| Hosts reporting | Foundation | Share | 50% | Percentage of the hosts seen in the last 7 days that still reported in the last 30 minutes. Kubernetes nodes are left out: they come and go by design. |
 | Host disk coverage | Best practice | Share | 50% | Percentage of monitored hosts with active disk utilization metrics. |
 | Host network coverage | Best practice | Share | 50% | Percentage of monitored hosts with network interface entities. |
 | Process CPU coverage | Best practice | Share | 30% | Percentage of process groups with active CPU usage metrics. |
@@ -51,6 +54,8 @@ Readings by kind: 101 shares, 32 presence checks, 5 configuration counts.
 | Container restart monitoring | Best practice | Share | 50% | Percentage of K8s namespaces with container restart tracking — critical for detecting CrashLoopBackOff and OOM issues. |
 | Problems with root cause | Best practice | Share | 50% | Share of Davis problems on infrastructure entities (hosts, processes, Kubernetes, cloud, custom devices) in the last 72h where Davis identified a root-cause entity. |
 | Assist, MCP and dtctl usage | Best practice | Presence | At least 1 | People who read metrics and topology through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days. |
+| Network device monitoring | Best practice | Share | 50% | Percentage of network devices (switches, routers, firewalls, access points) that report device metrics. |
+| Network interface status | Best practice | Share | 50% | Percentage of network device interfaces that report their operational status. |
 | K8s cluster coverage | Excellence | Share | 50% | Percentage of Kubernetes clusters with active workload monitoring. |
 | Host disk entity coverage | Excellence | Share | 50% | Percentage of hosts with disk entities detected. |
 | Cloud workload coverage | Excellence | Share | 50% | Percentage of K8s namespaces with running cloud-native workloads. |
@@ -65,6 +70,7 @@ Readings by kind: 101 shares, 32 presence checks, 5 configuration counts.
 
 | Criterion | Tier | Reading | Met at | What it measures |
 |---|---|---|---|---|
+| Application processes instrumented | Foundation | Share | 50% | Percentage of application processes (Java, .NET, Node.js, PHP, IIS) on full-stack hosts that run a OneAgent code module, as Fleet Management shows. A process without one produces no traces and no services. |
 | Response time coverage | Foundation | Share | 50% | Percentage of services with response time metrics (p95). |
 | Service method coverage | Best practice | Share | 30% | Percentage of services with method-level tracing. |
 | Failure tracking coverage | Best practice | Share | 40% | Percentage of services with failure rate metrics. |

@@ -9,6 +9,7 @@ import React from "react";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Text } from "@dynatrace/strato-components/typography";
 import Colors from "@dynatrace/strato-design-tokens/colors";
+import { useTr } from "../i18n/lang";
 
 /** One heartbeat in a 100-wide cell: baseline, P wave, QRS spike, T wave. */
 const BEAT = "l18 0 l6 -6 l6 6 l8 0 l4 6 l6 -38 l6 46 l4 -14 l8 0 l8 -9 l8 9 l18 0";
@@ -30,7 +31,9 @@ interface Props {
   label?: string;
 }
 
-export const PulseLoader: React.FC<Props> = ({ value, label = "Assessing the environment" }) => {
+export const PulseLoader: React.FC<Props> = ({ value, label: labelProp }) => {
+  const tr = useTr();
+  const label = labelProp ?? tr("Assessing the environment", "Avaliando o ambiente", "Evaluando el entorno");
   const known = typeof value === "number" && value > 0;
   const pct = known ? Math.floor(value as number) : undefined;
   return (

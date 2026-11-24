@@ -9,6 +9,8 @@
 // OneAgent reports, and hosts or Kubernetes nodes that only OpenTelemetry
 // reports, matched by short host name so a host seen by both counts once.
 
+import { tr, type PulseLang } from "./i18n/lang";
+
 export type TelemetrySource = "oneagent" | "otel" | "mixed";
 
 export interface TelemetryProfile {
@@ -26,6 +28,13 @@ export const TELEMETRY_LABEL: Record<TelemetrySource, string> = {
   mixed: "Mixed",
   otel: "Pure OpenTelemetry",
 };
+
+/** The classification's name on screen, in the language (same words as the PDF reports). */
+export function telemetryLabel(source: TelemetrySource, lang: PulseLang = "en"): string {
+  if (source === "oneagent") return tr(lang, TELEMETRY_LABEL.oneagent, "OneAgent completo", "OneAgent completo");
+  if (source === "otel") return tr(lang, TELEMETRY_LABEL.otel, "OpenTelemetry puro", "OpenTelemetry puro");
+  return tr(lang, TELEMETRY_LABEL.mixed, "Misto", "Mixto");
+}
 
 /** Share of the hosts on each side, floored. */
 export function telemetryShares(p: TelemetryProfile): { oneAgent: number; otelOnly: number } {

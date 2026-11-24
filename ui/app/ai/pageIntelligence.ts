@@ -22,6 +22,7 @@ import { passLine } from "../passLine";
 import { ADOPTION_FULL_RATE, gainIfMet } from "../pulseScore";
 import { SCORE_BANDS, scoreBand } from "../utils/colors";
 import { CRITERION_ACTIONS } from "../remediationActions";
+import type { PulseLang } from "../i18n/lang";
 
 export type PageId = "overview" | "overall" | "capability" | "evolution" | "guide";
 export interface PageQuestion { label: string; ask: string }
@@ -203,6 +204,50 @@ export function capabilityQuestions(name: string): PageQuestion[] {
     { label: "Risk if nothing changes", ask: `What can the customer not see or detect in ${name} today because of each unmet criterion, and how would an incident in this area be noticed?` },
   ];
 }
+
+// ── Question labels on screen ────────────────────────────────────────────────
+// Only the chip label is translated. The "ask" is the prompt sent to the AI and
+// stays in English, like the lenses and the facts.
+
+const LABELS: Record<string, { pt: string; es: string }> = {
+  "Where to act first": { pt: "Onde agir primeiro", es: "Dónde actuar primero" },
+  "Pattern behind the gaps": { pt: "Padrão por trás das lacunas", es: "Patrón detrás de las brechas" },
+  "Data nobody opens": { pt: "Dados que ninguém abre", es: "Datos que nadie abre" },
+  "Blind spots": { pt: "Pontos cegos", es: "Puntos ciegos" },
+  "Proof of value": { pt: "Prova de valor", es: "Prueba de valor" },
+  "AI and automation": { pt: "AI e automação", es: "AI y automatización" },
+  "Why this score": { pt: "Por que esta pontuação", es: "Por qué esta puntuación" },
+  "Path to the next band": { pt: "Caminho até a próxima faixa", es: "Camino a la siguiente banda" },
+  "Closed tier gates": { pt: "Portões de nível fechados", es: "Compuertas de nivel cerradas" },
+  "Who uses the platform": { pt: "Quem usa a plataforma", es: "Quién usa la plataforma" },
+  "Leadership brief": { pt: "Resumo para a liderança", es: "Resumen para la dirección" },
+  "What caused the change": { pt: "O que causou a mudança", es: "Qué causó el cambio" },
+  "Real or measurement": { pt: "Real ou de medição", es: "Real o de medición" },
+  "Regressions to act on": { pt: "Regressões a tratar", es: "Regresiones a atender" },
+  "What improved": { pt: "O que melhorou", es: "Qué mejoró" },
+  "What to watch next": { pt: "O que acompanhar", es: "Qué vigilar" },
+  "How my score is built": { pt: "Como minha pontuação é formada", es: "Cómo se forma mi puntuación" },
+  "Reading the verdicts": { pt: "Lendo os veredictos", es: "Cómo leer los veredictos" },
+  "Tiers and gates": { pt: "Níveis e portões", es: "Niveles y compuertas" },
+  "How adoption is counted": { pt: "Como a adoção é contada", es: "Cómo se cuenta la adopción" },
+  "What the score cannot tell": { pt: "O que a pontuação não diz", es: "Lo que la puntuación no dice" },
+  "Why governance matters": { pt: "Por que a governança importa", es: "Por qué importa la gobernanza" },
+  "Data protection posture": { pt: "Postura de proteção de dados", es: "Postura de protección de datos" },
+  "Why FinOps matters": { pt: "Por que FinOps importa", es: "Por qué importa FinOps" },
+  "Order of the work": { pt: "Ordem do trabalho", es: "Orden del trabajo" },
+  "Closest to passing": { pt: "Mais perto de passar", es: "Más cerca de cumplirse" },
+  "Who uses it": { pt: "Quem usa", es: "Quién lo usa" },
+  "Risk if nothing changes": { pt: "Risco se nada mudar", es: "Riesgo si nada cambia" },
+  "The baseline in short": { pt: "A linha de base em resumo", es: "La línea base en resumen" },
+  "What should move first": { pt: "O que deve mudar primeiro", es: "Qué debe moverse primero" },
+  "What to compare next run": { pt: "O que comparar na próxima execução", es: "Qué comparar en la próxima ejecución" },
+  "Weakest part per capability": { pt: "Parte mais fraca por capacidade", es: "Parte más débil por capacidad" },
+  "When to run again": { pt: "Quando executar de novo", es: "Cuándo ejecutar de nuevo" },
+};
+
+/** A question's chip label in the language; unknown labels pass through. */
+export const questionLabel = (label: string, lang: PulseLang = "en"): string =>
+  lang === "en" ? label : LABELS[label]?.[lang] ?? label;
 
 // ── Facts ────────────────────────────────────────────────────────────────────
 

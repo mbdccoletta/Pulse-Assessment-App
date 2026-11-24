@@ -18,6 +18,7 @@
 import { publicClient } from "@dynatrace-sdk/client-davis-copilot";
 import { buildReportPrompt, type ReportContext } from "./reportPrompt";
 import { classifyError, type DavisError } from "./davisError";
+import { ORIGIN_APP_ID } from "./assistIntent";
 
 export type SmartReportResult =
   | { ok: true; markdown: string }
@@ -61,7 +62,7 @@ export async function generateSmartReportText(
           { type: "document-retrieval", value: "dynatrace" },
         ],
         annotations: {
-          origin_app: "my.pulse.assessment",
+          origin_app: ORIGIN_APP_ID,
           prompt_version: "smart-report-v2",
         },
       },

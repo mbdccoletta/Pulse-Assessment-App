@@ -62,6 +62,7 @@
 // answer the same question.
 
 import { CAPABILITIES } from './queries';
+import { tr, type PulseLang } from './i18n/lang';
 
 
 export type ScaleTier = 'exact' | 'large' | 'xlarge';
@@ -114,6 +115,21 @@ export const TIER_CONFIG: Record<ScaleTier, TierConfig> = {
     maxHosts: Number.POSITIVE_INFINITY,
   },
 };
+
+/** The banner subtitle of a tier in the language (TIER_CONFIG keeps the English one). */
+export function tierDescription(tier: ScaleTier, lang: PulseLang = "en"): string {
+  switch (tier) {
+    case "exact": return tr(lang, TIER_CONFIG.exact.description,
+      "Janela completa de 2 horas, sem amostragem. Valores de cobertura exatos. Recomendado para ambientes com até 5.000 hosts.",
+      "Ventana completa de 2 horas, sin muestreo. Valores de cobertura exactos. Recomendado para entornos de hasta 5.000 hosts.");
+    case "large": return tr(lang, TIER_CONFIG.large.description,
+      "Janela de 30 minutos com limite de leitura de 50 GB por consulta. Adequado para ambientes de 5 mil a 50 mil hosts. Os valores de cobertura podem variar um pouco em sinais muito esparsos; fora isso, indistinguíveis do Exact.",
+      "Ventana de 30 minutos con límite de lectura de 50 GB por consulta. Adecuado para entornos de 5 mil a 50 mil hosts. Los valores de cobertura pueden variar ligeramente en señales muy escasas; por lo demás, indistinguibles de Exact.");
+    case "xlarge": return tr(lang, TIER_CONFIG.xlarge.description,
+      "Janela de 5 minutos com limite de leitura de 50 GB. Para ambientes com mais de 50 mil hosts. Os valores de cobertura são estimativas amostradas (±5–10% em cargas típicas com ingestão contínua). Adequado para acompanhar tendências, não para auditoria formal.",
+      "Ventana de 5 minutos con límite de lectura de 50 GB. Para entornos con más de 50 mil hosts. Los valores de cobertura son estimaciones muestreadas (±5–10% en cargas típicas con ingesta continua). Adecuado para seguir tendencias, no para auditoría formal.");
+  }
+}
 
 /**
  * Auto-selects a tier from observed host count using the thresholds defined

@@ -23,6 +23,7 @@ import { generateSmartReportText, SMART_REPORT_SUGGESTIONS } from "../ai/smartRe
 import type { ReportContext } from "../ai/reportPrompt";
 import { generateAiNarrativePdf } from "../reports/aiNarrativePdf";
 import type { DavisError } from "../ai/davisError";
+import { useTr } from "../i18n/lang";
 
 interface SmartReportModalProps {
   open: boolean;
@@ -38,6 +39,7 @@ interface SmartReportModalProps {
 const FINOPS_ASK = /finops|cost|spend|cloud|bill|budget|saving|carbon|energy|emission|sustainab|custo|gasto|nuvem|fatura|orçamento|econom|carbono|energia|emiss|sustentab|consumo|gasto|nube|factura|presupuesto|ahorr|sostenib/i;
 
 export const SmartReportModal: React.FC<SmartReportModalProps> = ({ open, onClose, ctx, loadFinopsNote, dk }) => {
+  const tr = useTr();
   const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DavisError | null>(null);
@@ -92,11 +94,14 @@ export const SmartReportModal: React.FC<SmartReportModalProps> = ({ open, onClos
   };
 
   return (
-    <Modal show={open} onDismiss={() => { if (!busy) onClose(); }} title="Smart report — Dynatrace Assist" size="small">
+    <Modal show={open} onDismiss={() => { if (!busy) onClose(); }} title={tr("Smart report — Dynatrace Assist", "Relatório inteligente — Dynatrace Assist", "Informe inteligente — Dynatrace Assist")} size="small">
       <Flex flexDirection="column" gap={12} style={{ minWidth: 520, maxWidth: 640 }}>
         <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.5 }}>
-          Describe the report you need — Davis CoPilot writes it grounded in this
-          assessment. Phrase it as a question (What / How / Which) for best results.
+          {tr(
+            "Describe the report you need — Davis CoPilot writes it grounded in this assessment. Phrase it as a question (What / How / Which) for best results.",
+            "Descreva o relatório de que precisa — o Davis CoPilot o escreve com base nesta avaliação. Formule como pergunta (O que / Como / Qual) para melhores resultados.",
+            "Describa el informe que necesita — Davis CoPilot lo escribe basado en esta evaluación. Formúlelo como pregunta (Qué / Cómo / Cuál) para mejores resultados.",
+          )}
         </Text>
 
         <Flex gap={6} flexWrap="wrap">
@@ -138,15 +143,15 @@ export const SmartReportModal: React.FC<SmartReportModalProps> = ({ open, onClos
 
         <Flex justifyContent="space-between" alignItems="center" gap={8} style={{ marginTop: 4 }}>
           <Text style={{ fontSize: 10, color: textSec }}>
-            AI-generated content — review before sharing.
+            {tr("AI-generated content — review before sharing.", "Conteúdo gerado por AI — revise antes de compartilhar.", "Contenido generado por AI — revíselo antes de compartir.")}
           </Text>
           <Flex gap={8}>
-            <Button onClick={onClose} disabled={busy}>Cancel</Button>
+            <Button onClick={onClose} disabled={busy}>{tr("Cancel", "Cancelar", "Cancelar")}</Button>
             <Button onClick={openInAssist} disabled={busy} color="primary">
-              Open in Assist
+              {tr("Open in Assist", "Abrir no Assist", "Abrir en Assist")}
             </Button>
             <Button onClick={generatePdf} loading={busy} variant="emphasized" color="primary">
-              Generate PDF
+              {tr("Generate PDF", "Gerar PDF", "Generar PDF")}
             </Button>
           </Flex>
         </Flex>

@@ -225,9 +225,50 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "i26", label: "Assist, MCP and dtctl usage",
         description: "People who read metrics and topology through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days.",
-        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"metrics\", \"smartscape.nodes\", \"smartscape.edges\") | summarize count = countDistinct(user.email)",
+        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) and not(endsWith(user.email, \"@dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"metrics\", \"smartscape.nodes\", \"smartscape.edges\") | summarize count = countDistinct(user.email)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
+      },
+      // Next release (request: "tem várias máquinas não reportando serviços, faltando restart… avaliar melhor a cobertura"):
+      // the deployment itself, read as Fleet Management reads it (OneAgent module events in default_fleet_events) and
+      // from the entity model. Only what OneAgent already detected is counted — an OpenTelemetry-only estate has a zero
+      // denominator and is not assessed, never failed (Pulse does not judge OneAgent against OpenTelemetry).
+      {
+        id: "i29", label: "Application hosts in full-stack (%)",
+        description: "Percentage of hosts running application processes (Java, .NET, Node.js, PHP, IIS) that OneAgent monitors in full-stack mode. A host only in infrastructure mode runs those applications without traces or services.",
+        query: "fetch dt.entity.process_group_instance | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, \"JAVA\") or matchesPhrase(tech, \"DOTNET\") or matchesPhrase(tech, \"NODE_JS\") or matchesPhrase(tech, \"PHP\") or matchesPhrase(tech, \"IIS\") | fields h = belongs_to[dt.entity.host] | dedup h | lookup [fetch dt.entity.host | fields id, mode = monitoringMode], sourceField:h, lookupField:id, prefix:\"host.\" | filter host.mode == \"FULL_STACK\" | summarize c = count()",
+        queryB: "fetch dt.entity.process_group_instance | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, \"JAVA\") or matchesPhrase(tech, \"DOTNET\") or matchesPhrase(tech, \"NODE_JS\") or matchesPhrase(tech, \"PHP\") or matchesPhrase(tech, \"IIS\") | fields h = belongs_to[dt.entity.host] | dedup h | lookup [fetch dt.entity.host | fields id, mode = monitoringMode], sourceField:h, lookupField:id, prefix:\"host.\" | summarize count()",
+        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
+      },
+      {
+        id: "i30", label: "OneAgent code modules up to date (%)",
+        description: "Percentage of OneAgent code modules running the installed agent version. An outdated module (Fleet Management: AGENT_OUTDATED) waits for its process to restart.",
+        query: "fetch events | filter dt.system.bucket == \"default_fleet_events\" and in(dt.agent.module.type, {\"java\", \"dotnet\", \"nodejs\", \"php\", \"iis\", \"apache\", \"go\"}) | dedup dt.agent.module.id, sort:{timestamp desc} | filter isFalseOrNull(contains(toString(dt.agent.module.issues), \"AGENT_OUTDATED\")) | summarize c = count()",
+        queryB: "fetch events | filter dt.system.bucket == \"default_fleet_events\" and in(dt.agent.module.type, {\"java\", \"dotnet\", \"nodejs\", \"php\", \"iis\", \"apache\", \"go\"}) | dedup dt.agent.module.id, sort:{timestamp desc} | summarize count()",
+        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
+      },
+      {
+        id: "i31", label: "Hosts reporting (%)",
+        description: "Percentage of the hosts seen in the last 7 days that still reported in the last 30 minutes. Kubernetes nodes are left out: they come and go by design.",
+        query: "smartscapeNodes \"HOST\", from:now()-7d | filter isNull(k8s.cluster.name) | filter lifetime[end] >= now() - 30m | summarize c = count()",
+        queryB: "smartscapeNodes \"HOST\", from:now()-7d | filter isNull(k8s.cluster.name) | summarize count()",
+        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
+      },
+      // Network devices and their interfaces (SNMP), read as Infrastructure & Operations shows them. An estate with no
+      // network device has a zero denominator: the criterion is not assessed, never a failure.
+      {
+        id: "i27", label: "Network device monitoring (%)",
+        description: "Percentage of network devices (switches, routers, firewalls, access points) that report device metrics.",
+        query: "timeseries v = avg(com.dynatrace.extension.network_device.cpu_usage), by:{dt.smartscape.ext_network_device} | summarize c = count()",
+        queryB: "smartscapeNodes \"EXT_NETWORK_DEVICE\" | summarize count()",
+        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
+      },
+      {
+        id: "i28", label: "Network interface status (%)",
+        description: "Percentage of network device interfaces that report their operational status.",
+        query: "timeseries v = avg(com.dynatrace.extension.network_device.if.status), by:{dt.smartscape.ext_network_interface} | summarize c = count()",
+        queryB: "smartscapeNodes \"EXT_NETWORK_INTERFACE\" | summarize count()",
+        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
       },
     ],
   },
@@ -237,6 +278,15 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: "Application Observability",
     color: "#8B5CF6",
     criteria: [
+      // Next release: application processes OneAgent sees but does not instrument (no code module: injection off, or the
+      // process was not restarted after OneAgent was installed) — the reason a full-stack host shows no services.
+      {
+        id: "a18", label: "Application processes instrumented (%)",
+        description: "Percentage of application processes (Java, .NET, Node.js, PHP, IIS) on full-stack hosts that run a OneAgent code module, as Fleet Management shows. A process without one produces no traces and no services.",
+        query: "fetch dt.entity.process_group_instance | filter lifetime[end] >= now() - 1h | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, \"JAVA\") or matchesPhrase(tech, \"DOTNET\") or matchesPhrase(tech, \"NODE_JS\") or matchesPhrase(tech, \"PHP\") or matchesPhrase(tech, \"IIS\") | fieldsAdd h = belongs_to[dt.entity.host], pid = replaceString(toString(id), \"PROCESS_GROUP_INSTANCE-\", \"PROCESS-\") | lookup [fetch dt.entity.host | filter monitoringMode == \"FULL_STACK\" | fields id], sourceField:h, lookupField:id, prefix:\"fs.\" | filter isNotNull(fs.id) | lookup [fetch events | filter dt.system.bucket == \"default_fleet_events\" and in(dt.agent.module.type, {\"java\", \"dotnet\", \"nodejs\", \"php\", \"iis\", \"apache\", \"go\"}) | summarize m = count(), by:{p = toString(dt.smartscape.process)}], sourceField:pid, lookupField:p, prefix:\"mod.\" | filter isNotNull(mod.m) | summarize c = count()",
+        queryB: "fetch dt.entity.process_group_instance | filter lifetime[end] >= now() - 1h | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, \"JAVA\") or matchesPhrase(tech, \"DOTNET\") or matchesPhrase(tech, \"NODE_JS\") or matchesPhrase(tech, \"PHP\") or matchesPhrase(tech, \"IIS\") | fieldsAdd h = belongs_to[dt.entity.host], pid = replaceString(toString(id), \"PROCESS_GROUP_INSTANCE-\", \"PROCESS-\") | lookup [fetch dt.entity.host | filter monitoringMode == \"FULL_STACK\" | fields id], sourceField:h, lookupField:id, prefix:\"fs.\" | filter isNotNull(fs.id) | summarize count()",
+        thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
+      },
       {
         id: "a2", label: "Service method coverage (%)",
         description: "Percentage of services with method-level tracing.",
@@ -320,7 +370,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "a16", label: "Assist, MCP and dtctl usage",
         description: "People who read traces through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days.",
-        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"spans\") | summarize count = countDistinct(user.email)",
+        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) and not(endsWith(user.email, \"@dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"spans\") | summarize count = countDistinct(user.email)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },
@@ -433,7 +483,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "d15", label: "Assist, MCP and dtctl usage",
         description: "People who read user sessions and events through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days.",
-        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"user.events\", \"user.sessions\", \"user.replays\") | summarize count = countDistinct(user.email)",
+        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) and not(endsWith(user.email, \"@dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"user.events\", \"user.sessions\", \"user.replays\") | summarize count = countDistinct(user.email)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },
@@ -549,7 +599,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "l17", label: "Assist, MCP and dtctl usage",
         description: "People who read logs through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days.",
-        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"logs\") | summarize count = countDistinct(user.email)",
+        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) and not(endsWith(user.email, \"@dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"logs\") | summarize count = countDistinct(user.email)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },
@@ -606,7 +656,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "s14", label: "Assist, MCP and dtctl usage",
         description: "People who read security findings through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days.",
-        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"security.events\") | summarize count = countDistinct(user.email)",
+        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) and not(endsWith(user.email, \"@dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"security.events\") | summarize count = countDistinct(user.email)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },
@@ -649,7 +699,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "t14", label: "Assist, MCP and dtctl usage",
         description: "People who read security findings through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days.",
-        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"security.events\") | summarize count = countDistinct(user.email)",
+        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) and not(endsWith(user.email, \"@dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"security.events\") | summarize count = countDistinct(user.email)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },
@@ -734,14 +784,14 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "ai12", label: "Agentic AI in use",
         description: "Agentic Dynatrace Assist sessions in the last 30 days (GENAI_EVENT with skill = operator).",
-        query: 'fetch dt.system.events, from:now()-30d | filter event.kind == "GENAI_EVENT" and skill == "operator" | filter user.id != "system" | summarize count = countDistinct(user.id)',
+        query: 'fetch dt.system.events, from:now()-30d | filter event.kind == "GENAI_EVENT" and skill == "operator" | filter user.id != "system" | filter isFalseOrNull(endsWith(user_email, "@dynatrace.com")) | summarize count = countDistinct(user.id)',
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },
       {
         id: "ai18", label: "dtctl driven by AI agents",
         description: "People whose AI coding agent (for example Claude Code) ran dtctl in the last 30 days.",
-        query: 'fetch dt.system.events, from:now()-30d | filter event.kind == "QUERY_EXECUTION_EVENT" | filter contains(client.client_context, "\\"app\\":\\"dtctl\\"") | filter contains(client.client_context, "\\"agent\\"") | summarize count = countDistinct(user.email)',
+        query: 'fetch dt.system.events, from:now()-30d | filter event.kind == "QUERY_EXECUTION_EVENT" | filter contains(client.client_context, "\\"app\\":\\"dtctl\\"") | filter isFalseOrNull(endsWith(user.email, "@dynatrace.com")) | filter contains(client.client_context, "\\"agent\\"") | summarize count = countDistinct(user.email)',
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },
@@ -840,7 +890,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "b11", label: "Assist, MCP and dtctl usage",
         description: "People who read business events through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days.",
-        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"bizevents\") | summarize count = countDistinct(user.email)",
+        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) and not(endsWith(user.email, \"@dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"bizevents\") | summarize count = countDistinct(user.email)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },
@@ -959,7 +1009,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "g9", label: "Assist, MCP and dtctl usage",
         description: "People who read platform usage, audit and billing events through Dynatrace Assist, an MCP client or the dtctl CLI in the last 30 days.",
-        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"dt.system.events\") | summarize count = countDistinct(user.email)",
+        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) and not(endsWith(user.email, \"@dynatrace.com\")) | filter client.application_context == \"dynatrace.davis.copilot\" or contains(lower(toString(client.client_context)), \"dtctl\") or contains(lower(toString(client.client_context)), \"mcp\") or contains(lower(toString(client.source)), \"mcp\") | filter in(table, \"dt.system.events\") | summarize count = countDistinct(user.email)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },
@@ -1022,7 +1072,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "g19", label: "Audit trail consulted",
         description: "People who queried the platform's audit events in the last 30 days. Audit events are always recorded; this counts whether anyone looks at them.",
-        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) | filter contains(query_string, \"AUDIT_EVENT\") | summarize count = countDistinct(user.email)",
+        query: "fetch dt.system.events, from:now()-30d | filter event.kind == \"QUERY_EXECUTION_EVENT\" | filter isNotNull(user.email) and not(contains(user.email, \"heimdall.dynatrace.com\")) and not(endsWith(user.email, \"@dynatrace.com\")) | filter contains(query_string, \"AUDIT_EVENT\") | summarize count = countDistinct(user.email)",
         denominatorConstant: 1,
         thresholds: [{ min: 100 }],
       },

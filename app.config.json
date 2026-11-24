@@ -5,7 +5,7 @@
     "name": "Pulse Assessment",
     "description": "Scores coverage, utilization and adoption across 11 Dynatrace capabilities.",
     "icon": "ui/assets/icon.svg",
-    "version": "3.0.16",
+    "version": "3.0.17",
     "scopes": [
       { "name": "storage:logs:read", "comment": "Log Analytics coverage" },
       { "name": "storage:events:read", "comment": "Security, Delivery, Problems" },
@@ -23,7 +23,10 @@
       { "name": "slo:slos:read", "comment": "Count SLOs created in the Service-Level Objectives app (criterion SLOs defined)" },
       { "name": "storage:security.events:read", "comment": "Security findings (vulnerabilities, detections, compliance) live in security.events" },
       { "name": "app-engine:apps:run", "comment": "Read installed app names from the registry for the adoption view" },
-      { "name": "storage:smartscape:read", "comment": "Read Smartscape nodes and edges, so the assessment works on environments without the classic entity model" }
+      { "name": "storage:smartscape:read", "comment": "Read Smartscape nodes and edges, so the assessment works on environments without the classic entity model" },
+      { "name": "state:app-states:read", "comment": "Read the estate target the team set for this environment" },
+      { "name": "state:app-states:write", "comment": "Save the estate target (hosts, applications, clusters planned)" },
+      { "name": "state:app-states:delete", "comment": "Clear the estate target" }
     ]
   }
 }

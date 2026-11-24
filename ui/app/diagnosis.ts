@@ -15,6 +15,8 @@
 // The rule can also take an absolute floor of people, but the default sets it
 // to infinity, so only the share decides. tools/diagnosis.test.mjs pins that.
 
+import { tr, type PulseLang } from "./i18n/lang";
+
 export type DiagnosisId =
   | "healthy"
   | "skinDeep"
@@ -86,6 +88,40 @@ export const DIAGNOSIS_META: Record<DiagnosisId, Meta> = {
   },
 };
 
+/** Verdict words in Portuguese and Spanish (the same as the PDF reports). */
+const META_TR: Record<DiagnosisId, { pt: { label: string; action: string }; es: { label: string; action: string } }> = {
+  unwatched: {
+    pt: { label: "Sem audiência", action: "Dê um dono e um destino: um dashboard, um SLO ou um alerta que alguém realmente abre." },
+    es: { label: "Sin audiencia", action: "Asigne un dueño y un destino: un dashboard, un SLO o una alerta que alguien realmente abre." },
+  },
+  starved: {
+    pt: { label: "Subalimentada", action: "Amplie a cobertura primeiro: a demanda já existe, então este é o melhor retorno do plano." },
+    es: { label: "Desabastecida", action: "Amplíe primero la cobertura: la demanda ya existe, así que es el mejor retorno del plan." },
+  },
+  skinDeep: {
+    pt: { label: "Superficial", action: "Ative os critérios de Best practice e Excellence que faltam; a audiência já está lá." },
+    es: { label: "Superficial", action: "Active los criterios de Best practice y Excellence que faltan; la audiencia ya está." },
+  },
+  dark: {
+    pt: { label: "Apagada", action: "Tome uma decisão explícita: investir ou tirar do escopo." },
+    es: { label: "Apagada", action: "Tome una decisión explícita: invertir o sacarla del alcance." },
+  },
+  healthy: {
+    pt: { label: "Saudável", action: "Use como prova. Este é o padrão a replicar nas outras capacidades." },
+    es: { label: "Saludable", action: "Úsela como prueba. Este es el patrón a replicar en las demás capacidades." },
+  },
+  notAssessed: {
+    pt: { label: "Não avaliada", action: "Descubra por que os critérios não puderam ser medidos antes de ler qualquer número." },
+    es: { label: "No evaluada", action: "Averigüe por qué no se pudieron medir los criterios antes de leer cualquier número." },
+  },
+};
+
+/** A verdict's label and action in the language (rank unchanged). */
+export function diagnosisMeta(id: DiagnosisId, lang: PulseLang = "en"): Meta {
+  const m = DIAGNOSIS_META[id];
+  return lang === "en" ? m : { ...m, ...META_TR[id][lang] };
+}
+
 export interface DiagnosisInput {
   coverage: number;
   utilization: number;
@@ -111,24 +147,30 @@ export interface Diagnosis extends Meta {
   adoptionKnown: boolean;
 }
 
-function people(n: number | undefined, total: number | undefined, days: number | undefined): string {
-  if (n == null) return "adoption not measured";
-  const who = n === 0 ? "nobody" : n === 1 ? "one person" : `${n} people`;
-  const of = total && n > 0 ? ` of ${total}` : "";
-  const win = days ? ` in ${days} days` : "";
-  return `${who}${of} opened its apps${win}`;
+function people(n: number | undefined, total: number | undefined, days: number | undefined, lang: PulseLang = "en"): string {
+  if (n == null) return tr(lang, "adoption not measured", "adoção não medida", "adopción no medida");
+  const who = n === 0 ? tr(lang, "nobody", "ninguém", "nadie") : n === 1 ? tr(lang, "one person", "uma pessoa", "una persona") : tr(lang, `${n} people`, `${n} pessoas`, `${n} personas`);
+  const of = total && n > 0 ? tr(lang, ` of ${total}`, ` de ${total}`, ` de ${total}`) : "";
+  const win = days ? tr(lang, ` in ${days} days`, ` em ${days} dias`, ` en ${days} días`) : "";
+  return n === 1
+    ? tr(lang, `${who}${of} opened its apps${win}`, `${who}${of} abriu seus apps${win}`, `${who}${of} abrió sus apps${win}`)
+    : tr(lang, `${who}${of} opened its apps${win}`, `${who}${of} abriram seus apps${win}`, `${who}${of} abrieron sus apps${win}`);
 }
 
 /** The rules, in order. The first match wins. */
-export function diagnose(input: DiagnosisInput, cuts: DiagnosisCuts = DEFAULT_CUTS): Diagnosis {
+export function diagnose(input: DiagnosisInput, cuts: DiagnosisCuts = DEFAULT_CUTS, lang: PulseLang = "en"): Diagnosis {
   const { coverage, utilization, users, rate, totalUsers, windowDays, notAssessedCount, totalCount } = input;
+  const t = (en: string, pt: string, es: string) => tr(lang, en, pt, es);
 
   const build = (id: DiagnosisId, meaning: string, adoptionKnown: boolean): Diagnosis => ({
-    id, meaning, adoptionKnown, ...DIAGNOSIS_META[id],
+    id, meaning, adoptionKnown, ...diagnosisMeta(id, lang),
   });
 
   if (totalCount != null && notAssessedCount != null && notAssessedCount >= totalCount) {
-    return build("notAssessed", "No criterion in this capability could be measured on this tenant.", false);
+    return build("notAssessed", t(
+      "No criterion in this capability could be measured on this tenant.",
+      "Nenhum critério desta capacidade pôde ser medido neste ambiente.",
+      "Ningún criterio de esta capacidad pudo medirse en este entorno."), false);
   }
 
   const adoptionKnown = users != null;
@@ -136,29 +178,53 @@ export function diagnose(input: DiagnosisInput, cuts: DiagnosisCuts = DEFAULT_CU
   const deep = utilization >= cuts.utilization;
 
   if (!adoptionKnown) {
-    if (highCoverage && deep) return build("healthy", `${coverage}% of checks pass at ${utilization}% depth. Adoption was not measured.`, false);
-    if (highCoverage)         return build("skinDeep", `${coverage}% of checks pass, but only ${utilization}% depth. Adoption was not measured.`, false);
-    return build("dark", `Only ${coverage}% of checks pass. Adoption was not measured.`, false);
+    if (highCoverage && deep) return build("healthy", t(
+      `${coverage}% of checks pass at ${utilization}% depth. Adoption was not measured.`,
+      `${coverage}% dos critérios atendidos com ${utilization}% de profundidade. A adoção não foi medida.`,
+      `${coverage}% de los criterios cumplidos con ${utilization}% de profundidad. La adopción no se midió.`), false);
+    if (highCoverage)         return build("skinDeep", t(
+      `${coverage}% of checks pass, but only ${utilization}% depth. Adoption was not measured.`,
+      `${coverage}% dos critérios atendidos, mas só ${utilization}% de profundidade. A adoção não foi medida.`,
+      `${coverage}% de los criterios cumplidos, pero solo ${utilization}% de profundidad. La adopción no se midió.`), false);
+    return build("dark", t(
+      `Only ${coverage}% of checks pass. Adoption was not measured.`,
+      `Só ${coverage}% dos critérios atendidos. A adoção não foi medida.`,
+      `Solo ${coverage}% de los criterios cumplidos. La adopción no se midió.`), false);
   }
 
   const highAdoption = (rate ?? 0) >= cuts.adoptionRate || (users ?? 0) >= cuts.adoptionFloor;
-  const who = people(users, totalUsers, windowDays);
+  const who = people(users, totalUsers, windowDays, lang);
   // The basis of the judgement, stated with the reading: the share and the cut it is compared with.
-  const share = `${rate ?? 0}% of active users`;
-  const low = `${share}; below ${cuts.adoptionRate}% counts as low adoption`;
-  const high = `${share}; ${cuts.adoptionRate}% or more counts as high adoption`;
+  const share = t(`${rate ?? 0}% of active users`, `${rate ?? 0}% dos usuários ativos`, `${rate ?? 0}% de los usuarios activos`);
+  const low = t(`${share}; below ${cuts.adoptionRate}% counts as low adoption`, `${share}; abaixo de ${cuts.adoptionRate}% conta como adoção baixa`, `${share}; por debajo de ${cuts.adoptionRate}% cuenta como adopción baja`);
+  const high = t(`${share}; ${cuts.adoptionRate}% or more counts as high adoption`, `${share}; ${cuts.adoptionRate}% ou mais conta como adoção alta`, `${share}; ${cuts.adoptionRate}% o más cuenta como adopción alta`);
 
   if (highAdoption && !highCoverage)
-    return build("starved", `Demand is proven and supply is short: ${who} (${high}), but coverage is ${coverage}%, below ${cuts.coverage}%.`, true);
+    return build("starved", t(
+      `Demand is proven and supply is short: ${who} (${high}), but coverage is ${coverage}%, below ${cuts.coverage}%.`,
+      `A demanda está comprovada e a oferta é curta: ${who} (${high}), mas a cobertura é ${coverage}%, abaixo de ${cuts.coverage}%.`,
+      `La demanda está probada y la oferta es escasa: ${who} (${high}), pero la cobertura es ${coverage}%, por debajo de ${cuts.coverage}%.`), true);
 
   if (highCoverage && !highAdoption)
-    return build("unwatched", `The data is being collected (coverage ${coverage}%), but few people use it: ${who} (${low}).`, true);
+    return build("unwatched", t(
+      `The data is being collected (coverage ${coverage}%), but few people use it: ${who} (${low}).`,
+      `Os dados estão sendo coletados (cobertura ${coverage}%), mas poucas pessoas os usam: ${who} (${low}).`,
+      `Los datos se están recolectando (cobertura ${coverage}%), pero pocas personas los usan: ${who} (${low}).`), true);
 
   if (highCoverage && highAdoption && !deep)
-    return build("skinDeep", `People are in (${high}) and coverage is ${coverage}%, but utilization is ${utilization}%, below ${cuts.utilization}%.`, true);
+    return build("skinDeep", t(
+      `People are in (${high}) and coverage is ${coverage}%, but utilization is ${utilization}%, below ${cuts.utilization}%.`,
+      `As pessoas estão usando (${high}) e a cobertura é ${coverage}%, mas a utilização é ${utilization}%, abaixo de ${cuts.utilization}%.`,
+      `Las personas lo usan (${high}) y la cobertura es ${coverage}%, pero la utilización es ${utilization}%, por debajo de ${cuts.utilization}%.`), true);
 
   if (highCoverage && highAdoption)
-    return build("healthy", `On, used and deep: coverage ${coverage}%, utilization ${utilization}%, and ${who} (${high}).`, true);
+    return build("healthy", t(
+      `On, used and deep: coverage ${coverage}%, utilization ${utilization}%, and ${who} (${high}).`,
+      `Ativa, usada e profunda: cobertura ${coverage}%, utilização ${utilization}%, e ${who} (${high}).`,
+      `Activa, usada y profunda: cobertura ${coverage}%, utilización ${utilization}%, y ${who} (${high}).`), true);
 
-  return build("dark", `Barely on and barely opened: coverage ${coverage}%, below ${cuts.coverage}%, and ${who} (${low}).`, true);
+  return build("dark", t(
+    `Barely on and barely opened: coverage ${coverage}%, below ${cuts.coverage}%, and ${who} (${low}).`,
+    `Quase desligada e quase não aberta: cobertura ${coverage}%, abaixo de ${cuts.coverage}%, e ${who} (${low}).`,
+    `Casi apagada y casi sin abrir: cobertura ${coverage}%, por debajo de ${cuts.coverage}%, y ${who} (${low}).`), true);
 }

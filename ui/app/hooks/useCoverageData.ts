@@ -210,6 +210,27 @@ const POLL_INTERVAL_MS = 3000;
 const QUERY_TIMEOUT_MS = 30000;
 const DEFAULT_TIMEFRAME_HOURS = 2;
 
+/** Window of the queries that carry none of their own: the entity model, metrics, Smartscape. Pulse on its own reads
+ *  2 h; a host app (kit) sets its own window so inventory counts match the host's screens. Ratios keep numerator and
+ *  denominator in the same window, and both read the entity model or metrics, so a longer window costs ~0 GB. */
+let inventoryWindowHours = DEFAULT_TIMEFRAME_HOURS;
+export function setInventoryWindowHours(hours: number | undefined): void {
+  inventoryWindowHours = hours && Number.isFinite(hours) && hours > 0 ? hours : DEFAULT_TIMEFRAME_HOURS;
+}
+export const getInventoryWindowHours = () => inventoryWindowHours;
+
+/** A raw-event read (logs, spans, events…) always keeps the 2 h default, whether or not it names a window of its own
+ *  (a `filter timestamp > …` after the fetch is not guaranteed to narrow what Grail scans), so a longer host window can
+ *  never multiply what Grail reads. Only the entity model, metrics and Smartscape follow the host's window. */
+const RAW_EVENT = /\bfetch\s+(logs|spans|bizevents|events|security\.events|user\.events|user\.sessions|dt\.davis\.problems|dt\.davis\.events|dt\.system\.events)\b/;
+export const windowHoursFor = (query: string) => (RAW_EVENT.test(query) ? DEFAULT_TIMEFRAME_HOURS : inventoryWindowHours);
+/** Cache key: a value read over another window is another value. Only reads that follow the host's window change key;
+ *  logs, spans and events keep theirs (their window never changes), so a new host window re-reads only ~0 GB queries. */
+const windowKey = (key: string) => {
+  const hours = windowHoursFor(key);
+  return hours === DEFAULT_TIMEFRAME_HOURS ? key : `w${hours}h|${key}`;
+};
+
 /** A criterion that reads configuration, not data. No Grail scan.
  *    "settings:count <schemaId>"              number of settings objects of that schema
  *    "settings:count <schemaId> <predicate>"  only the objects the named predicate accepts
@@ -287,7 +308,7 @@ async function executeDql(query: string): Promise<DqlResult> {
         query,
         requestTimeoutMilliseconds: QUERY_TIMEOUT_MS,
         maxResultRecords: 1000,
-        defaultTimeframeStart: new Date(Date.now() - DEFAULT_TIMEFRAME_HOURS * 60 * 60 * 1000).toISOString(),
+        defaultTimeframeStart: new Date(Date.now() - windowHoursFor(query) * 60 * 60 * 1000).toISOString(),
         defaultTimeframeEnd: new Date().toISOString(),
       },
     });
@@ -496,7 +517,7 @@ async function executeAllUnique(
       // a value cached under the old rules must not be served as current.
       // Configuration reads cost nothing and must be current: never cached.
       const isConfig = /^(settings:count\b|slos:count$)/.test(originalQ.trim());
-      const cached = isConfig ? undefined : persistentCache?.get(scaleQuery(originalQ, tier), tier);
+      const cached = isConfig ? undefined : persistentCache?.get(windowKey(scaleQuery(originalQ, tier)), tier);
       if (cached) {
         cache.set(originalQ, cached.v);
         if (cached.p) partial.add(originalQ);
@@ -573,7 +594,7 @@ async function executeAllUnique(
       if (ok && result.value !== -1 && persistentCache && !isConfig) {
         persistentCache.set(
           // The key the lookup above uses: per criterion, also when a shared scan answered it.
-          scaleQuery(originalQ, tier),
+          windowKey(scaleQuery(originalQ, tier)),
           tier,
           result.value,
           result.scannedBytes,

@@ -8,10 +8,19 @@
 // 95% with a whole team in it.
 //
 // Source ─────────────────────────────────────────────────────────────────
-// Every DQL execution lands in dt.system.events as a QUERY_EXECUTION_EVENT
-// carrying `user.email` and `client.source` (the app URL, which contains
-// DT_APP_ID=<app id>). Counting distinct emails per app id gives active
-// users per app; ../data/appCapabilityMap.ts maps apps to capabilities.
+// Every action a person takes in a platform app passes the API gateway and
+// lands in dt.system.events as an AUDIT_EVENT with `user.id`, `dt.app.id` and
+// `request.source` ("BROWSER" for people, "OTHER" for API clients). Counting
+// distinct users per app id gives active users per app, apps that never run
+// DQL included (settings, Hub, configuration screens); ../data/appCapabilityMap.ts
+// maps apps to capabilities. (Until 3.0.16 this read QUERY_EXECUTION_EVENT,
+// which misses every app that does not query; the PoC Automation app read the
+// audit events, so the two showed different people for the same platform.)
+//
+// Who counts ─────────────────────────────────────────────────────────────
+// The customer's people only: users of the Dynatrace organisation (the SE,
+// the partner, support) are counted apart and never in the score, and the
+// assessment tools themselves (Pulse, PoC Automation) are not adoption.
 //
 // Cost ───────────────────────────────────────────────────────────────────
 // dt.system.events is a system bucket: measured at 0 GB scanned on a real
@@ -19,9 +28,8 @@
 // storage:system:read scope, which the app already requests.
 //
 // Honest limits (surfaced in the UI, not hidden) ─────────────────────────
-//   - Only apps that run DQL appear. Pure-configuration apps never query.
-//   - API/automation traffic has no client.source and is excluded.
-//   - This is platform usage, not data usage: a dashboard that queries logs
+//   - API/automation traffic is not a person and is excluded.
+//   - This is platform usage, not data usage: a dashboard that shows logs
 //     counts for whoever opened it, not for "Log Analytics" as such.
 //
 // Adoption is one of the three parts of a capability score (../pulseScore.ts).
@@ -34,10 +42,11 @@ import { capabilityForApp, OTHER_BUCKET } from "../data/appCapabilityMap";
 
 export interface AppUsage {
   appId: string;
-  /** Distinct people who opened the app in the window (30 days). */
+  /** Distinct people who used the app in the window (30 days). */
   users: number;
   /** Distinct people per day, averaged over every day of the window. */
   dailyUsers: number;
+  /** Actions in the app over the window (a tie-breaker between apps with the same people). */
   queries: number;
   capability: string;
 }
@@ -63,8 +72,10 @@ export interface UseAppAdoptionResult {
   apps: AppUsage[];
   /** capability name → adoption. Includes OTHER_BUCKET when relevant. */
   byCapability: Record<string, CapabilityAdoption>;
-  /** Distinct users across the whole platform in the window. */
+  /** The customer's distinct people on the platform in the window. */
   totalUsers: number;
+  /** Distinct users of the Dynatrace organisation (SE, partner, support) in the window: shown apart, never scored. */
+  dynatraceUsers: number;
   /** Days the window covers (for labelling). */
   windowDays: number;
   refresh: () => void;
@@ -74,42 +85,38 @@ const WINDOW_DAYS = 30;
 
 /** What a page reads before the app's single adoption fetch has anything. */
 export const NO_ADOPTION: UseAppAdoptionResult = {
-  loading: true, unavailable: false, apps: [], byCapability: {}, totalUsers: 0, windowDays: WINDOW_DAYS, refresh: () => {},
+  loading: true, unavailable: false, apps: [], byCapability: {}, totalUsers: 0, dynatraceUsers: 0, windowDays: WINDOW_DAYS, refresh: () => {},
 };
 
-/** Distinct users + query count per app id, over the window. Service
- *  accounts (heimdall) are excluded so the count reflects real people. */
-// Keyed on client.application_context — the documented field for "which app
-// ran this query". The earlier version parsed DT_APP_ID out of client.source,
-// which is missing on many apps' queries: on a real tenant it showed Dashboards
-// and Dynatrace Assist with no users and Problems at half its real audience.
-// The platform shell itself (dynatrace.appshell) is not an app people choose.
-const ADOPTION_QUERY = `
-fetch dt.system.events, from:now()-${WINDOW_DAYS}d
-| filter event.kind == "QUERY_EXECUTION_EVENT"
-| filter isNotNull(client.application_context) and client.application_context != "dynatrace.appshell"
-| filter isNotNull(user.email) and not(contains(user.email, "heimdall.dynatrace.com"))
-| summarize users = countDistinct(user.email), queries = count(), by:{appId = client.application_context}
+/** The people and apps every adoption read counts: browser actions of the
+ *  customer's users, in the apps people choose (not the shell, the launcher or
+ *  the assessment tools). */
+const ASSESSMENT_APPS = ["dynatrace.appshell", "dynatrace.launcher", "my.pulse.assessment", "my.poc.automation"];
+const PEOPLE = `fetch dt.system.events, from:now()-${WINDOW_DAYS}d
+| filter event.kind == "AUDIT_EVENT" and event.provider == "API_GATEWAY" and \`request.source\` == "BROWSER"
+| filter \`user.id\` != "UNKNOWN" and \`user.id\` != "system"
+| filter isNotNull(\`dt.app.id\`) and not(in(\`dt.app.id\`, {${ASSESSMENT_APPS.map(a => `"${a}"`).join(", ")}}))`;
+const CUSTOMER = `| filter isFalseOrNull(user.organization == "DYNATRACE")`;
+
+/** Distinct people and their actions per app id, over the window. */
+const ADOPTION_QUERY = `${PEOPLE}
+${CUSTOMER}
+| summarize users = countDistinctExact(\`user.id\`), queries = count(), by:{appId = \`dt.app.id\`}
 | sort users desc, queries desc
 | limit 200`;
 
 /** Distinct people per app per day, averaged over all days of the window
- *  (days without use count as zero). Same filters as above; system events,
- *  no Grail scan. */
-const DAILY_USERS_QUERY = `
-fetch dt.system.events, from:now()-${WINDOW_DAYS}d
-| filter event.kind == "QUERY_EXECUTION_EVENT"
-| filter isNotNull(client.application_context) and client.application_context != "dynatrace.appshell"
-| filter isNotNull(user.email) and not(contains(user.email, "heimdall.dynatrace.com"))
-| summarize u = countDistinct(user.email), by:{appId = client.application_context, day = bin(timestamp, 1d)}
+ *  (days without use count as zero). */
+const DAILY_USERS_QUERY = `${PEOPLE}
+${CUSTOMER}
+| summarize u = countDistinctExact(\`user.id\`), by:{appId = \`dt.app.id\`, day = bin(timestamp, 1d)}
 | summarize dailyUsers = sum(u) / ${WINDOW_DAYS}.0, by:{appId}
 | limit 200`;
 
-const TOTAL_USERS_QUERY = `
-fetch dt.system.events, from:now()-${WINDOW_DAYS}d
-| filter event.kind == "QUERY_EXECUTION_EVENT"
-| filter isNotNull(user.email) and not(contains(user.email, "heimdall.dynatrace.com"))
-| summarize users = countDistinct(user.email)`;
+/** The customer's people on the platform, and the Dynatrace organisation's apart. */
+const TOTAL_USERS_QUERY = `${PEOPLE}
+| summarize users = countDistinctExact(if(isFalseOrNull(user.organization == "DYNATRACE"), \`user.id\`)),
+    dynatraceUsers = countDistinctExact(if(user.organization == "DYNATRACE", \`user.id\`))`;
 
 const num = (v: unknown): number => {
   if (typeof v === "number") return v;
@@ -121,7 +128,7 @@ const num = (v: unknown): number => {
 async function runQuery(query: string): Promise<Record<string, unknown>[] | null> {
   try {
     let res: { state?: string; result?: unknown; requestToken?: string } | undefined = await queryExecutionClient.queryExecute({
-      body: { query, requestTimeoutMilliseconds: 30_000, maxResultRecords: 200 },
+      body: { query, requestTimeoutMilliseconds: 30_000, maxResultRecords: 200, defaultScanLimitGbytes: 2 },
     });
     // 30 days of system events can outlive the request timeout on a large
     // tenant: poll for the result instead of reading "no adoption".
@@ -149,6 +156,7 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
   const [unavailable, setUnavailable] = useState(false);
   const [apps, setApps] = useState<AppUsage[]>([]);
   const [totalUsers, setTotalUsers] = useState(0);
+  const [dynatraceUsers, setDynatraceUsers] = useState(0);
   const [runId, setRunId] = useState(0);
   const startedRef = useRef(false);
 
@@ -201,6 +209,7 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
       }
       setApps(parsed);
       setTotalUsers(total);
+      setDynatraceUsers(num(totalRows?.[0]?.dynatraceUsers));
       setLoading(false);
       setDone(true);
     })();
@@ -231,7 +240,7 @@ export function useAppAdoption(enabled: boolean): UseAppAdoptionResult {
 
   const refresh = useCallback(() => setRunId(n => n + 1), []);
 
-  return { loading: loading || (enabled && !done), unavailable, apps, byCapability, totalUsers, windowDays: WINDOW_DAYS, refresh };
+  return { loading: loading || (enabled && !done), unavailable, apps, byCapability, totalUsers, dynatraceUsers, windowDays: WINDOW_DAYS, refresh };
 }
 
 /** "N people a month · M a day" — people, never queries: a dashboard on a wall

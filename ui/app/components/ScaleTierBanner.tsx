@@ -28,8 +28,9 @@ import { Flex, Surface } from '@dynatrace/strato-components/layouts';
 import { Text, Strong } from '@dynatrace/strato-components/typography';
 import { Button } from '@dynatrace/strato-components/buttons';
 import Colors from '@dynatrace/strato-design-tokens/colors';
-import { TIER_CONFIG, type ScaleTier } from '../scale-tier';
+import { TIER_CONFIG, tierDescription, type ScaleTier } from '../scale-tier';
 import type { UseScaleTierResult } from '../hooks/useScaleTier';
+import { tr, useLang, localeTag, type PulseLang } from '../i18n/lang';
 
 interface ScaleTierBannerProps {
   scale: UseScaleTierResult;
@@ -52,17 +53,34 @@ export const COST_MODE_TEXT =
   'AI checks read 4 hours unsampled; criteria over the same records share one read. ' +
   'Every read stops at 50 GB, and a value it cuts shows with ≈.';
 
-export const CostModeNote: React.FC<{ className?: string }> = ({ className }) => (
+/** COST_MODE_TEXT in the given language. */
+export const costModeText = (lang: PulseLang): string => tr(lang,
+  COST_MODE_TEXT,
+  'Os critérios leem métricas do Dynatrace e o Smartscape sempre que respondem à pergunta. ' +
+  'Verificações de proporção em logs e eventos leem uma amostra de 1 em 1000; verificações de abrangência leem 15 minutos; ' +
+  'verificações de AI leem 4 horas sem amostragem; critérios sobre os mesmos registros compartilham uma leitura. ' +
+  'Toda leitura para em 50 GB, e um valor cortado aparece com ≈.',
+  'Los criterios leen métricas de Dynatrace y Smartscape siempre que responden a la pregunta. ' +
+  'Las comprobaciones de proporción en logs y eventos leen una muestra de 1 en 1000; las de amplitud leen 15 minutos; ' +
+  'las comprobaciones de AI leen 4 horas sin muestreo; los criterios sobre los mismos registros comparten una lectura. ' +
+  'Toda lectura se detiene en 50 GB, y un valor recortado aparece con ≈.',
+);
+
+export const CostModeNote: React.FC<{ className?: string }> = ({ className }) => {
+  const lang = useLang();
+  return (
   <Text
     className={className}
     textStyle="small"
     style={{ color: Colors.Text.Neutral.Subdued, display: 'block', marginBottom: 8 }}
   >
-    {COST_MODE_TEXT}
+    {costModeText(lang)}
   </Text>
-);
+  );
+};
 
 export const ScaleTierBanner: React.FC<ScaleTierBannerProps> = ({ scale, className }) => {
+  const lang = useLang();
   // Default tier is invisible — the goal is zero presentation impact for the
   // common case (small/medium tenants). Above-threshold tenants get the disclosure.
   // Exact tier: nothing to choose, so no banner — the toolbar chip carries
@@ -73,8 +91,8 @@ export const ScaleTierBanner: React.FC<ScaleTierBannerProps> = ({ scale, classNa
   const isOverridden = scale.override !== null && scale.override !== scale.autoTier;
   const hostLabel =
     scale.hostCount != null && scale.hostCount > 0
-      ? `${scale.hostCount.toLocaleString()} hosts detected`
-      : 'host count unavailable';
+      ? tr(lang, `${scale.hostCount.toLocaleString(localeTag(lang))} hosts detected`, `${scale.hostCount.toLocaleString(localeTag(lang))} hosts detectados`, `${scale.hostCount.toLocaleString(localeTag(lang))} hosts detectados`)
+      : tr(lang, 'host count unavailable', 'contagem de hosts indisponível', 'recuento de hosts no disponible');
 
   return (
     <Surface
@@ -93,10 +111,10 @@ export const ScaleTierBanner: React.FC<ScaleTierBannerProps> = ({ scale, classNa
       <Flex flexDirection="column" gap={6}>
         <Flex justifyContent="space-between" alignItems="center" gap={12} flexWrap="wrap">
           <Flex gap={8} alignItems="baseline">
-            <Strong>Scale tier: {cfg.label}</Strong>
+            <Strong>{tr(lang, 'Scale tier', 'Nível de escala', 'Nivel de escala')}: {cfg.label}</Strong>
             <Text textStyle="small">
               {hostLabel}
-              {isOverridden ? ' · manual override' : ' · auto-selected'}
+              {isOverridden ? tr(lang, ' · manual override', ' · seleção manual', ' · selección manual') : tr(lang, ' · auto-selected', ' · seleção automática', ' · selección automática')}
             </Text>
           </Flex>
           <Flex gap={4}>
@@ -107,14 +125,14 @@ export const ScaleTierBanner: React.FC<ScaleTierBannerProps> = ({ scale, classNa
                 variant={t === scale.tier ? 'accent' : 'default'}
                 onClick={() => scale.setOverride(t === scale.autoTier ? null : t)}
                 aria-pressed={t === scale.tier}
-                aria-label={`Switch to ${TIER_CONFIG[t].label} tier`}
+                aria-label={tr(lang, `Switch to ${TIER_CONFIG[t].label} tier`, `Mudar para o nível ${TIER_CONFIG[t].label}`, `Cambiar al nivel ${TIER_CONFIG[t].label}`)}
               >
                 {TIER_CONFIG[t].label}
               </Button>
             ))}
           </Flex>
         </Flex>
-        <Text textStyle="small">{cfg.description}</Text>
+        <Text textStyle="small">{tierDescription(scale.tier, lang)}</Text>
         <CostModeNote />
       </Flex>
     </Surface>

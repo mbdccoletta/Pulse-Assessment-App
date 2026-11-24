@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { usePulseHost, usePulseNavigate } from "../kit/PulseHost";
 import { createPortal } from "react-dom";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
@@ -11,10 +11,11 @@ import { Menu } from "@dynatrace/strato-components/navigation";
 import { Chip, EmptyState, MessageContainer } from "@dynatrace/strato-components/content";
 import { PulseLoader } from "../components/PulseLoader";
 import { showToast } from "@dynatrace/strato-components/notifications";
-import { DownloadIcon, RefreshIcon } from "@dynatrace/strato-icons";
+import { CrosshairIcon, DownloadIcon, RefreshIcon } from "@dynatrace/strato-icons";
 import type { CoverageData, ViewMode } from "../hooks/useCoverageData";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
-import { ScaleTierBanner, COST_MODE_TEXT } from "../components/ScaleTierBanner";
+import { ScaleTierBanner, costModeText } from "../components/ScaleTierBanner";
+import { useLang, useTr, tr as trLang, bandWord } from "../i18n/lang";
 import { DpsCostBadge } from "../components/DpsCostBadge";
 import type { UseScaleTierResult } from "../hooks/useScaleTier";
 import { NO_ADOPTION } from "../hooks/useAppAdoption";
@@ -28,6 +29,8 @@ import { useAppNames } from "../hooks/useAppNames";
 // Report code (and jsPDF) is only needed after a click: load it on demand.
 const loadReports = () => import("../reports/pulseReports");
 import { SmartReportModal } from "../components/SmartReportModal";
+import { EstateTargetModal } from "../components/EstateTargetModal";
+import { applyEstateTarget, hasEstateTarget, loadEstateTarget, type EstateTarget } from "../data/estateTarget";
 import { tracesNotEntitled, classicEntitiesMissing, detectTelemetry, simulatedOtelSkipsLogScans } from "../hooks/usePreflight";
 import { telemetrySummary, setCurrentTelemetry, getCurrentTelemetry, type TelemetryProfile } from "../telemetry";
 import { Tooltip } from "../components/Tooltip";
@@ -76,7 +79,14 @@ interface Props {
 
 export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageData, scale, headerOnly }) => {
   const { capabilities, totalScore, overallUtilizationLevel, loading, error, tenant, date, stats, start, refresh } = coverageData;
-  const navigate = useNavigate();
+  const navigate = usePulseNavigate();
+  const lang = useLang();
+  const tr = useTr();
+  /** Report languages, the active UI language first. */
+  const reportLangs = useMemo(() => {
+    const all: [ReportLang, string][] = [["en", "English"], ["pt", "Português"], ["es", "Español"]];
+    return [...all.filter(([l]) => l === lang), ...all.filter(([l]) => l !== lang)];
+  }, [lang]);
   const [chartSize, setChartSize] = useState(500);
   const [isMobile, setIsMobile] = useState(false);
   const viewMode = (view === "recommendations" ? "recommendations" : "coverage") as ViewMode;
@@ -91,7 +101,8 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
   const adoption = coverageData.adoption ?? NO_ADOPTION;
 
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => { setHeaderSlot(document.getElementById("pulse-header-actions")); }, []);
+  const { headerSlotId } = usePulseHost();
+  useEffect(() => { setHeaderSlot(document.getElementById(headerSlotId)); }, [headerSlotId]);
 
   const openCapability = useCallback((idx: number) => {
     const cap = capabilities[idx];
@@ -104,6 +115,10 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
    *  ones (incl. all of AI/LLM Observability) leave the scoring denominator.
    *  See ../trace-proxy.ts and docs/STUDY-CLASSIC-SAAS-NO-GRAIL-TRACES.md. */
   const [traceProxyMode, setTraceProxyMode] = useState(() => session.traceProxy);
+
+  /** The estate the project plans to monitor (data/estateTarget.ts); empty until set. */
+  const [estateTarget, setEstateTarget] = useState<EstateTarget>(() => session.target);
+  const [showTarget, setShowTarget] = useState(false);
 
   /** What the probes found in this environment; decides how the catalog is adapted. */
   const envRef = useRef<RunEnv>(session.env);
@@ -128,7 +143,9 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
     if (otel) caps = otel.caps;
     setActionOverrides(env.source === "otel" ? OTEL_ACTIONS : env.source === "mixed" ? mixedActions(CRITERION_ACTIONS) : null);
     const model = env.noEntities ? applySmartscapeModel(caps) : null;
-    return { caps: model ? model.caps : caps, modelInfo: model ? model.info : null, otelInfo: otel ? otel.info : null };
+    // The estate target last: its numerators are the host and cluster universe of the catalog adapted above.
+    const adapted = applyEstateTarget(model ? model.caps : caps, session.target);
+    return { caps: adapted, modelInfo: model ? model.info : null, otelInfo: otel ? otel.info : null };
   }, []);
 
   /** Refresh means new readings: drop the 24h result cache, then run. Opening
@@ -170,11 +187,14 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
     if (scale?.detecting) return;
     autoRanRef.current = true;
     (async () => {
-      const [noTraces, noEntities, logMetric] = await Promise.all([
+      const [noTraces, noEntities, logMetric, target] = await Promise.all([
         tracesNotEntitled().catch(() => false),
         classicEntitiesMissing().catch(() => false),
         logMetricAvailable().catch(() => false),
+        loadEstateTarget(),
       ]);
+      session.target = target;
+      setEstateTarget(target);
       const profile = await detectTelemetry(noEntities).catch((): TelemetryProfile => ({ source: "oneagent", oneAgentHosts: 0, otelOnlyHosts: 0, sharedHosts: 0 }));
       envRef.current = { noEntities, logMetric, source: profile.source };
       session.env = envRef.current;
@@ -251,10 +271,20 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
     setExporting(true);
     try {
       const d = await ensureFinops();
-      if (!d) { showToast({ type: "warning", title: "No FinOps data", message: "Cost & Carbon Optimization has written no cost or carbon data in this environment." }); return; }
+      if (!d) {
+        showToast({
+          type: "warning",
+          title: trLang(lang, "No FinOps data", "Sem dados de FinOps", "Sin datos de FinOps"),
+          message: trLang(lang,
+            "Cost & Carbon Optimization has written no cost or carbon data in this environment.",
+            "O Cost & Carbon Optimization não gravou dados de custo ou carbono neste ambiente.",
+            "Cost & Carbon Optimization no ha escrito datos de costo ni de carbono en este entorno."),
+        });
+        return;
+      }
       (await loadReports()).generateFinOpsReport(reportInput(), d, lang);
     } finally { setExporting(false); }
-  }, [exporting, capabilities.length, ensureFinops, reportInput]);
+  }, [exporting, capabilities.length, ensureFinops, reportInput, lang]);
   /** FinOps facts for the Smart report, fetched only when a request asks about cost, energy or carbon. */
   const loadFinopsNote = useCallback(async () => { const d = await ensureFinops(); return d ? finopsNote(d) : undefined; }, [ensureFinops]);
 
@@ -265,31 +295,36 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
   // The run is saved to the history in App.tsx, so it is saved on any page.
 
   // Auto-size chart — use ResizeObserver for notebook/embedded containers
+  const { embedded } = usePulseHost();
   useEffect(() => {
     const el = rootRef.current;
     let tid: ReturnType<typeof setTimeout>;
     const calc = () => {
-      const vh = el ? el.offsetHeight || window.innerHeight : window.innerHeight;
+      // Embedded in another app the page scrolls and Pulse's box grows with its content, so its own height says
+      // nothing about the room on screen: the viewport does.
+      const vh = embedded || !el ? window.innerHeight : el.offsetHeight || window.innerHeight;
       const vw = el ? el.offsetWidth : window.innerWidth;
       const mobile = vw < 640;
       setIsMobile(mobile);
-      // Reserve space for toolbar (~50px) + collapsed guide bar (~32px) + padding
-      // header + intelligence bar + "Needs attention" row + the labels drawn outside the plot
+      // Reserve space for header + intelligence bar + "Needs attention" row + the labels above and below the plot.
       const reserve = mobile ? 220 : 330;
-      // The chart is the whole page now (the side cards moved to the detail page).
-      const maxSide = Math.min(vh - reserve, (vw - (mobile ? 32 : 48)) * 0.5, 620);
+      // Width: the radar draws its labels outside the plot (PulseRadar: padX = max(260, 0.85 R) per side), so the
+      // plot gets what is left after them. Sized this way the SVG is never scaled down and the text keeps its size.
+      const fitW = vw - (mobile ? 32 : 48);
+      const byWidth = fitW - 520 <= 611 ? fitW - 520 : fitW / 1.85;
+      const maxSide = Math.min(vh - reserve, byWidth, 620);
       setChartSize(Math.max(maxSide, mobile ? 200 : 220));
     };
     const debounced = () => { clearTimeout(tid); tid = setTimeout(calc, 100); };
     calc();
+    window.addEventListener("resize", debounced);
     if (el && typeof ResizeObserver !== "undefined") {
       const ro = new ResizeObserver(debounced);
       ro.observe(el);
-      return () => { ro.disconnect(); clearTimeout(tid); };
+      return () => { ro.disconnect(); window.removeEventListener("resize", debounced); clearTimeout(tid); };
     }
-    window.addEventListener("resize", debounced);
     return () => { window.removeEventListener("resize", debounced); clearTimeout(tid); };
-  }, []);
+  }, [embedded]);
 
 
 
@@ -307,7 +342,11 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
   const headerActions = !loading && capabilities.length > 0 && !nothingMeasured
     ? (headerSlot && createPortal(
           <Flex alignItems="center" gap={8}>
-            <Button onClick={freshRun} size="condensed"><Button.Prefix><RefreshIcon /></Button.Prefix>Refresh</Button>
+            <Button onClick={freshRun} size="condensed"><Button.Prefix><RefreshIcon /></Button.Prefix>{tr("Refresh", "Atualizar", "Actualizar")}</Button>
+            <Button onClick={() => setShowTarget(true)} size="condensed">
+              <Button.Prefix><CrosshairIcon /></Button.Prefix>
+              {hasEstateTarget(estateTarget) ? tr("Target ✓", "Meta ✓", "Meta ✓") : tr("Target", "Meta", "Meta")}
+            </Button>
             {/* Reports: the PDFs and the raw export are built in the browser
                 (jsPDF). The Smart report is the only entry that calls Davis
                 CoPilot, and only when the user submits it. */}
@@ -316,45 +355,52 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                 <Menu.Trigger>
                   <Button loading={exporting} size="condensed">
                     <Button.Prefix><DownloadIcon /></Button.Prefix>
-                    Reports
+                    {tr("Reports", "Relatórios", "Informes")}
                   </Button>
                 </Menu.Trigger>
                 <Menu.Content>
                   {([
-                    ["overall", "Overall score"],
-                    ["plan", "Action plan"],
-                    ["criteria", "Criteria detail"],
+                    ["overall", tr("Overall score", "Pontuação geral", "Puntuación general")],
+                    ["plan", tr("Action plan", "Plano de ação", "Plan de acción")],
+                    ["criteria", tr("Criteria detail", "Detalhe dos critérios", "Detalle de criterios")],
                   ] as [ReportKind, string][]).map(([p, label]) => (
                     <Menu.Sub key={p}>
                       <Menu.SubTrigger>{label}</Menu.SubTrigger>
                       <Menu.SubContent>
-                        <Menu.Item onSelect={() => generateReport(p, "en")}>English</Menu.Item>
-                        <Menu.Item onSelect={() => generateReport(p, "pt")}>Português</Menu.Item>
-                        <Menu.Item onSelect={() => generateReport(p, "es")}>Español</Menu.Item>
+                        {reportLangs.map(([l, name]) => (
+                          <Menu.Item key={l} onSelect={() => generateReport(p, l)}>{name}</Menu.Item>
+                        ))}
                       </Menu.SubContent>
                     </Menu.Sub>
                   ))}
                   <Menu.Sub>
                     <Menu.SubTrigger>FinOps</Menu.SubTrigger>
                     <Menu.SubContent>
-                      <Menu.Item onSelect={() => generateFinOps("en")}>English</Menu.Item>
-                      <Menu.Item onSelect={() => generateFinOps("pt")}>Português</Menu.Item>
-                      <Menu.Item onSelect={() => generateFinOps("es")}>Español</Menu.Item>
+                      {reportLangs.map(([l, name]) => (
+                        <Menu.Item key={l} onSelect={() => generateFinOps(l)}>{name}</Menu.Item>
+                      ))}
                     </Menu.SubContent>
                   </Menu.Sub>
                   <Menu.Sub>
-                    <Menu.SubTrigger>Raw data</Menu.SubTrigger>
+                    <Menu.SubTrigger>{tr("Raw data", "Dados brutos", "Datos sin procesar")}</Menu.SubTrigger>
                     <Menu.SubContent>
                       <Menu.Item onSelect={() => exportRaw("json")}>JSON</Menu.Item>
                       <Menu.Item onSelect={() => exportRaw("csv")}>CSV</Menu.Item>
                     </Menu.SubContent>
                   </Menu.Sub>
-                  <Menu.Item onSelect={() => setShowSmartReport(true)}>Smart (Assist)…</Menu.Item>
+                  <Menu.Item onSelect={() => setShowSmartReport(true)}>{tr("Smart (Assist)…", "Inteligente (Assist)…", "Inteligente (Assist)…")}</Menu.Item>
                 </Menu.Content>
               </Menu>
             )}
           </Flex>, headerSlot))
     : null;
+  /** The estate target dialog: a save re-runs the assessment with the target's criteria. */
+  const targetModal = (<EstateTargetModal
+          open={showTarget}
+          target={estateTarget}
+          onClose={() => setShowTarget(false)}
+          onSaved={(t) => { session.target = t; setEstateTarget(t); startFiltered(); }}
+        />);
   /** The Smart report dialog the Reports menu opens. */
   const smartReport = (<SmartReportModal
           open={showSmartReport}
@@ -374,7 +420,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
           loadFinopsNote={loadFinopsNote}
           dk={dk}
         />);
-  if (headerOnly) return <>{headerActions}{smartReport}</>;
+  if (headerOnly) return <>{headerActions}{smartReport}{targetModal}</>;
 
   return (
     <Flex flexDirection="column" ref={rootRef} style={{ height: "100%",
@@ -396,8 +442,8 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
         <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
           <EmptyState>
             <EmptyState.VisualPreset context="chart" type="something-missing" />
-            <EmptyState.Title>No assessment results</EmptyState.Title>
-            <EmptyState.Actions><Button variant="accent" color="primary" onClick={() => startFiltered()}>Run assessment</Button></EmptyState.Actions>
+            <EmptyState.Title>{tr("No assessment results", "Sem resultados de avaliação", "Sin resultados de evaluación")}</EmptyState.Title>
+            <EmptyState.Actions><Button variant="accent" color="primary" onClick={() => startFiltered()}>{tr("Run assessment", "Executar avaliação", "Ejecutar evaluación")}</Button></EmptyState.Actions>
           </EmptyState>
         </Flex>
       )}
@@ -407,9 +453,9 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
         <Flex alignItems="center" justifyContent="center" style={{ flex: 1, padding: 48 }}>
           <EmptyState>
             <EmptyState.VisualPreset context="generic" type="something-wrong" />
-            <EmptyState.Title>The assessment could not read this environment</EmptyState.Title>
-            <EmptyState.Details>None of the queries returned. This usually means the connection to the environment was lost or the session expired.</EmptyState.Details>
-            <EmptyState.Actions><Button variant="accent" color="primary" onClick={refresh}>Try again</Button></EmptyState.Actions>
+            <EmptyState.Title>{tr("The assessment could not read this environment", "A avaliação não conseguiu ler este ambiente", "La evaluación no pudo leer este entorno")}</EmptyState.Title>
+            <EmptyState.Details>{tr("None of the queries returned. This usually means the connection to the environment was lost or the session expired.", "Nenhuma das consultas retornou. Isso costuma indicar que a conexão com o ambiente caiu ou a sessão expirou.", "Ninguna de las consultas respondió. Esto suele indicar que se perdió la conexión con el entorno o la sesión expiró.")}</EmptyState.Details>
+            <EmptyState.Actions><Button variant="accent" color="primary" onClick={refresh}>{tr("Try again", "Tentar novamente", "Intentar de nuevo")}</Button></EmptyState.Actions>
           </EmptyState>
         </Flex>
       )}
@@ -438,11 +484,15 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
             <Text style={{ fontSize: 12, color: textSec }}>
               {stats && stats.failed > 0 && (
                 <Text style={{ marginRight: 8, fontSize: 12, color: Colors.Text.Warning.Default }}>
-                  {stats.failed} {stats.failed === 1 ? "check" : "checks"} could not run ·
+                  {tr(
+                    `${stats.failed} ${stats.failed === 1 ? "check" : "checks"} could not run ·`,
+                    `${stats.failed} ${stats.failed === 1 ? "verificação não pôde" : "verificações não puderam"} ser executada${stats.failed === 1 ? "" : "s"} ·`,
+                    `${stats.failed} ${stats.failed === 1 ? "comprobación no se pudo" : "comprobaciones no se pudieron"} ejecutar ·`,
+                  )}
                 </Text>
               )}
               <DpsCostBadge
-                note={COST_MODE_TEXT}
+                note={costModeText(lang)}
                 stats={stats}
                 partialCount={capabilities.reduce((n, c) => n + c.criteriaResults.filter(r => r.partial).length, 0)}
                 liveScannedBytes={coverageData.liveScannedBytes}
@@ -478,9 +528,13 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
             <Flex style={{ padding: "0 16px", marginTop: 8, flexShrink: 0 }}>
               <MessageContainer variant="primary" style={{ width: "100%" }}>
                 <MessageContainer.Prefix />
-                <MessageContainer.Title>Smartscape entity model</MessageContainer.Title>
+                <MessageContainer.Title>{tr("Smartscape entity model", "Modelo de entidades Smartscape", "Modelo de entidades Smartscape")}</MessageContainer.Title>
                 <MessageContainer.Description>
-                  {`This environment has no classic entity tables, so entity counts are read from Smartscape (${entityModelInfo.rewrittenIds.length} criteria). ${entityModelInfo.excludedIds.length} criteria with no Smartscape equivalent are left out of the score instead of counting as not met.`}
+                  {tr(
+                    `This environment has no classic entity tables, so entity counts are read from Smartscape (${entityModelInfo.rewrittenIds.length} criteria). ${entityModelInfo.excludedIds.length} criteria with no Smartscape equivalent are left out of the score instead of counting as not met.`,
+                    `Este ambiente não tem as tabelas clássicas de entidades, então as contagens de entidades são lidas do Smartscape (${entityModelInfo.rewrittenIds.length} critérios). ${entityModelInfo.excludedIds.length} critérios sem equivalente no Smartscape ficam fora da pontuação em vez de contar como não atendidos.`,
+                    `Este entorno no tiene las tablas clásicas de entidades, así que los recuentos de entidades se leen de Smartscape (${entityModelInfo.rewrittenIds.length} criterios). ${entityModelInfo.excludedIds.length} criterios sin equivalente en Smartscape quedan fuera de la puntuación en lugar de contar como no cumplidos.`,
+                  )}
                 </MessageContainer.Description>
               </MessageContainer>
             </Flex>
@@ -496,7 +550,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                 const low = capabilities.map((c, i) => ({ c, i })).filter(x => x.c.score < 60).sort((a, b) => a.c.score - b.c.score).slice(0, 3);
                 return (
                   <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ alignSelf: "stretch", flexShrink: 0, padding: isMobile ? "12px 16px 0" : "8px 48px 0 16px" }}>
-                    <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>{low.length > 0 ? "Needs attention" : "All capabilities at 60% or above"}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>{low.length > 0 ? tr("Needs attention", "Requer atenção", "Requiere atención") : tr("All capabilities at 60% or above", "Todas as capabilities em 60% ou mais", "Todas las capabilities en 60% o más")}</Text>
                     {low.map(({ c, i }) => (
                       <Chip key={c.name} color={c.score < 40 ? "critical" : "warning"} onClick={(e: React.MouseEvent) => { e.stopPropagation(); openCapability(i); }}>
                         {c.name} <strong style={{ fontVariantNumeric: "tabular-nums" }}>{c.score}%</strong>
@@ -510,9 +564,9 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                 /* A phone is too narrow for the radar's labels: the same scores as a list, lowest first. */
                 <Flex flexDirection="column" gap={16} style={{ alignSelf: "stretch", padding: "16px 16px 32px" }}>
                   <Flex alignItems="baseline" gap={8}>
-                    <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>Overall score</Text>
+                    <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>{tr("Overall score", "Pontuação geral", "Puntuación general")}</Text>
                     <Link onClick={() => navigate("/summary")}><strong style={{ fontVariantNumeric: "tabular-nums" }}>{totalScore}%</strong></Link>
-                    <Text textStyle="small" style={{ color: scoreBand(totalScore).text }}>{scoreBand(totalScore).label}</Text>
+                    <Text textStyle="small" style={{ color: scoreBand(totalScore).text }}>{bandWord(scoreBand(totalScore).label, lang)}</Text>
                   </Flex>
                   {capabilities.map((c, i) => ({ c, i })).sort((a, b) => a.c.score - b.c.score).map(({ c, i }) => (
                     <MeterBarChart key={c.name} value={Math.floor(c.score)} min={0} max={100} color={scoreBand(c.score).token} size="size8" formatter={(v: number) => `${Math.floor(v)}%`}>
@@ -546,7 +600,7 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
                     <Flex key={x.l} alignItems="center" gap={2} style={{ padding: "2px 8px", borderRadius: 6,
                       background: x.hex + (dk ? "20" : "12") }}>
                       <Flex style={{ width: 5, height: 5, borderRadius: "50%", background: x.c }} />
-                      <Text style={{ fontSize: 12, color: text, fontWeight: 600 }}>{x.l}</Text>
+                      <Text style={{ fontSize: 12, color: text, fontWeight: 600 }}>{bandWord(x.l, lang)}</Text>
                       <Text style={{ fontSize: 12, color: text, fontWeight: 500 }}>{x.r}</Text>
                     </Flex>
                   ))}
@@ -565,12 +619,13 @@ export const CoverageAssessment: React.FC<Props> = ({ view, history, coverageDat
       {/* Error State */}
       {error && (
         <Flex flexDirection="column" style={{ textAlign: "center", padding: 24, color: Colors.Text.Critical.Default }}>
-          <Flex flexDirection="column" style={{ fontSize: 14, marginBottom: 8 }}>Assessment failed</Flex>
+          <Flex flexDirection="column" style={{ fontSize: 14, marginBottom: 8 }}>{tr("Assessment failed", "A avaliação falhou", "La evaluación falló")}</Flex>
           <Flex flexDirection="column" style={{ fontSize: 12, color: textSec }}>{error}</Flex>
         </Flex>
       )}
 
       {smartReport}
+      {targetModal}
 
     </Flex>
   );
@@ -595,5 +650,6 @@ const session: {
   traceProxy: boolean;
   modelInfo: SmartscapeModelInfo | null;
   otelInfo: OtelModeInfo | null;
-} = { env: { noEntities: false, logMetric: false, source: "oneagent" }, traceProxy: false, modelInfo: null, otelInfo: null };
+  target: EstateTarget;
+} = { env: { noEntities: false, logMetric: false, source: "oneagent" }, traceProxy: false, modelInfo: null, otelInfo: null, target: {} };
 

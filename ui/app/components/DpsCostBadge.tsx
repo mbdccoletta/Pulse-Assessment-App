@@ -11,6 +11,8 @@ import React from 'react';
 import { Text } from '@dynatrace/strato-components/typography';
 import { Tooltip } from './Tooltip';
 import type { QueryStats, CoverageData } from '../hooks/useCoverageData';
+import { useLang, tr as trLang, localeTag, windowWords } from '../i18n/lang';
+import { getInventoryWindowHours } from '../hooks/useCoverageData';
 
 interface DpsCostBadgeProps {
   /** Final run stats. Null while the run is in flight; we fall back to live
@@ -52,29 +54,63 @@ export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
   partialCount = 0,
 }) => {
   void textColor;
+  const lang = useLang();
+  const tr = (en: string, pt: string, es: string) => trLang(lang, en, pt, es);
   const scannedBytes = stats?.scannedBytes ?? liveScannedBytes ?? 0;
   const savedBytes = lastRunMeta?.cachedBytesSaved ?? 0;
   const cacheHits = lastRunMeta?.cacheHits ?? 0;
   const cacheMisses = lastRunMeta?.cacheMisses ?? 0;
   const cacheTotal = cacheHits + cacheMisses;
-  const liveTag = loading && cacheTotal === 0 ? 'Running…' : '';
+  const liveTag = loading && cacheTotal === 0 ? tr('Running…', 'Em execução…', 'En ejecución…') : '';
 
+  const win = windowWords(getInventoryWindowHours(), lang);
   const lines = [
+    // The windows the run read: inventory and metrics follow the host's window; raw events keep their own short ones.
+    tr(
+      `Window: ${win} for inventory and metrics; logs, spans and events read the short window of each criterion.`,
+      `Janela: ${win} para inventário e métricas; logs, spans e eventos usam a janela curta de cada critério.`,
+      `Ventana: ${win} para inventario y métricas; logs, spans y eventos usan la ventana corta de cada criterio.`,
+    ),
+    '',
     ...(stats
       ? [
-          `${stats.succeeded} of ${stats.total} queries ran.${stats.failed > 0 ? ` ${stats.failed} failed.` : ''}`,
+          tr(
+            `${stats.succeeded} of ${stats.total} queries ran.${stats.failed > 0 ? ` ${stats.failed} failed.` : ''}`,
+            `${stats.succeeded} de ${stats.total} consultas executadas.${stats.failed > 0 ? ` ${stats.failed} falharam.` : ''}`,
+            `${stats.succeeded} de ${stats.total} consultas ejecutadas.${stats.failed > 0 ? ` ${stats.failed} fallaron.` : ''}`,
+          ),
           partialCount > 0
-            ? `${partialCount} ${partialCount === 1 ? 'reading' : 'readings'} stopped at the 50 GB scan ceiling and show with ≈.`
-            : 'Every reading is complete.',
+            ? tr(
+                `${partialCount} ${partialCount === 1 ? 'reading' : 'readings'} stopped at the 50 GB scan ceiling and show with ≈.`,
+                `${partialCount} ${partialCount === 1 ? 'leitura parou' : 'leituras pararam'} no teto de 50 GB de leitura e ${partialCount === 1 ? 'aparece' : 'aparecem'} com ≈.`,
+                `${partialCount} ${partialCount === 1 ? 'lectura se detuvo' : 'lecturas se detuvieron'} en el techo de 50 GB de lectura y ${partialCount === 1 ? 'aparece' : 'aparecen'} con ≈.`,
+              )
+            : tr('Every reading is complete.', 'Todas as leituras estão completas.', 'Todas las lecturas están completas.'),
           '',
         ]
       : []),
-    `Read from Grail: ${fmtBytes(scannedBytes)}${stats ? ` (${stats.scannedRecords.toLocaleString()} records)` : ''}.`,
+    tr(
+      `Read from Grail: ${fmtBytes(scannedBytes)}${stats ? ` (${stats.scannedRecords.toLocaleString(localeTag(lang))} records)` : ''}.`,
+      `Lido do Grail: ${fmtBytes(scannedBytes)}${stats ? ` (${stats.scannedRecords.toLocaleString(localeTag(lang))} registros)` : ''}.`,
+      `Leído de Grail: ${fmtBytes(scannedBytes)}${stats ? ` (${stats.scannedRecords.toLocaleString(localeTag(lang))} registros)` : ''}.`,
+    ),
     cacheTotal > 0
-      ? `Cache: ${cacheHits} of ${cacheTotal} queries served from the 24h cache${savedBytes > 0 ? `, ${fmtBytes(savedBytes)} not read again` : ''}.`
-      : 'Cache: not used on this run (first run of the day or Refresh).',
+      ? tr(
+          `Cache: ${cacheHits} of ${cacheTotal} queries served from the 24h cache${savedBytes > 0 ? `, ${fmtBytes(savedBytes)} not read again` : ''}.`,
+          `Cache: ${cacheHits} de ${cacheTotal} consultas servidas do cache de 24h${savedBytes > 0 ? `, ${fmtBytes(savedBytes)} não lidos de novo` : ''}.`,
+          `Caché: ${cacheHits} de ${cacheTotal} consultas servidas desde la caché de 24h${savedBytes > 0 ? `, ${fmtBytes(savedBytes)} no leídos de nuevo` : ''}.`,
+        )
+      : tr(
+          'Cache: not used on this run (first run of the day or Refresh).',
+          'Cache: não usado nesta execução (primeira execução do dia ou Atualizar).',
+          'Caché: no usada en esta ejecución (primera ejecución del día o Actualizar).',
+        ),
     '',
-    'Volume read is the load on Grail. What is billed depends on the environment\'s licensing.',
+    tr(
+      'Volume read is the load on Grail. What is billed depends on the environment\'s licensing.',
+      'O volume lido é a carga no Grail. O que é cobrado depende do licenciamento do ambiente.',
+      'El volumen leído es la carga en Grail. Lo que se factura depende del licenciamiento del entorno.',
+    ),
     ...(note ? ['', note] : []),
     ...(liveTag ? ['', liveTag] : []),
   ];
@@ -82,7 +118,7 @@ export const DpsCostBadge: React.FC<DpsCostBadgeProps> = ({
   return (
     <Tooltip text={lines.join('\n')} position="bottom">
       <Text style={{ marginLeft: 8, fontSize: 12, color: textSecColor, borderBottom: `1px dotted ${textSecColor}`, cursor: 'help' }}>
-        Run details
+        {tr('Run details', 'Detalhes da execução', 'Detalles de la ejecución')}
       </Text>
     </Tooltip>
   );

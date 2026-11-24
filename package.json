@@ -13,6 +13,7 @@
     "@dynatrace-sdk/client-davis-copilot": "^1.0.0",
     "@dynatrace-sdk/client-document": "^1.30.0",
     "@dynatrace-sdk/client-query": "^1.17.0",
+    "@dynatrace-sdk/client-state": "^1.11.1",
     "@dynatrace-sdk/navigation": "^2.3.2",
     "@dynatrace/strato-components": "^3.18.0",
     "@dynatrace/strato-design-tokens": "^1.8.1",

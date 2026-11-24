@@ -4,6 +4,7 @@ import { Modal } from "@dynatrace/strato-components/overlays";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Text } from "@dynatrace/strato-components/typography";
+import { useTr } from "../i18n/lang";
 
 interface ExpandableChartModalProps {
   open: boolean;
@@ -20,8 +21,9 @@ export const ExpandableChartModal: React.FC<ExpandableChartModalProps> = ({
   title,
   children,
 }) => {
+  const tr = useTr();
   return (
-    <Modal title={title || "Chart"} show={open} onDismiss={onClose} size="large">
+    <Modal title={title || tr("Chart", "Gráfico", "Gráfico")} show={open} onDismiss={onClose} size="large">
       <Flex style={{ width: "100%", height: "min(80vh, 900px)" }} alignItems="center" justifyContent="center">
         {children}
       </Flex>
@@ -35,13 +37,14 @@ interface ExpandChartButtonProps {
 }
 
 export const ExpandChartButton: React.FC<ExpandChartButtonProps> = ({ onClick, style }) => {
+  const tr = useTr();
   return (
     <Text style={style}>
       <Button
         onClick={(e: React.MouseEvent<Element>) => { e.stopPropagation(); onClick(e as React.MouseEvent); }}
         variant="default"
         size="condensed"
-        aria-label="Expand chart"
+        aria-label={tr("Expand chart", "Expandir gráfico", "Expandir gráfico")}
       >
         <Button.Prefix><MaximizeIcon /></Button.Prefix>
       </Button>

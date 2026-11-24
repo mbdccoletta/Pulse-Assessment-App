@@ -9,6 +9,7 @@
 // criteria have no gap list: listing them unsampled would scan far more than
 // the criterion itself.
 
+import { windowHoursFor } from "../hooks/useCoverageData";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
 
 export interface Gap { noun: string; query: string }
@@ -29,6 +30,13 @@ const STATIC: Record<string, Gap> = {
   i3: { noun: "hosts without disk metrics", query: noMetric("dt.entity.host", "avg(dt.host.disk.used.percent)") },
   i4: { noun: "hosts without availability data", query: noMetric("dt.entity.host", "sum(dt.host.availability)") },
   i5: { noun: "hosts without network interfaces", query: hostWithout("dt.entity.network_interface") },
+  i27: { noun: "network devices without metrics", query: `smartscapeNodes "EXT_NETWORK_DEVICE" | fields sid = toString(id), name | lookup [timeseries v = avg(com.dynatrace.extension.network_device.cpu_usage), by:{dt.smartscape.ext_network_device} | fields e = toString(dt.smartscape.ext_network_device) | dedup e], sourceField:sid, lookupField:e, prefix:"m." | filter isNull(m.e)${LIST}` },
+  i28: { noun: "network interfaces without status", query: `smartscapeNodes "EXT_NETWORK_INTERFACE" | fields sid = toString(id), name | lookup [timeseries v = avg(com.dynatrace.extension.network_device.if.status), by:{dt.smartscape.ext_network_interface} | fields e = toString(dt.smartscape.ext_network_interface) | dedup e], sourceField:sid, lookupField:e, prefix:"m." | filter isNull(m.e)${LIST}` },
+  // Next release: the deployment criteria, listed as Fleet Management and Infrastructure & Operations list them.
+  i29: { noun: "application hosts not in full-stack", query: `fetch dt.entity.process_group_instance | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, "JAVA") or matchesPhrase(tech, "DOTNET") or matchesPhrase(tech, "NODE_JS") or matchesPhrase(tech, "PHP") or matchesPhrase(tech, "IIS") | summarize procs = count(), by:{h = belongs_to[dt.entity.host]} | lookup [fetch dt.entity.host | fields id, hn = entity.name, mode = monitoringMode], sourceField:h, lookupField:id, prefix:"host." | filter host.mode != "FULL_STACK" | sort procs desc | limit 50 | fields name = concat(host.hn, " · ", toString(procs))` },
+  i30: { noun: "processes waiting for a restart (outdated module)", query: `fetch events | filter dt.system.bucket == "default_fleet_events" and in(dt.agent.module.type, {"java", "dotnet", "nodejs", "php", "iis", "apache", "go"}) | dedup dt.agent.module.id, sort:{timestamp desc} | filter contains(toString(dt.agent.module.issues), "AGENT_OUTDATED") | fields name = concat(host.name, " · ", dt.agent.module.name)${LIST}` },
+  i31: { noun: "hosts that stopped reporting", query: `smartscapeNodes "HOST", from:now()-7d | filter isNull(k8s.cluster.name) | filter lifetime[end] < now() - 30m${LIST}` },
+  a18: { noun: "full-stack hosts with application processes not instrumented", query: `fetch dt.entity.process_group_instance | filter lifetime[end] >= now() - 1h | fieldsAdd tech = toString(softwareTechnologies) | filter matchesPhrase(tech, "JAVA") or matchesPhrase(tech, "DOTNET") or matchesPhrase(tech, "NODE_JS") or matchesPhrase(tech, "PHP") or matchesPhrase(tech, "IIS") | fieldsAdd h = belongs_to[dt.entity.host], pid = replaceString(toString(id), "PROCESS_GROUP_INSTANCE-", "PROCESS-") | lookup [fetch dt.entity.host | filter monitoringMode == "FULL_STACK" | fields id, hn = entity.name], sourceField:h, lookupField:id, prefix:"fs." | filter isNotNull(fs.id) | lookup [fetch events | filter dt.system.bucket == "default_fleet_events" and in(dt.agent.module.type, {"java", "dotnet", "nodejs", "php", "iis", "apache", "go"}) | summarize m = count(), by:{p = toString(dt.smartscape.process)}], sourceField:pid, lookupField:p, prefix:"mod." | filter isNull(mod.m) | summarize procs = count(), by:{hn = fs.hn} | sort procs desc | limit 50 | fields name = concat(hn, " · ", toString(procs))` },
   i6: { noun: "processes without CPU metrics", query: noMetric("dt.entity.process_group_instance", "avg(dt.process.cpu.usage)") },
   i8: { noun: "hosts without disks", query: hostWithout("dt.entity.disk") },
   i11: { noun: "hosts without processes", query: hostWithout("dt.entity.process_group_instance") },
@@ -63,7 +71,9 @@ export function gapFor(id: string, denominator: string | undefined): Gap | null 
 
 /** Runs a gap query and returns the names (at most 50). */
 export async function runGap(query: string): Promise<string[]> {
-  const first = await queryExecutionClient.queryExecute({ body: { query, requestTimeoutMilliseconds: 30000, maxResultRecords: 50 } });
+  // The list reads the same window as the criterion it explains (the host's window for inventory and metrics).
+  const hours = windowHoursFor(query);
+  const first = await queryExecutionClient.queryExecute({ body: { query, requestTimeoutMilliseconds: 30000, maxResultRecords: 50, defaultTimeframeStart: new Date(Date.now() - hours * 3600000).toISOString(), defaultTimeframeEnd: new Date().toISOString() } });
   let state = first?.state, result = first?.result;
   const token = (first as { requestToken?: string })?.requestToken;
   for (let i = 0; state === "RUNNING" && token && i < 10; i++) {

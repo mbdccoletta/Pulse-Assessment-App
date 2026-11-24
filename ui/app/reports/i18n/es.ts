@@ -21,6 +21,46 @@ export const ES: Record<string, CriterionText> = {
     description: "Porcentaje de hosts monitoreados con métricas de disponibilidad — base para los informes de SLA.",
     action: "Confirme que se estén recopilando las métricas de disponibilidad de los hosts. Revise la configuración de monitoreo de hosts y de SLA.",
   },
+  i29: {
+    label: "Hosts de aplicación en full-stack",
+    description: "Porcentaje de los hosts que ejecutan procesos de aplicación (Java, .NET, Node.js, PHP, IIS) monitoreados por OneAgent en modo full-stack. Un host solo en modo infraestructura ejecuta esas aplicaciones sin traces ni servicios.",
+    action: "Pase a full-stack los hosts que ejecutan aplicaciones para que OneAgent instrumente sus procesos.",
+  },
+  i30: {
+    label: "Módulos de código de OneAgent actualizados",
+    description: "Porcentaje de los módulos de código de OneAgent que ejecutan la versión instalada del agente. Un módulo desactualizado (Fleet Management: AGENT_OUTDATED) espera que el proceso se reinicie.",
+    action: "Reinicie los procesos que Fleet Management muestra como desactualizados para que carguen la versión instalada de OneAgent.",
+  },
+  i31: {
+    label: "Hosts que reportan",
+    description: "Porcentaje de los hosts vistos en los últimos 7 días que reportaron en los últimos 30 minutos. Los nodos de Kubernetes quedan fuera: entran y salen por diseño.",
+    action: "Revise los hosts que dejaron de reportar: OneAgent detenido, ruta de red hasta el ActiveGate o un host retirado sin eliminar.",
+  },
+  i32: {
+    label: "Hosts previstos monitoreados",
+    description: "Hosts que reportan a Dynatrace frente a los hosts que el proyecto prevé monitorear.",
+    action: "Instale OneAgent (o conecte OpenTelemetry) en los hosts previstos que aún no reportan.",
+  },
+  i33: {
+    label: "Clusters de Kubernetes previstos monitoreados",
+    description: "Clusters de Kubernetes que reportan a Dynatrace frente a los clusters que el proyecto prevé monitorear.",
+    action: "Conecte los clusters de Kubernetes previstos con el Dynatrace Operator.",
+  },
+  d16: {
+    label: "Aplicaciones previstas monitoreadas",
+    description: "Aplicaciones web y móviles monitoreadas frente a las aplicaciones que el proyecto prevé monitorear.",
+    action: "Active Real User Monitoring en las aplicaciones web y móviles previstas que aún no se monitorean.",
+  },
+  i27: {
+    label: "Monitoreo de dispositivos de red",
+    description: "Porcentaje de los dispositivos de red (switches, routers, firewalls, access points) que envían métricas del dispositivo.",
+    action: "Incluya todos los dispositivos de red en la configuración de monitoreo SNMP para que envíen CPU, memoria y uptime.",
+  },
+  i28: {
+    label: "Estado de las interfaces de red",
+    description: "Porcentaje de las interfaces de los dispositivos de red que reportan su estado operativo.",
+    action: "Incluya las interfaces de los dispositivos en la configuración de monitoreo SNMP para que cada una reporte estado y tráfico.",
+  },
   i5: {
     label: "Cobertura de red de hosts",
     description: "Porcentaje de hosts monitoreados con entidades de interfaz de red.",
@@ -125,6 +165,11 @@ export const ES: Record<string, CriterionText> = {
     label: "Uso de Assist, MCP y dtctl",
     description: "Personas que consultaron métricas y topología mediante Dynatrace Assist, un cliente MCP o la CLI dtctl en los últimos 30 días.",
     action: "Presente Dynatrace Assist al equipo responsable de estos datos y conecte su IDE o agente de programación mediante el servidor MCP de Dynatrace o dtctl.",
+  },
+  a18: {
+    label: "Procesos de aplicación instrumentados",
+    description: "Porcentaje de los procesos de aplicación (Java, .NET, Node.js, PHP, IIS) en hosts full-stack que ejecutan un módulo de código de OneAgent, como muestra Fleet Management. Un proceso sin módulo no genera traces ni servicios.",
+    action: "Reinicie los procesos de aplicación que arrancaron antes de OneAgent y confirme que la inyección automática está activa en esos hosts (o que el Dynatrace Operator inyecta los pods).",
   },
   a2: {
     label: "Cobertura de métodos de servicios",

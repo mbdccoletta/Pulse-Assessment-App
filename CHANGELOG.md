@@ -4,6 +4,24 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.17] — 2026-11-24
+
+### Added
+- Deployment criteria, read the way Fleet Management and Infrastructure & Operations read the estate. All in Foundation; an estate with nothing for them to count (e.g. OpenTelemetry only) reads "not assessed", never a failure:
+  - **Application hosts in full-stack** (Infrastructure, `i29`): hosts running Java, .NET, Node.js, PHP or IIS processes that OneAgent monitors in full-stack mode.
+  - **OneAgent code modules up to date** (Infrastructure, `i30`): code modules without Fleet Management's `AGENT_OUTDATED` issue, i.e. not waiting for a process restart.
+  - **Hosts reporting** (Infrastructure, `i31`): hosts seen in the last 7 days that reported in the last 30 minutes; Kubernetes nodes are left out, they come and go by design.
+  - **Application processes instrumented** (Application, `a18`): application processes on full-stack hosts that run a OneAgent code module (Fleet Management) — the usual reason a full-stack host shows no services (injection off, or the process started before OneAgent).
+  - Each comes with its "Which ones?" list: hosts not in full-stack, processes waiting for a restart, hosts that stopped reporting, hosts with uninstrumented processes.
+- **Estate target** (header button "Target"): the hosts, web and mobile applications and Kubernetes clusters the project plans to monitor. Each number set adds a Foundation criterion, monitored ÷ planned (`i32`, `i33`, `d16`), so coverage also reads against the real size of the project and not only against what already reports. Stored in the app state (one value per environment, the same for every user); clearing it removes the criteria. Its numerators are the same host and cluster universe the other criteria use, after the OpenTelemetry, mixed and Smartscape adaptations.
+- Network devices (`i27`) and network interfaces (`i28`), Best practice in Infrastructure, from the SNMP extension's Smartscape nodes and metrics.
+- Coverage kit (`scripts/export-coverage-kit.mjs`): Pulse packaged for a host app, with every screen, the host's language (English, Portuguese, Spanish) and the host's inventory window; a light `summary` entry for host pages that only show the latest reading.
+
+### Changed
+- Adoption reads the API gateway's audit events (people's browser actions per app), not query executions: apps that never run DQL (settings, Hub, configuration screens) now count. Users of the Dynatrace organisation (SE, partner, support) and the assessment tools themselves are left out of the score; "Most used apps" names the population ("Share of 773 users") and its tooltip gives the Dynatrace users counted apart. The people criteria (Assist, MCP and dtctl usage per data source) leave Dynatrace users out the same way. Every adoption read carries a 2 GiB scan ceiling.
+- Inventory and metric criteria follow the host's window when Pulse is embedded; logs, spans and events always keep 2 h, so a longer window never multiplies what Grail reads. The capability header and Run details name the window.
+- The radar's centre texts shrink to fit the ring at any size; the score gauge's tooltip says the score and its band.
+
 ## [3.0.16] — 2026-11-23
 
 ### Changed

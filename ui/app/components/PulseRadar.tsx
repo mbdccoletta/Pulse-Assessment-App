@@ -13,6 +13,7 @@ import React, { useMemo, useState } from "react";
 import Colors from "@dynatrace/strato-design-tokens/colors";
 import type { CapabilityResult } from "../hooks/useCoverageData";
 import { scoreBand } from "../utils/colors";
+import { useTr, useLang, bandWord } from "../i18n/lang";
 
 interface Props {
   capabilities: CapabilityResult[];
@@ -57,7 +58,22 @@ function sector(r0: number, r1: number, a0: number, a1: number): string {
   return `M${x0},${y0} A${r1},${r1} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${r0},${r0} 0 ${large} 0 ${x3},${y3} Z`;
 }
 
+
+/** Largest font size (≤ max) at which `text` fits a chord of the centre circle: never overflows the hole,
+ *  whatever the chart size. Width per character ≈ 0.62 em plus the letter spacing (in em). */
+const fitFont = (text: string, chord: number, max: number, spacingEm = 0) =>
+  Math.max(0, Math.min(max, chord / Math.max(1, text.length * (0.62 + spacingEm))));
+/** Width of the centre circle's chord at a height y from its centre (radius r), with a margin. */
+const chordAt = (r: number, y: number) => 2 * Math.sqrt(Math.max(0, r * r - y * y)) * 0.86;
+
 export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, onOpen, onOpenOverall }) => {
+  const tr = useTr();
+  const lang = useLang();
+  /** On-screen name of a part (the key and colour stay as they are). */
+  const partLabel = (key: string, label: string) =>
+    key === "coverage" ? tr("Coverage", "Cobertura", "Cobertura")
+    : key === "utilization" ? tr("Utilization", "Utilização", "Utilización")
+    : key === "adoption" ? tr("Adoption", "Adoção", "Adopción") : label;
   const [hover, setHover] = useState<number | null>(null);
   const [centre, setCentre] = useState(false);
   /** Parts switched off from the legend. At least one always stays on. */
@@ -88,7 +104,7 @@ export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, on
 
   return (
     <svg viewBox={`${-W / 2} ${-H / 2} ${W} ${H}`} width="100%" height={H} style={{ maxWidth: W, display: "block" }}
-      role="img" aria-label={`Score ${totalScore}% across ${N} capabilities`}>
+      role="img" aria-label={tr(`Score ${totalScore}% across ${N} capabilities`, `Pontuação ${totalScore}% em ${N} capabilities`, `Puntuación ${totalScore}% en ${N} capabilities`)}>
       <style>{`
         @keyframes pulseRadarGrow { from { transform: scale(0.3); opacity: 0 } to { transform: scale(1); opacity: 1 } }
         .pr-bars { transform-origin: 0 0; animation: pulseRadarGrow .9s cubic-bezier(.2,.7,.2,1) both; }
@@ -119,7 +135,7 @@ export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, on
         const lift = side !== 0 ? 4 : ly < 0 ? -(lines - 1) * 16 - 4 : 16;
         return (
           <g key={s.c.name} className="pr-sector" role="button" tabIndex={0}
-            aria-label={`${s.c.name}: score ${s.c.score}%, ${band.label}`}
+            aria-label={tr(`${s.c.name}: score ${s.c.score}%, ${bandWord(band.label, lang)}`, `${s.c.name}: pontuação ${s.c.score}%, ${bandWord(band.label, lang)}`, `${s.c.name}: puntuación ${s.c.score}%, ${bandWord(band.label, lang)}`)}
             opacity={dim ? 0.3 : 1}
             // The pointed sector lifts 8px outward along its own axis.
             transform={on ? `translate(${pt(8, s.mid)[0]}, ${pt(8, s.mid)[1]})` : undefined}
@@ -145,7 +161,7 @@ export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, on
             <text x={lx} y={ly + lift} textAnchor={anchor} fontSize={13} fontWeight={700} fill={ink}>
               {s.c.name}
               <tspan x={lx} dy="1.35em" fontSize={13} fontWeight={700} fill={band.text} style={{ fontVariantNumeric: "tabular-nums" }}>{s.c.score}%</tspan>
-              <tspan dx={6} fontSize={11} fontWeight={600} fill={band.text}>{band.label}</tspan>
+              <tspan dx={6} fontSize={11} fontWeight={600} fill={band.text}>{bandWord(band.label, lang)}</tspan>
             </text>
           </g>
         );
@@ -154,7 +170,7 @@ export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, on
       {/* centre: the overall score — or, while a capability is pointed at, its three parts by name */}
       <circle r={hole - 6} fill={Colors.Background.Surface.Default} stroke={centre && onOpenOverall ? total.token : line} strokeWidth={centre && onOpenOverall ? 2 : 1}
         className="pr-centre" role={onOpenOverall ? "button" : undefined} tabIndex={onOpenOverall ? 0 : undefined}
-        aria-label={onOpenOverall ? `Overall score ${totalScore}%: open the overall score page` : undefined}
+        aria-label={onOpenOverall ? tr(`Overall score ${totalScore}%: open the overall score page`, `Pontuação geral ${totalScore}%: abrir a página de pontuação geral`, `Puntuación general ${totalScore}%: abrir la página de puntuación general`) : undefined}
         style={{ cursor: onOpenOverall ? "pointer" : undefined, transition: "stroke .2s" }}
         onMouseEnter={() => setCentre(true)} onMouseLeave={() => setCentre(false)}
         onFocus={() => setCentre(true)} onBlur={() => setCentre(false)}
@@ -163,20 +179,31 @@ export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, on
       {hover == null ? (
         <g style={{ pointerEvents: "none" }}>
           <text textAnchor="middle" y={hole * 0.08} fontSize={hole * 0.52} fontWeight={700} fill={total.text} style={{ fontVariantNumeric: "tabular-nums" }}>{totalScore}%</text>
-          <text textAnchor="middle" y={hole * 0.42} fontSize={11} fontWeight={600} fill={total.text}>{total.label}</text>
-          <text textAnchor="middle" y={-hole * 0.5} fontSize={10} fill={sub} letterSpacing={1.2}>OVERALL SCORE</text>
+          {(() => {
+            // Fitted to the centre circle: the band word and the caption never overflow it, however small the chart.
+            const band = bandWord(total.label, lang);
+            const bandSize = fitFont(band, chordAt(hole, hole * 0.42), 11);
+            const caption = tr("OVERALL SCORE", "PONTUAÇÃO GERAL", "PUNTUACIÓN GENERAL");
+            const capSize = fitFont(caption, chordAt(hole, hole * 0.5), 10, 0.12);
+            return (
+              <>
+                {bandSize >= 6 && <text textAnchor="middle" y={hole * 0.42} fontSize={bandSize} fontWeight={600} fill={total.text}>{band}</text>}
+                {capSize >= 6 && <text textAnchor="middle" y={-hole * 0.5} fontSize={capSize} fill={sub} letterSpacing={capSize * 0.12}>{caption}</text>}
+              </>
+            );
+          })()}
         </g>
       ) : (
         <g style={{ pointerEvents: "none" }}>
-          <text textAnchor="middle" y={-hole * 0.56} fontSize={12} fontWeight={700} fill={ink}>{SHORT[sectors[hover].c.name] ?? sectors[hover].c.name}</text>
+          <text textAnchor="middle" y={-hole * 0.56} fontSize={fitFont(SHORT[sectors[hover].c.name] ?? sectors[hover].c.name, chordAt(hole, hole * 0.56), 12)} fontWeight={700} fill={ink}>{SHORT[sectors[hover].c.name] ?? sectors[hover].c.name}</text>
           {/* the capability's own score, in its band colour, above its parts */}
           <text textAnchor="middle" y={-hole * 0.24} fontSize={hole * 0.26} fontWeight={700} fill={scoreBand(sectors[hover].c.score).text} style={{ fontVariantNumeric: "tabular-nums" }}>{sectors[hover].c.score}%</text>
           {/* label on the left edge, value on the right edge of the same row: they cannot collide */}
           {sectors[hover].bars.map((b, k) => (
             <g key={b.key} transform={`translate(0, ${hole * 0.04 + k * hole * 0.24})`}>
               <rect x={-hole * 0.66} width={8} height={8} y={-7.5} rx={2} fill={b.color} />
-              <text x={-hole * 0.66 + 13} fontSize={10.5} fill={sub}>{b.label}</text>
-              <text x={hole * 0.66} textAnchor="end" fontSize={11} fontWeight={700} fill={ink} style={{ fontVariantNumeric: "tabular-nums" }}>{b.v == null ? "—" : `${b.v}%`}</text>
+              <text x={-hole * 0.66 + 13} fontSize={Math.min(10.5, hole * 0.13)} fill={sub}>{partLabel(b.key, b.label)}</text>
+              <text x={hole * 0.66} textAnchor="end" fontSize={Math.min(11, hole * 0.14)} fontWeight={700} fill={ink} style={{ fontVariantNumeric: "tabular-nums" }}>{b.v == null ? "—" : `${b.v}%`}</text>
             </g>
           ))}
         </g>
@@ -188,12 +215,12 @@ export const PulseRadar: React.FC<Props> = ({ capabilities, totalScore, size, on
           const isOff = off.has(p.key);
           return (
             <g key={p.key} transform={`translate(0, ${k * 26})`} role="button" tabIndex={0} aria-pressed={!isOff}
-              aria-label={`${isOff ? "Show" : "Hide"} ${p.label}`} style={{ cursor: "pointer" }}
+              aria-label={isOff ? tr(`Show ${p.label}`, `Mostrar ${partLabel(p.key, p.label)}`, `Mostrar ${partLabel(p.key, p.label)}`) : tr(`Hide ${p.label}`, `Ocultar ${partLabel(p.key, p.label)}`, `Ocultar ${partLabel(p.key, p.label)}`)} style={{ cursor: "pointer" }}
               onClick={() => toggle(p.key)}
               onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(p.key); } }}>
               <rect x={-6} y={-17} width={124} height={24} rx={6} fill="transparent" />
               <rect width={14} height={14} y={-11} rx={3} fill={isOff ? "none" : p.color} stroke={p.color} strokeWidth={1.5} />
-              <text x={22} fontSize={13} fontWeight={600} fill={isOff ? sub : ink} textDecoration={isOff ? "line-through" : undefined}>{p.label}</text>
+              <text x={22} fontSize={13} fontWeight={600} fill={isOff ? sub : ink} textDecoration={isOff ? "line-through" : undefined}>{partLabel(p.key, p.label)}</text>
             </g>
           );
         })}
