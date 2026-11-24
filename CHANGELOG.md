@@ -4,6 +4,11 @@ All notable changes to the Pulse Assessment app are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.23] — 2026-11-24
+
+### Fixed
+- The run still held at 98–99% on large estates. The deployment criteria read the process group instances two or three times per query (the application processes, then again for the database servers, then the hosts): 44 s and 27 s on a ~1,000-host estate. They now read one pass — per host: database server or application code, monitoring mode, full-stack supported; per live application process: OneAgent code module or not — and the four readings are summaries of it, run once (about 5 s there). A host whose application processes all ended more than an hour ago still counts among the application hosts.
+
 ## [3.0.22] — 2026-11-24
 
 ### Changed
